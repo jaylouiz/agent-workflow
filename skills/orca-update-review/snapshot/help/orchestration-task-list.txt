@@ -1,0 +1,20 @@
+orca orchestration task-list
+
+Usage: orca orchestration task-list [--status <status>] [--ready] [--brief] [--run <run_id>] [--from <handle>] [--json] [--full]
+
+List orchestration tasks
+
+Options:
+  --help                 Show this help message
+  --json                 Emit machine-readable JSON
+  --pairing-code <code>  Run against a remote Orca server using an orca://pair?... code
+  --environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them
+  --status
+  --ready
+  --brief
+  --run
+  --from
+  --full                 Print the full record Orca returned instead of the concise view
+
+Notes:
+  Rows show id, status, and title; --full adds each spec and result, where --brief collapses whitespace and caps each spec at 160 characters.
