@@ -1,0 +1,38 @@
+orca orchestration check
+
+Usage: orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]
+  default: return the bound Run's oldest unread FIFO batch and mark it handled.
+  --ack: optional; acknowledges a batch from an older Orca that does not mark it.
+  --peek: return only unread messages without marking them read.
+  --all: return recent messages for the handle; does not mark read.
+  --wait: block until a matching message arrives or --timeout-ms expires.
+          Emits JSON keepalive lines to stderr every 15s so the caller can
+          tell the process is alive. `_keepalive` is unrelated to heartbeat
+          messages; `_heartbeat` remains as a deprecated compatibility alias.
+          Filter with `jq "select(._keepalive|not)"` when merging streams.
+
+Check this agent's messages
+
+Options:
+  --help                 Show this help message
+  --json                 Emit machine-readable JSON
+  --pairing-code <code>  Run against a remote Orca server using an orca://pair?... code
+  --environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them
+  --terminal <handle>  Runtime-issued terminal handle
+  --run
+  --ack
+  --unread
+  --peek
+  --all
+  --types
+  --format <png|jpeg>    Screenshot image format
+  --wait
+  --timeout-ms <ms>     Maximum wait time before timing out
+  --retry-request
+  --full                 Print the full record Orca returned instead of the concise view
+
+Notes:
+  On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".
+  --types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.
+  --format renders the returned rows as local text only; it never writes to another terminal.
+  A consuming check marks the batch it returns as handled, so the next check returns newer mail; no --ack is needed. Several --wait calls may wait on one inbox; waiting reserves nothing, listeners woken by the same arrival get the same Delivery, and --ack of a handled Delivery is a no-op. Consuming checks belong to the agent itself. A script that only watches the inbox must use --peek (including --peek --wait) and must never --ack, or it takes mail the agent never sees. If a check response was lost, rerun it with the --retry-request it printed to get the same batch. To find mail after losing context, run orca orchestration inbox --terminal <mailbox> --limit <n> --full and name the mailbox: run:<run_id> for a coordinator's bound Run, or dispatch:<dispatch_id> for a worker, including mail it read before it bound a helper Run.
