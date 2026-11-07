@@ -49,7 +49,7 @@ Measure the files in the profile's "Context files" (`wc -w`; `wc -l` too for eac
 - Larger or uncertain ones: an `inbox` issue in the repo that owns the target (global CLAUDE.md rules).
 - Watch-list rows you acted on get `fixed <date> <file>` plus the expected effect, so the next retro can check it.
 - Delete the processed ledgers (the log holds what matters).
-- Report one line per change (what, where, which cause) plus the context-size delta.
+- Report one line per change (what, where, which cause) plus the context-size delta. Spell ids out for the user ("watch list item 7", not "W7").
 
 ## Running log format
 
