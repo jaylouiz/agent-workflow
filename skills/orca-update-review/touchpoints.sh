@@ -5,8 +5,10 @@
 # Scanned: this repo's skills/ and reference/, plus the .claude dir of every checkout next to this one (hooks, rules, skills,
 # issue-workflow.*). Extra dirs: ORCA_TOUCHPOINT_DIRS (colon-separated).
 set -uo pipefail
-DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT=$(cd "$DIR/../.." && pwd)
+# -P: called through the ~/.claude/skills/<skill> symlink (the SessionStart hook does), a logical path makes ROOT ~/.claude,
+# whose skills/ holds only symlinks grep -r does not follow: an empty scan that reads as "all unchanged".
+DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+ROOT=$(cd "$DIR/../.." && pwd -P)
 
 dirs=("$ROOT/skills" "$ROOT/reference")
 for d in "$(dirname "$ROOT")"/*/.claude; do [ -d "$d" ] && dirs+=("$d"); done
@@ -47,6 +49,10 @@ case "${1:-}" in
     done < <(scan | grep -oE '(^|[^a-z_/-])orca [a-z][a-z-]+( [a-z][a-z-]+)?' | sed -E 's/^[^o]*orca/orca/' | sort -u)
     if [ -n "$broken" ]; then
       echo "touchpoints.sh: \`orca <cmd> --help\` failed or printed no Usage line (Orca not ready?) for: ${broken% }; command list incomplete, not used" >&2
+      exit 1
+    fi
+    if [ -z "$list" ]; then # the workflow always uses Orca: nothing found means the scan looked in the wrong place
+      echo "touchpoints.sh: no orca command found in ${dirs[*]}; command list not used" >&2
       exit 1
     fi
     printf '%s' "$list" | sort -u ;;

@@ -42,6 +42,21 @@ check "healthy: exit 0" '[ $rc = 0 ]'
 check "healthy: exactly the real commands" '[ "$out" = "$(printf "orca orchestration\norca orchestration check\norca orchestration send\norca skills get\norca worktree show")" ]'
 check "healthy: nothing on stderr" '[ ! -s "$T/err" ]'
 
+# --- called through a symlinked skill dir (~/.claude/skills/<skill> -> the checkout, as install.sh links it and the
+# SessionStart hook calls it): the same list, never an empty scan reported as "all unchanged"
+mkdir -p "$T/link/skills"; ln -s "$S" "$T/link/skills/orca-update-review"
+lout=$(bash "$T/link/skills/orca-update-review/touchpoints.sh" commands 2>"$T/err"); rc=$?
+check "symlinked: exit 0" '[ $rc = 0 ]'
+check "symlinked: same list as the real path" '[ "$lout" = "$out" ]'
+
+# --- no touchpoint found at all: an error, never an empty list
+mv "$T/skills/other/use.md" "$T/use.md.off"
+eout=$(bash "$S/touchpoints.sh" commands 2>"$T/err"); rc=$?
+check "empty scan: exits non-zero" '[ $rc != 0 ]'
+check "empty scan: says so on stderr" 'grep -q "no orca command" "$T/err"'
+check "empty scan: prints no list" '[ -z "$eout" ]'
+mv "$T/use.md.off" "$T/skills/other/use.md"
+
 # --- Orca not ready: every entry point fails loudly
 for broken in orchestration any; do
   export STUB_BROKEN=$broken
