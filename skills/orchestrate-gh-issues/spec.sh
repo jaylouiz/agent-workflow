@@ -20,6 +20,7 @@ stage=${1:-}; n=${2:-}
 shift 2
 tier="Standard - default"; model=sonnet; branch=""; pr=""; wt=""; ledger=""; extra=""; want_port=1; interactive=0
 while [ $# -gt 0 ]; do
+  case "$1" in --no-port|--interactive) ;; --*) case "${2-}" in ""|--*) die "$1 needs a value, got '${2-}' (an empty unquoted variable is dropped by zsh)" ;; esac ;; esac
   case "$1" in
     --tier) tier=${2:?}; shift 2 ;;
     --model) model=${2:?}; shift 2 ;;
