@@ -22,7 +22,7 @@ Turn what agents logged *while* working (`ledger.sh`, global CLAUDE.md) into few
 
 ## 3. Decide with the running log
 
-Update each matching watch-list row (seen count, last run) or add one. Then:
+Update each matching watch-list row (seen count, last run) or add one; find rows with `grep` by cause or id, never by reading the whole log. Then:
 
 - **Act** on a cause seen in 2+ runs, or once when it cost ≥ 15 min or an instruction was plainly wrong.
 - **Effect check**: a `fixed` row whose cause shows up again means the fix did not work; mark it `recurred` and pick a stronger action below, never a second sentence of the same rule.
