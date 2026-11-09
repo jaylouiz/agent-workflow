@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
     --pr) pr=${2:?}; shift 2 ;;
     --wt) wt=${2:?}; shift 2 ;;
     --ledger) ledger=${2:?}; shift 2 ;;
-    --extra) extra=${2:?}; shift 2 ;;
+    --extra) extra="$extra ${2:?}"; shift 2 ;;
     --no-port) want_port=0; shift ;;
     --interactive) interactive=1; shift ;;
     *) die "unknown flag $1" ;;
@@ -87,6 +87,6 @@ out = block("common") + block("stage:" + os.environ["STAGEKEY"])
 out = re.sub(r"\{\{([A-Z]+)\}\}", lambda m: os.environ.get(m.group(1), m.group(0)), out)
 sys.stdout.write(out)
 ' "$DIR/task-template.md"
-[ -n "$extra" ] && { echo "Notes:"; cat "$extra"; }
+[ -n "$extra" ] && { echo "Notes:"; for x in $extra; do cat "$x"; echo; done; }
 [ -n "$port" ] && echo "PORT=$port"
 exit 0
