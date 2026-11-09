@@ -75,9 +75,13 @@ Decide and write the reason in one line:
    ## Design round <k>: <issue title>
    Preview: <the route plus the seed that shows the change and the first variant, e.g. <preview>/tasks?seed=<seed>&variant=<first key>>
    Variants: <key>, <key>, …
-   <brief summary, at most 3 lines>
+   <brief summary, at most 2 lines>
+   <details><summary>Job, stories, checks</summary>
+
    Job: <id job> · Stories: <the draft stories, one line each, at most 3>
    Checks: brief <tool | asserted> · tech check <sub-agent | inline: why> · current-state review and motion per the profile <ran | skipped: why> · known flaws <list | none>
+   </details>
+
    ### <key>: <variant name>
    <one line> · tech check: <S|M|L, risk areas>
    <details><summary>Details</summary> <the variant paragraph> </details>
