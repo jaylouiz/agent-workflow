@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Issue lanes</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Geist', system-ui, sans-serif; background: #f5f5f5; color: #2d3142;
+           min-height: 100vh; display: flex; align-items: center; justify-content: center;
+           padding: 3rem 2rem; }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 0.66rem; font-weight: 500; letter-spacing: 0.18em;
+               text-transform: uppercase; color: #4f5d75; margin-bottom: 0.5rem; }
+    h1 { font-family: 'Instrument Serif', 'Noto Serif', serif; font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem); font-weight: 400;
+         letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Flowchart · agent-workflow</p>
+    <h1>Issue lanes</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 456" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="lanes-title lanes-desc">
+        <title id="lanes-title">Issue lanes</title>
+        <desc id="lanes-desc">Flow of a GitHub issue through the lanes: triage routes it to needs-design, needs-spec, or ready when the issue standard is met; design leads to needs-spec or to ready, specify leads to ready, and build opens a pull request that is reviewed and merged. Fog goes to the user's /wayfinder.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+        <path d="M 152 212 L 186 212" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 232 176 L 232 100 Q 232 92 240 92 L 358 92" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 276 212 L 358 212" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 232 248 L 232 324 Q 232 332 240 332 L 358 332" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 440 124 L 440 178" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 440 244 L 440 298" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 560 92 L 592 92 Q 600 92 600 100 L 600 298" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 640 332 L 698 332" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 812 332 L 850 332" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="273" y="72" width="46" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="296" y="81" fill="#5a6580" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">OPEN UX</text>
+        <rect x="284" y="192" width="64" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="316" y="201" fill="#5a6580" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">OPEN BUILD</text>
+        <rect x="267" y="312" width="74" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="304" y="321" fill="#5a6580" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">STANDARD MET</text>
+        <rect x="608" y="192" width="74" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="645" y="201" fill="#5a6580" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">STANDARD MET</text>
+        <rect x="32" y="188" width="120" height="48" rx="24" fill="#f5f5f5"/>
+        <rect x="32" y="188" width="120" height="48" rx="24" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="92" y="212.0" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Issue</text>
+        <text x="92" y="226.0" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">any shape</text>
+        <polygon points="188,212 232,176 276,212 232,248" fill="#f5f5f5"/>
+        <polygon points="188,212 232,176 276,212 232,248" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="232" y="216" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Triage</text>
+        <rect x="360" y="60" width="200" height="64" rx="8" fill="#f5f5f5"/>
+        <rect x="360" y="60" width="200" height="64" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="368" y="68" width="42" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="389" y="77" fill="#2d3142" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">LABEL</text>
+        <text x="460" y="100" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">needs-design</text>
+        <text x="460" y="116" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">/design-gh-issue</text>
+        <rect x="360" y="180" width="200" height="64" rx="8" fill="#f5f5f5"/>
+        <rect x="360" y="180" width="200" height="64" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="368" y="188" width="42" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="389" y="197" fill="#2d3142" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">LABEL</text>
+        <text x="460" y="220" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">needs-spec</text>
+        <text x="460" y="236" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">/specify-gh-issue</text>
+        <rect x="360" y="300" width="280" height="64" rx="8" fill="#f5f5f5"/>
+        <rect x="360" y="300" width="280" height="64" rx="8" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+        <rect x="368" y="308" width="42" height="12" rx="2" fill="none" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+        <text x="389" y="317" fill="#bf4520" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">LABEL</text>
+        <text x="500" y="340" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">ready</text>
+        <text x="500" y="356" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">/build-gh-issue</text>
+        <rect x="700" y="300" width="112" height="64" rx="8" fill="#f5f5f5"/>
+        <rect x="700" y="300" width="112" height="64" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="708" y="308" width="24" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="720" y="317" fill="#2d3142" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">PR</text>
+        <text x="756" y="340" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Pull request</text>
+        <text x="756" y="356" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">review</text>
+        <rect x="852" y="308" width="84" height="48" rx="24" fill="#f5f5f5"/>
+        <rect x="852" y="308" width="84" height="48" rx="24" fill="rgba(45,49,66,0.05)" stroke="#2d3142" stroke-width="1.6"/>
+        <text x="894" y="337.0" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Merge</text>
+        <text x="936" y="84" fill="#2d3142" font-size="15" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="end">Fog at any point: no lane.</text>
+        <text x="936" y="104" fill="#2d3142" font-size="15" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="end">The user charts it with /wayfinder.</text>
+        <line x1="32" y1="400" x2="928" y2="400" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="32" y="424" fill="#4f5d75" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.14em">LEGEND</text>
+        <rect x="112" y="414" width="22" height="12" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="0.8"/>
+        <text x="142" y="424" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">start · end</text>
+        <polygon points="255,420 263,414 271,420 263,426" fill="#ffffff" stroke="#2d3142" stroke-width="0.8"/>
+        <text x="282" y="424" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">triage rule</text>
+        <rect x="392" y="414" width="22" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="0.8"/>
+        <text x="422" y="424" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">label · skill that works it</text>
+        <rect x="632" y="414" width="22" height="12" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="0.8"/>
+        <text x="662" y="424" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">build gate</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

@@ -86,17 +86,17 @@ Cloud sessions (Claude Code on the web) do not get these skills (only the attach
 
 What an issue holds at each stage (`## Problem` solution-free, `## Solution` sharpened per stage, job, user stories, UACs) and how it gets its lane (fog, `needs-design`, `needs-spec`, `ready`): [reference/issue-rules.md](reference/issue-rules.md), the file the skills load.
 
-```
-issue ─triage─► needs-design ─/design-gh-issue─► needs-spec ─/specify-gh-issue─► ready ─/build-gh-issue─► PR ─review─► merge
-          │                         └────────── standard after Design ──────────►┘
-          ├──────────────────────────► needs-spec
-          └─────────────────────────────────────────────────────────────► ready (only if the issue standard is met)
-fog anywhere ─► /wayfinder (user)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/lanes-dark.png">
+  <img src="docs/diagrams/lanes.png" width="960" alt="Issue lanes: triage routes an issue to needs-design (open UX), needs-spec (open build) or ready (issue standard met). /design-gh-issue leads to needs-spec, or to ready when the standard is met; /specify-gh-issue leads to ready; /build-gh-issue opens a PR, which is reviewed and merged. Fog at any point gets no lane: the user charts it with /wayfinder.">
+</picture>
 
-issue standard, layer by layer (the first stage that runs adds Problem & job and a rough Solution when missing):
-  title only ──► Problem & job, rough Solution ──/design-gh-issue──► + user stories, UACs ──/specify-gh-issue──► + technical ACs, verification
-                      └──────────────/specify-gh-issue (no Design): + user stories, UACs, technical ACs─────────────────────────────────────┘
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/issue-standard-dark.png">
+  <img src="docs/diagrams/issue-standard.png" width="960" alt="Issue standard, layer by layer: a title-only issue gets Problem &amp; job and a rough Solution from the first stage that runs; /design-gh-issue adds user stories and UACs; /specify-gh-issue adds the technical layer (approach, technical ACs, verification). Specify without Design adds user stories, UACs and technical ACs in one step.">
+</picture>
+
+Diagram sources: `docs/diagrams/render.py` (writes the HTML; rasterize with the diagram-design skill's `export_png.py`).
 
 ## Generic vs project
 
