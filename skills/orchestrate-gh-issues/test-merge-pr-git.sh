@@ -41,6 +41,7 @@ cat >"$T/bin/gh" <<'EOF'
 case "$*" in
   "pr view 7 --json state,headRefName,baseRefName,labels,body")
     printf '{"state":"OPEN","headRefName":"feat/7-x","baseRefName":"main","labels":[],"body":"Closes #70\\n## Review\\nroute: lead · effort: low · by: sonnet\\nlows: 0\\n"}' ;;
+  "pr checks 7 --json name,bucket") [ -f "$T/checks" ] || { echo "no checks reported on the 'x' branch" >&2; exit 1; }; cat "$T/checks" ;;
   "pr view 7 --json files"*) printf 'b\t1\t0\n' ;;
   "pr view 7 --json state,headRefOid") printf '{"state":"MERGED","headRefOid":"abc"}' ;;
   "pr view 7 --json state,headRefName,headRefOid,isCrossRepository") printf '{"state":"MERGED","headRefName":"feat/7-x","headRefOid":"%s"}' "$(cat "$OIDFILE")" ;;
@@ -64,6 +65,36 @@ out=$(bash "$DIR/merge-pr.sh" prep 7 2>&1); rc=$?
 eq "rerun verifies and pushes" "$rc:$(printf '%s' "$out" | grep -c verify-ok)" "0:1"
 git -C "$R/main" fetch -q origin
 eq "remote head contains main" "$(git -C "$R/main" merge-base --is-ancestor origin/main origin/feat/7-x && echo yes)" "yes"
+
+# CI checks: prep refuses on failed, waits on pending, honours WF_REQUIRED_CHECKS.
+ck() { printf '%s' "$1" >"$T/checks"; out=$(bash "$DIR/merge-pr.sh" prep 7 2>&1); rc=$?; }
+ck '[{"name":"CI / quality","bucket":"fail"},{"name":"lint","bucket":"pass"}]'
+eq "ci failed refuses" "$rc:$(printf '%s' "$out" | grep -c 'CI: failed check(s): CI / quality')" "1:1"
+eq "ci failed: no ready line" "$(printf '%s' "$out" | grep -c '^ready:')" 0
+ck '[{"name":"CI / quality","bucket":"cancel"}]'
+eq "ci cancelled refuses" "$rc" 1
+rm "$T/checks"
+echo 'WF_REQUIRED_CHECKS="CI / quality"' >>"$R/main/.claude/issue-workflow.sh"
+ck '[{"name":"other","bucket":"pass"}]'
+eq "required check not reported waits" "$rc:$(printf '%s' "$out" | grep -c 'WAIT #7: CI pending: CI / quality(not reported)')" "2:1"
+ck '[{"name":"CI / quality","bucket":"pending"}]'
+eq "pending waits, no ready line" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "2:0"
+ck '[{"name":"CI / quality","bucket":"pass"},{"name":"flaky","bucket":"fail"}]'
+eq "required subset ignores other failure" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"
+echo 'WF_REQUIRED_CHECKS="CI / quality, build [linux],"' >>"$R/main/.claude/issue-workflow.sh"
+mkdir -p "$R/main/b"; : >"$R/main/build l"
+ck '[{"name":"CI / quality","bucket":"pass"},{"name":"build [linux]","bucket":"pass"}]'
+eq "several names, trimmed, glob chars literal, trailing comma" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"
+ck '[{"name":"CI / quality","bucket":"pass"}]'
+eq "second required name missing waits" "$rc:$(printf '%s' "$out" | grep -c 'build \[linux\](not reported)')" "2:1"
+sed -i.bak '$d' "$R/main/.claude/issue-workflow.sh"; rm -f "$R/main/.claude/issue-workflow.sh.bak" "$R/main/build l"; rmdir "$R/main/b"
+ck 'not json'
+eq "unreadable output fails closed" "$rc" 64
+sed -i.bak '$d' "$R/main/.claude/issue-workflow.sh"; rm -f "$R/main/.claude/issue-workflow.sh.bak"
+ck '[{"name":"CI / quality","bucket":"pass"},{"name":"s","bucket":"skipping"}]'
+eq "all pass/skipping is ready" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"
+rm "$T/checks"
+out=$(bash "$DIR/merge-pr.sh" prep 7 2>&1); eq "no checks reported is ready" "$?:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"
 
 # M1: a conflict aborts the merge and leaves the worktree clean.
 echo d >d; q add d; q commit -qm d; q push -q origin main 2>/dev/null
