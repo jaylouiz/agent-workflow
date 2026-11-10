@@ -57,7 +57,7 @@ def strip_env(s):
         i += 1
     return s[i:]
 SQ, DQ, BS, NL = chr(39), chr(34), chr(92), chr(10)  # no literal quotes here: this whole block sits inside shell single quotes
-HEREDOC = re.compile(r"<<(-?)[ \t]*(?:" + SQ + "([^" + SQ + r"]*)" + SQ + r"|\"([^\"]*)\"|\\?([^\s;&|()<>" + DQ + SQ + BS + BS + "]+))")
+HEREDOC = re.compile(r"<<(-?)[ \t]*(?:" + SQ + "([^" + SQ + r"]*)" + SQ + r"|\"([^\"]*)\"|\\?([^\s;&|()<>`" + DQ + SQ + BS + BS + "]+))")
 WORD_START = " \t\n;&|()"  # a `#` after one of these starts a comment
 def prep(text):  # one quote-aware scan: comments, line continuations and heredoc bodies go, ANSI-C strings and quoted substitutions are normalised so shlex can lex the rest
     n, pending = len(text), []  # pending: heredocs whose body starts after the next newline
@@ -121,6 +121,10 @@ def prep(text):  # one quote-aware scan: comments, line continuations and heredo
                 j = arith(i + 1); out.append(text[i:j]); i = j  # `<<` in here is a shift
             elif text.startswith("((", i):
                 j = arith(i); out.append(text[i:j]); i = j
+            elif text.startswith("$[", i):  # legacy arithmetic: `<<` in here is a shift
+                j = text.find("]", i)
+                j = n if j < 0 else j + 1
+                out.append(text[i:j]); i = j
             elif ch == "$" and text.startswith("(", i + 1):
                 s, i = scan(i + 2, True); out.append("$(" + s + ")")
             elif ch == ")" and closer and depth == 0:

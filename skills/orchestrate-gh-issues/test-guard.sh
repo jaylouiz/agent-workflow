@@ -267,6 +267,12 @@ expect 2 "arithmetic << in a (( )) command" "((i = 1<<n))
 gh pr create --title x --fill"
 expect 2 "arithmetic << then merge chain" "x=\$((1<<n))
 gh pr merge 5 && $MC after 5 x"
+expect 2 "backtick in heredoc delimiter: the heredoc body still hides nothing after it (#3 review)" "echo \`cat <<EOF\`x\`\`
+body
+EOF
+gh pr merge 1 && echo hi"
+expect 2 "legacy arithmetic \$[1<<3] opens no heredoc (#3 review)" "echo \$[1<<3]
+gh pr merge 1 && echo hi"
 expect 2 "here-string <<< opens no heredoc" "cat <<< \"it's\"
 gh pr create --title x --fill"
 expect 2 "escaped-delimiter heredoc (<<\\EOF) is skipped, the next command is checked" "cat <<\\EOF >/dev/null
