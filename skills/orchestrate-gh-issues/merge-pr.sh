@@ -87,20 +87,21 @@ ci_state() { # ci_state <pr>: "pass" | "fail: <names>" | "pending: <names>"; fai
   failed=""; pending=""
   if [ -n "${WF_REQUIRED_CHECKS:-}" ]; then
     local IFS=,
+    set -f # comma-separated names; no globbing: "build [linux]" stays literal
     for n in $WF_REQUIRED_CHECKS; do
       n=$(printf '%s' "$n" | sed 's/^ *//; s/ *$//'); [ -n "$n" ] || continue
-      name=$(printf '%s\n' "$rows" | awk -F'\t' -v n="$n" '$1==n{print $2}' | sort -u | tr '\n' ' ')
+      name=$(printf '%s\n' "$rows" | CK=$n awk -F'\t' '$1==ENVIRON["CK"]{print $2}' | sort -u | tr '\n' ' ')
       case " $name" in
         *" fail "*|*" cancel "*) failed="$failed $n" ;;
         *" pending "*) pending="$pending $n" ;;
         " ") pending="$pending $n(not reported)" ;;
       esac
     done
+    set +f
   else
     failed=$(printf '%s\n' "$rows" | awk -F'\t' '$2=="fail"||$2=="cancel"{printf " %s", $1}')
     pending=$(printf '%s\n' "$rows" | awk -F'\t' '$2=="pending"{printf " %s", $1}')
   fi
-  unset IFS
   if [ -n "$failed" ]; then echo "fail:$failed"; elif [ -n "$pending" ]; then echo "pending:$pending"; else echo pass; fi
 }
 

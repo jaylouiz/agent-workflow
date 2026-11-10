@@ -81,6 +81,13 @@ ck '[{"name":"CI / quality","bucket":"pending"}]'
 eq "pending waits, no ready line" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "2:0"
 ck '[{"name":"CI / quality","bucket":"pass"},{"name":"flaky","bucket":"fail"}]'
 eq "required subset ignores other failure" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"
+echo 'WF_REQUIRED_CHECKS="CI / quality, build [linux],"' >>"$R/main/.claude/issue-workflow.sh"
+mkdir -p "$R/main/b"; : >"$R/main/build l"
+ck '[{"name":"CI / quality","bucket":"pass"},{"name":"build [linux]","bucket":"pass"}]'
+eq "several names, trimmed, glob chars literal, trailing comma" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"
+ck '[{"name":"CI / quality","bucket":"pass"}]'
+eq "second required name missing waits" "$rc:$(printf '%s' "$out" | grep -c 'build \[linux\](not reported)')" "2:1"
+sed -i.bak '$d' "$R/main/.claude/issue-workflow.sh"; rm -f "$R/main/.claude/issue-workflow.sh.bak" "$R/main/build l"; rmdir "$R/main/b"
 ck 'not json'
 eq "unreadable output fails closed" "$rc" 64
 sed -i.bak '$d' "$R/main/.claude/issue-workflow.sh"; rm -f "$R/main/.claude/issue-workflow.sh.bak"
