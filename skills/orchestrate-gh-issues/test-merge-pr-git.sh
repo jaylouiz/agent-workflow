@@ -68,23 +68,23 @@ eq "remote head contains main" "$(git -C "$R/main" merge-base --is-ancestor orig
 
 # CI checks: prep refuses on failed, waits on pending, honours WF_REQUIRED_CHECKS.
 ck() { printf '%s' "$1" >"$T/checks"; out=$(bash "$DIR/merge-pr.sh" prep 7 2>&1); rc=$?; }
-ck '[{"name":"quality","bucket":"fail"},{"name":"lint","bucket":"pass"}]'
-eq "ci failed refuses" "$rc:$(printf '%s' "$out" | grep -c 'CI: failed check(s): quality')" "1:1"
-eq "ci failed refusal before NOT READY output only" "$(printf '%s' "$out" | grep -c '^ready:')" 0
-ck '[{"name":"quality","bucket":"cancel"}]'
+ck '[{"name":"CI / quality","bucket":"fail"},{"name":"lint","bucket":"pass"}]'
+eq "ci failed refuses" "$rc:$(printf '%s' "$out" | grep -c 'CI: failed check(s): CI / quality')" "1:1"
+eq "ci failed: no ready line" "$(printf '%s' "$out" | grep -c '^ready:')" 0
+ck '[{"name":"CI / quality","bucket":"cancel"}]'
 eq "ci cancelled refuses" "$rc" 1
 rm "$T/checks"
-echo 'WF_REQUIRED_CHECKS="quality"' >>"$R/main/.claude/issue-workflow.sh"
+echo 'WF_REQUIRED_CHECKS="CI / quality"' >>"$R/main/.claude/issue-workflow.sh"
 ck '[{"name":"other","bucket":"pass"}]'
-eq "required check not reported waits" "$rc:$(printf '%s' "$out" | grep -c 'WAIT #7: CI pending: quality(not reported)')" "2:1"
-ck '[{"name":"quality","bucket":"pending"}]'
+eq "required check not reported waits" "$rc:$(printf '%s' "$out" | grep -c 'WAIT #7: CI pending: CI / quality(not reported)')" "2:1"
+ck '[{"name":"CI / quality","bucket":"pending"}]'
 eq "pending waits, no ready line" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "2:0"
-ck '[{"name":"quality","bucket":"pass"},{"name":"flaky","bucket":"fail"}]'
+ck '[{"name":"CI / quality","bucket":"pass"},{"name":"flaky","bucket":"fail"}]'
 eq "required subset ignores other failure" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"
 ck 'not json'
 eq "unreadable output fails closed" "$rc" 64
 sed -i.bak '$d' "$R/main/.claude/issue-workflow.sh"; rm -f "$R/main/.claude/issue-workflow.sh.bak"
-ck '[{"name":"quality","bucket":"pass"},{"name":"s","bucket":"skipping"}]'
+ck '[{"name":"CI / quality","bucket":"pass"},{"name":"s","bucket":"skipping"}]'
 eq "all pass/skipping is ready" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"
 rm "$T/checks"
 out=$(bash "$DIR/merge-pr.sh" prep 7 2>&1); eq "no checks reported is ready" "$?:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"

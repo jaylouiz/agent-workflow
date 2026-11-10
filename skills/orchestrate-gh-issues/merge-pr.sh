@@ -86,7 +86,9 @@ ci_state() { # ci_state <pr>: "pass" | "fail: <names>" | "pending: <names>"; fai
   rows=$(jq -r '.[] | "\(.name)\t\(.bucket)"' <<<"$out")
   failed=""; pending=""
   if [ -n "${WF_REQUIRED_CHECKS:-}" ]; then
+    local IFS=,
     for n in $WF_REQUIRED_CHECKS; do
+      n=$(printf '%s' "$n" | sed 's/^ *//; s/ *$//'); [ -n "$n" ] || continue
       name=$(printf '%s\n' "$rows" | awk -F'\t' -v n="$n" '$1==n{print $2}' | sort -u | tr '\n' ' ')
       case " $name" in
         *" fail "*|*" cancel "*) failed="$failed $n" ;;
@@ -98,6 +100,7 @@ ci_state() { # ci_state <pr>: "pass" | "fail: <names>" | "pending: <names>"; fai
     failed=$(printf '%s\n' "$rows" | awk -F'\t' '$2=="fail"||$2=="cancel"{printf " %s", $1}')
     pending=$(printf '%s\n' "$rows" | awk -F'\t' '$2=="pending"{printf " %s", $1}')
   fi
+  unset IFS
   if [ -n "$failed" ]; then echo "fail:$failed"; elif [ -n "$pending" ]; then echo "pending:$pending"; else echo pass; fi
 }
 
