@@ -27,3 +27,7 @@ Goal: fewer round trips, fewer errors, checks sized to the change, and instructi
 ## Multiple issues -> screen all first
 
 When handed several issues at once, read and screen all of them first (size, area overlap, dependencies, lane) and derive the order and parallelisation before dispatching anything.
+
+## Commit and push without asking
+
+Committing and pushing are part of the development workflow: do them yourself (or let agents do them) whenever a unit of work is done, including config and doc changes left in the working tree. Feature work goes through a branch and PR; small workflow, config or doc changes may go straight to the default branch. Hold back only when the user asks for it or the situation clearly calls for it (a held merge, a one-way decision). Merging PRs still follows the skills and the user's word.
