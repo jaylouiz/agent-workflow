@@ -12,7 +12,7 @@ cat >"$T/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 T=$(dirname "$(dirname "$0")")
 case "$1 $2" in
-  "issue list") case "$*" in *agent-decided*comments*) cat "$T/agent.json" ;; *--label*needs-decision*) echo '[]' ;; *comments*) cat "$T/needs.json" ;; *--jq*) echo 0 ;; *) echo '[]' ;; esac ;;
+  "issue list") case "$*" in *agent-decided*comments*) cat "$T/agent.json" ;; *--label*needs-decision*) [ -e "$T/nolabel" ] && echo '[]' || cat "$T/needs.json" ;; *comments*) cat "$T/needs.json" ;; *--jq*) echo 0 ;; *) echo '[]' ;; esac ;;
   "issue view") case "$*" in *"--json comments"*) jq '.[0].comments' "$T/needs.json" ;; *) cat "$T/state-$3" 2>/dev/null || echo OPEN ;; esac ;;
   "issue comment") while [ $# -gt 0 ]; do [ "$1" = --body-file ] && cat "$2" >>"$T/posted"; shift; done ;;
   "issue edit"|"label create") ;;
@@ -110,11 +110,13 @@ eq "resolved request stays resolved (no row, later chatter is not a change)" "$(
 eq "record then followup is not a change" "$(status 'rec D1' 'D1: x' 'fol D1')" ""
 
 eq "a later comment after followup is a change again" "$(status 'rec D1' 'D1: x' 'fol D1' 'D1: also y')" "change   #7 D1: D1: also y"
-# the needs-decision label can be gone (dropped by hand, lag: kan-do#68 D1): status and digest scan by comments, not by label
+touch "$T/nolabel" # the needs-decision label can be gone (dropped by hand, lag: kan-do#68 D1): status and digest scan by comments, not by label
 eq "answered request is listed although the label is gone" "$(status 'req D1' 'D1: B')" "answered #7 D1: D1: B"
 eq "waiting request is listed although the label is gone" "$(status 'req D1')" "waiting  #7 D1 (0m): Pick D1?"
 eq "digest lists a request although the label is gone" "$(thread "$T/needs.json" 'req D1'; bash "$D" digest | sed -n 1p)" "1 decision(s) need you:"
 eq "a multi-line answer starting 'D1:' is answered" "$(thread "$T/needs.json" 'req D1' 'D1:' ; jq '.[0].comments[1].body = "D1:\n\nStep: agree\n\nEmpty: agree"' "$T/needs.json" >"$T/n2" && mv "$T/n2" "$T/needs.json"; cp "$T/needs.json" "$T/agent.json"; bash "$D" status)" "answered #7 D1: D1: Step: agree Empty: agree"
+rm -f "$T/nolabel"
+eq "labeled and recent scans list a request once" "$(status 'req D1')" "waiting  #7 D1 (0m): Pick D1?"
 
 # write commands: default to the newest decision, or the D<k> given (the one status printed)
 thread "$T/needs.json" 'req D3' 'rec D4' 'D3: B'

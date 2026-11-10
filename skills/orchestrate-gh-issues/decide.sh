@@ -111,10 +111,10 @@ log_dir() { echo "${WF_ISSUE_LOG_DIR:-$HOME/.claude/issue-logs}/$REPO"; }
 # open); any other unmarked comment owns to the nearest earlier marked comment, a note included: a note has no
 # decision, so a reply to it (`rec D1, note look, "y"`) belongs to none and is dropped, exactly as Tandem reads it.
 # Output (US-separated, \x1f: a tab IFS would collapse an empty answer field and shift the preview into it): number, url, last kind, id, question, age seconds, answer text (newlines flattened), preview link
-# An empty <label> scans every issue of that state: a request whose `needs-decision` label was dropped by hand (or lags)
-# must still show up, so status and digest scan unlabeled.
+# An empty <label> scans the 100 most recently updated issues of that state (an answer updates its issue).
 scan() { # <label|""> <state>
-  gh issue list ${1:+--label "$1"} --state "$2" --limit 100 --json number,url,comments | jq -r '
+  local f=(--label "$1"); [ -n "$1" ] || f=(--search "sort:updated-desc")
+  gh issue list "${f[@]}" --state "$2" --limit 100 --json number,url,comments | jq -r '
     def owner($cs; $e):
       ($e.pre) as $p
       | if $p != null and ([$cs[] | select(.key < $e.key and .c != null and (.c.kind == "request" or .c.kind == "record") and .c.id == $p)] | length) > 0
@@ -142,6 +142,10 @@ scan() { # <label|""> <state>
        ($q.v.body | split("\n") | map(select(test("^Preview: "))) | first // "" | sub("^Preview: "; ""))]
     | map(tostring | gsub("\u001f"; " ")) | join("\u001f")'
 }
+
+# Unresolved requests: labeled issues first, then recently updated ones, so a request whose `needs-decision` label was
+# dropped by hand (or lags) still shows up (kan-do#68 D1); one row per issue and decision.
+pending() { { scan needs-decision open; scan "" open; } | awk -F'\037' '!seen[$1, $4]++'; }
 
 age() { local s=$1; if [ "$s" -ge 3600 ]; then echo "$((s / 3600))h"; else echo "$((s / 60))m"; fi; }
 
@@ -209,7 +213,7 @@ case "$cmd" in
     post "$1" "$tmp"; rm -f "$tmp"
     ;;
   status)
-    scan "" open | while IFS=$'\x1f' read -r n url kind id q secs ans _prev; do
+    pending | while IFS=$'\x1f' read -r n url kind id q secs ans _prev; do
       if [ "$kind" = answered ] || { [ "$kind" = request ] && [ -n "$ans" ]; }; then
         echo "answered #$n $id: $ans"
       elif [ "$kind" = request ]; then
@@ -230,7 +234,7 @@ case "$cmd" in
         *) die "unknown digest flag $1" ;;
       esac
     done
-    rows=$(scan "" open | awk -F'\037' '$3 == "request" && $7 == ""' | sort -t$'\037' -k6,6nr)
+    rows=$(pending | awk -F'\037' '$3 == "request" && $7 == ""' | sort -t$'\037' -k6,6nr)
     [ -n "$rows" ] || { [ -n "$due" ] && exit 1; echo "no open decision requests"; exit 0; }
     if [ -n "$due" ]; then
       touch "$due"
