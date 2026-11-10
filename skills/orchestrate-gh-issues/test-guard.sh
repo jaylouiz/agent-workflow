@@ -267,6 +267,12 @@ expect 2 "arithmetic << in a (( )) command" "((i = 1<<n))
 gh pr create --title x --fill"
 expect 2 "arithmetic << then merge chain" "x=\$((1<<n))
 gh pr merge 5 && $MC after 5 x"
+expect 2 "backtick in heredoc delimiter: the heredoc body still hides nothing after it (#3 review)" "echo \`cat <<EOF\`x\`\`
+body
+EOF
+gh pr merge 1 && echo hi"
+expect 2 "legacy arithmetic \$[1<<3] opens no heredoc (#3 review)" "echo \$[1<<3]
+gh pr merge 1 && echo hi"
 expect 2 "here-string <<< opens no heredoc" "cat <<< \"it's\"
 gh pr create --title x --fill"
 expect 2 "escaped-delimiter heredoc (<<\\EOF) is skipped, the next command is checked" "cat <<\\EOF >/dev/null
@@ -346,6 +352,47 @@ out=$(jq -n --arg d "$T" '{tool_name:"Bash",tool_input:{command:"gh pr create --
 { [ $rc = 1 ] && grep -q WARNING <<<"$out"; } || { fail=$((fail + 1)); echo "FAIL [parse-block crash warns] rc=$rc out=$out"; }
 out=$(jq -n --arg d "$T" '{tool_name:"Bash",tool_input:{command:"gh pr create --title x --fill"},cwd:$d}' | GUARD_PYTHON="$T/nonexistent" bash "$DIR/guard.sh" 2>&1); rc=$?; n=$((n + 1))
 { [ $rc = 1 ] && grep -q WARNING <<<"$out"; } || { fail=$((fail + 1)); echo "FAIL [missing python warns] rc=$rc out=$out"; }
+
+# #3: heredoc delimiters are any shell word, and an empty token before & does not hide the separator
+for d in PR-BODY EOF.md 1 a.b-c A1 'x,y'; do
+  expect 2 "heredoc <<$d: the end line matches, the next command is checked" "cat <<$d >/dev/null
+it's a note
+$d
+gh pr create --title x --fill"
+  expect 0 "heredoc <<$d: a body line with a guarded command is not a command" "cat <<$d >/dev/null
+x; gh pr create --fill
+$d
+echo done"
+  expect 2 "heredoc <<-$d (tab-indented end line), then a command" "cat <<-$d >/dev/null
+	it's
+	$d
+gh pr create --title x --fill"
+  expect 2 "heredoc <<\\$d (escaped), then a command" "cat <<\\$d >/dev/null
+it's
+$d
+gh pr create --title x --fill"
+done
+expect 2 "heredoc delimiter stops at a redirect (<<EOF>out)" "cat <<EOF>$T/o.txt
+it's
+EOF
+gh pr create --title x --fill"
+expect 2 "heredoc delimiter stops at ; (<<EOF;)" "cat <<EOF; echo hi
+it's
+EOF
+gh pr create --title x --fill"
+expect 2 "heredoc delimiter stops at ) (<<EOF)" "(cat <<EOF)
+it's
+EOF
+gh pr create --title x --fill"
+expect 2 "<<1 in arithmetic still opens no heredoc" "echo \$((1<<3))
+gh pr create --title x --fill"
+expect 2 "ask with an empty --body before the trailing &" "orca orchestration ask --to x --body \"\" &"
+expect 2 "ask with an empty single-quoted token before the trailing &" "orca orchestration ask --to x --body '' &"
+expect 2 "ask with an empty token first, trailing &" "orca orchestration ask '' &"
+expect 2 "ask, &> redirect, trailing &" "orca orchestration ask --to x --body y &>/dev/null &"
+expect 2 "ask, 2>&1, empty token, trailing &" "orca orchestration ask --to x --body \"\" 2>&1 &"
+expect 2 "merge with an empty token, then & echo is a merge chain" "gh pr merge 1 \"\" & echo hi"
+expect 0 "lone merge with an empty token" "gh pr merge 1 \"\""
 
 # mentions only
 expect 0 "commit message mentions pr create" "git commit -m \"gh pr create later\""
