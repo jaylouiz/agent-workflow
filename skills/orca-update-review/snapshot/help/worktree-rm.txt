@@ -8,15 +8,15 @@ Options:
   --help                 Show this help message
   --json                 Emit machine-readable JSON
   --pairing-code <code>  Run against a remote Orca server using an orca://pair?... code
-  --environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them
-  --worktree <selector>  Worktree selector such as identity:<identity>, id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
+  --environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them
+  --worktree <selector>  Worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id> (where the command takes folder workspaces), name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --force                Force worktree removal when supported; does not force branch deletion
   --delete-branch
   --run-hooks
   --allow-failed-archive-hook
 
 Notes:
-  For a non-root folder workspace, removes its Orca entry and stops its sessions without deleting the folder or touching Git. The folder project root cannot be removed with this command.
+  Needs an explicit workspace: --worktree current and active are refused, and the error names the selector they resolve to right now, as `git worktree remove` needs a path. For a non-root folder workspace, removes its Orca entry and stops its sessions without deleting the folder or touching Git. The folder project root cannot be removed with this command. For a group folder workspace (folder:<id>, or a path:/name: selector that matches one), Orca forgets it and the folder stays on disk; --delete-branch, --run-hooks and --allow-failed-archive-hook are refused for it.
   Use --worktree "id:<full-instance-id>" with the full id from orca worktree list --json to select one folder workspace; several entries can share the same path.
   Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.
   With --run-hooks, a failed archive hook blocks the removal: nothing is stopped, deleted or deregistered, and the command exits non-zero with error code worktree_archive_hook_failed. --force does not waive this.

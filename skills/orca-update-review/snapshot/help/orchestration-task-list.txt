@@ -8,7 +8,7 @@ Options:
   --help                 Show this help message
   --json                 Emit machine-readable JSON
   --pairing-code <code>  Run against a remote Orca server using an orca://pair?... code
-  --environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them
+  --environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them
   --status
   --ready
   --brief

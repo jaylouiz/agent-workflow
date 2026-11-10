@@ -8,7 +8,7 @@ Options:
   --help                 Show this help message
   --json                 Emit machine-readable JSON
   --pairing-code <code>  Run against a remote Orca server using an orca://pair?... code
-  --environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them
+  --environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them
   --to
   --run
   --question
@@ -18,7 +18,7 @@ Options:
   --wait
   --timeout-ms <ms>     Maximum wait time before timing out
   --from
-  --retry-request
+  --retry-request <id>  Reissue an earlier request by its ID; replays its result instead of repeating it
   --full                 Print the full record Orca returned instead of the concise view
 
 Notes:

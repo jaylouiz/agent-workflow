@@ -8,7 +8,7 @@ Options:
   --help                 Show this help message
   --json                 Emit machine-readable JSON
   --pairing-code <code>  Run against a remote Orca server using an orca://pair?... code
-  --environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them
+  --environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them
   --to
   --run
   --from
@@ -21,7 +21,7 @@ Options:
   --task-id <id>        Task id to include in orchestration payload JSON
   --dispatch-id <id>    Dispatch id to include in orchestration payload JSON
   --dispatch-capability
-  --retry-request
+  --retry-request <id>  Reissue an earlier request by its ID; replays its result instead of repeating it
   --outcome
   --files-modified <csv> Comma-separated files for orchestration payload JSON
   --report-path <path>  Report path to include in orchestration payload JSON

@@ -8,7 +8,7 @@ Options:
   --help                 Show this help message
   --json                 Emit machine-readable JSON
   --pairing-code <code>  Run against a remote Orca server using an orca://pair?... code
-  --environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them
+  --environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them
   --task
   --spec
   --spec-file <path|->  Read the spec from a file or stdin
@@ -17,7 +17,7 @@ Options:
   --deps
   --parent
   --on
-  --worktree <selector>  Worktree selector such as identity:<identity>, id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
+  --worktree <selector>  Worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id> (where the command takes folder workspaces), name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --name <name>          Name for the new worktree or automation
   --repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>
   --base-branch <ref>    Base branch/ref to create the worktree from
@@ -32,7 +32,7 @@ Options:
   --timeout-ms <ms>     Maximum wait time before timing out
   --run
   --from
-  --retry-request
+  --retry-request <id>  Reissue an earlier request by its ID; replays its result instead of repeating it
   --full                 Print the full record Orca returned instead of the concise view
 
 Notes:
