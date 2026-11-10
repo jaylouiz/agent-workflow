@@ -11,9 +11,10 @@
 #        `route: lead` where the route says reviewer. Else exit 1 with the reasons.
 #   merge-pr.sh prep <pr>
 #        refuse on a hold label, an open needs-decision, no `Closes #<n>` (opt-out: `No-issue: <reason>`) or a
-#        failing review-check; then, in the PR's worktree (wf_install first when the base brought a package.json change),
+#        failing review-check or a failed GitHub check on the PR head (WF_REQUIRED_CHECKS); then, in the PR's worktree (wf_install first when the base brought a package.json change),
 #        merge the base branch in when behind (no rebase, no force-push), wf_verify (+ wf_build when
-#        wf_build_needed), push. Prints "ready: gh pr merge <pr> --merge".
+#        wf_build_needed), push; then re-reads the checks of the pushed head: failed = NOT READY (exit 1), pending or a required check not
+#        reported yet = "WAIT #<pr>: CI pending: <names>" (exit 2, rerun prep later). Prints "ready: gh pr merge <pr> --merge".
 #   merge-pr.sh after <pr> "<summary>"
 #        PR must be merged: print its gate row (WF_CHECKS_TSV), wf_after_merge, wf_deploy_check, and post the
 #        summary on the closed issue via decide.sh note, then delete its coordination log, then sweep.sh --pr <pr>:
@@ -73,6 +74,33 @@ issues_of() { # issues_of <body file>: every issue a line-leading Closes/Fixes/R
   grep -Eio '^[[:space:]-]*(closes|fixes|resolves) +([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+' "$1" | grep -Eo '[0-9]+$'
 }
 
+ci_state() { # ci_state <pr>: "pass" | "fail: <names>" | "pending: <names>"; fails closed (returns 1) on unreadable output
+  local pr=$1 out err rows failed pending reported n name
+  err=$(mktemp)
+  out=$(gh pr checks "$pr" --json name,bucket 2>"$err")
+  if ! printf '%s' "$out" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    if grep -qi 'no checks reported' "$err"; then out='[]'
+    else echo "gh pr checks $pr unreadable: $(head -c 200 "$err")" >&2; rm -f "$err"; return 1; fi
+  fi
+  rm -f "$err"
+  rows=$(jq -r '.[] | "\(.name)\t\(.bucket)"' <<<"$out")
+  failed=""; pending=""
+  if [ -n "${WF_REQUIRED_CHECKS:-}" ]; then
+    for n in $WF_REQUIRED_CHECKS; do
+      name=$(printf '%s\n' "$rows" | awk -F'\t' -v n="$n" '$1==n{print $2}' | sort -u | tr '\n' ' ')
+      case " $name" in
+        *" fail "*|*" cancel "*) failed="$failed $n" ;;
+        *" pending "*) pending="$pending $n" ;;
+        " ") pending="$pending $n(not reported)" ;;
+      esac
+    done
+  else
+    failed=$(printf '%s\n' "$rows" | awk -F'\t' '$2=="fail"||$2=="cancel"{printf " %s", $1}')
+    pending=$(printf '%s\n' "$rows" | awk -F'\t' '$2=="pending"{printf " %s", $1}')
+  fi
+  if [ -n "$failed" ]; then echo "fail:$failed"; elif [ -n "$pending" ]; then echo "pending:$pending"; else echo pass; fi
+}
+
 worktree_of() { # worktree path that has <branch> checked out
   git worktree list --porcelain | awk -v b="refs/heads/$1" '/^worktree /{p=substr($0,10)} $0=="branch " b {print p; exit}'
 }
@@ -117,6 +145,8 @@ case "$cmd" in
         for h in $WF_HOLD_LABELS; do [ "$l" = "$h" ] && stop="$stop\nhold: issue #$n label $l"; done
       done
     done
+    ci=$(ci_state "$pr") || die "cannot read CI checks of PR #$pr (nothing merged or pushed)"
+    case "$ci" in fail:*) stop="$stop\nCI: failed check(s):${ci#fail:}" ;; esac
     r=$(route_pr "$pr") && [ -n "$r" ] || die "route for PR #$pr failed"
     echo "route $r"
     msg=$(review_check "$bodyf" "${r%%:*}") || stop="$stop\n$msg"
@@ -148,6 +178,11 @@ case "$cmd" in
     else
       echo "up to date with origin/$base, pushed"
     fi
+    ci=$(ci_state "$pr") || die "cannot read CI checks of PR #$pr after the push"
+    case "$ci" in
+      fail:*) printf 'NOT READY #%s:\nCI: failed check(s):%s\n' "$pr" "${ci#fail:}"; exit 1 ;;
+      pending:*) printf 'WAIT #%s: CI pending:%s (rerun prep when it is done)\n' "$pr" "${ci#pending:}"; exit 2 ;;
+    esac
     echo "ready: gh pr merge $pr --merge" ;;
   after)
     pr=${1:?usage: after <pr> "<summary>"}; summary=${2:?usage: after <pr> "<summary>"}

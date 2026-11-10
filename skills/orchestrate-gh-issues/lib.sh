@@ -12,6 +12,7 @@ wf_load() { # defaults, then the project's config
   WF_IGNORE_GLOBS=(package-lock.json)
   WF_HOLD_LABELS="on-hold-after-spec do-not-merge"
   WF_CHECKS_TSV=""
+  WF_REQUIRED_CHECKS=""
   # Globbing off while sourcing: an unquoted `store/**` in the config must stay a pattern, not expand to files.
   set -f
   # shellcheck disable=SC1091
