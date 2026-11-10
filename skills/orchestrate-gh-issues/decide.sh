@@ -111,8 +111,10 @@ log_dir() { echo "${WF_ISSUE_LOG_DIR:-$HOME/.claude/issue-logs}/$REPO"; }
 # open); any other unmarked comment owns to the nearest earlier marked comment, a note included: a note has no
 # decision, so a reply to it (`rec D1, note look, "y"`) belongs to none and is dropped, exactly as Tandem reads it.
 # Output (US-separated, \x1f: a tab IFS would collapse an empty answer field and shift the preview into it): number, url, last kind, id, question, age seconds, answer text (newlines flattened), preview link
-scan() { # <label> <state>
-  gh issue list --label "$1" --state "$2" --limit 100 --json number,url,comments | jq -r '
+# An empty <label> scans every issue of that state: a request whose `needs-decision` label was dropped by hand (or lags)
+# must still show up, so status and digest scan unlabeled.
+scan() { # <label|""> <state>
+  gh issue list ${1:+--label "$1"} --state "$2" --limit 100 --json number,url,comments | jq -r '
     def owner($cs; $e):
       ($e.pre) as $p
       | if $p != null and ([$cs[] | select(.key < $e.key and .c != null and (.c.kind == "request" or .c.kind == "record") and .c.id == $p)] | length) > 0
@@ -207,7 +209,7 @@ case "$cmd" in
     post "$1" "$tmp"; rm -f "$tmp"
     ;;
   status)
-    scan needs-decision open | while IFS=$'\x1f' read -r n url kind id q secs ans _prev; do
+    scan "" open | while IFS=$'\x1f' read -r n url kind id q secs ans _prev; do
       if [ "$kind" = answered ] || { [ "$kind" = request ] && [ -n "$ans" ]; }; then
         echo "answered #$n $id: $ans"
       elif [ "$kind" = request ]; then
@@ -228,7 +230,7 @@ case "$cmd" in
         *) die "unknown digest flag $1" ;;
       esac
     done
-    rows=$(scan needs-decision open | awk -F'\037' '$3 == "request" && $7 == ""' | sort -t$'\037' -k6,6nr)
+    rows=$(scan "" open | awk -F'\037' '$3 == "request" && $7 == ""' | sort -t$'\037' -k6,6nr)
     [ -n "$rows" ] || { [ -n "$due" ] && exit 1; echo "no open decision requests"; exit 0; }
     if [ -n "$due" ]; then
       touch "$due"
