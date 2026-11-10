@@ -43,7 +43,7 @@ OPS = re.compile(r"&&|\|\||;;&|;;|;&|\|&|&|;|\||\(|\)|\n")
 def split(toks):
     segs, cur, seps = [], [], []
     for t in toks:
-        if t and set(t) <= SEP_CHARS and not (t == "&" and cur and cur[-1][-1:] in "<>"):
+        if t and set(t) <= SEP_CHARS and not (t == "&" and cur and cur[-1] and cur[-1][-1] in "<>"):
             for op in OPS.findall(t):  # shlex glues adjacent operator chars (`&` + newline + `)`): one separator per operator (#39)
                 segs.append(cur); seps.append(op); cur = []
         else:
@@ -57,7 +57,7 @@ def strip_env(s):
         i += 1
     return s[i:]
 SQ, DQ, BS, NL = chr(39), chr(34), chr(92), chr(10)  # no literal quotes here: this whole block sits inside shell single quotes
-HEREDOC = re.compile(r"<<(-?)[ \t]*(?:" + SQ + "([^" + SQ + r"]*)" + SQ + r"|\"([^\"]*)\"|\\?([A-Za-z_]\w*))")
+HEREDOC = re.compile(r"<<(-?)[ \t]*(?:" + SQ + "([^" + SQ + r"]*)" + SQ + r"|\"([^\"]*)\"|\\?([^\s;&|()<>" + DQ + SQ + BS + BS + "]+))")
 WORD_START = " \t\n;&|()"  # a `#` after one of these starts a comment
 def prep(text):  # one quote-aware scan: comments, line continuations and heredoc bodies go, ANSI-C strings and quoted substitutions are normalised so shlex can lex the rest
     n, pending = len(text), []  # pending: heredocs whose body starts after the next newline
