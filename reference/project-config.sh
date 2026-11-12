@@ -23,5 +23,8 @@ WF_CHECKS_TSV=""                      # gate log with the PR head SHA per row, p
 # wf_after_merge() { [ "$(git branch --show-current)" = main ] && git fetch -q origin main && git merge -q --ff-only origin/main; }
 # wf_deploy_check() { echo "deploy: <state>"; }
 
+# WF_KEEP_CWD (exported by merge-pr.sh after): the coordinator's working directory. A cleanup in wf_after_merge must not remove it
+# (a removed cwd refuses every later shell call of the session): [ "$PWD" = "$WF_KEEP_CWD" ] or skip that worktree.
+
 # $1 = the PR body file; print the reason and return 1 to block gh pr create (guard.sh).
 # wf_pr_body_check() { grep -q '^Test plan:' "$1" || { echo "missing 'Test plan:' line"; return 1; }; }

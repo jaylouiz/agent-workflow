@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
     --pr) pr=${2:?}; shift 2 ;;
     --wt) wt=${2:?}; shift 2 ;;
     --ledger) ledger=${2:?}; shift 2 ;;
-    --extra) extra="$extra ${2:?}"; shift 2 ;;
+    --extra) [ -r "$2" ] || die "--extra file not readable: $2 (a spec without its notes would go out silently)"; extra="$extra $2"; shift 2 ;;
     --no-port) want_port=0; shift ;;
     --interactive) interactive=1; shift ;;
     *) die "unknown flag $1" ;;
