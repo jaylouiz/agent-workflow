@@ -18,6 +18,7 @@
 #        worker-start args default to `--agent claude`. Each arg is kept whole (spaces are fine, e.g. --tier "Fix - 3
 #        mediums"); an arg must not contain a tab or newline (use --extra <file> for long text).
 #        Queue only tasks whose dependencies are done: the queue order is the start order.
+#        Title convention the duplicate guard reads: `#<n> <stage>`; a batch names every issue up front: `#9+#11 lead (batch)`.
 #
 #   next.sh watch  --dispatch <id> [--dispatch <id>...] [--interval <s>] [--max-secs <s>] [--run <run_id>]
 #        fallback when this session gets no Orca wake (e.g. it runs as a background job): run it as a background
@@ -55,7 +56,7 @@ orca_o() { # orca_o <stage> <orchestration args...>: stdout in $TMP/out; fail th
 run_flag() { [ -n "$run" ] && echo "--run $run"; return 0; }
 
 cmd=${1:-}
-[ -n "$cmd" ] || { sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 64; }
+[ -n "$cmd" ] || { sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'; exit 64; }
 shift
 
 if [ "$cmd" = queue ]; then

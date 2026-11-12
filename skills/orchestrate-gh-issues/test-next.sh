@@ -128,9 +128,6 @@ check "duplicate: exit 1, names Task and --force" '[ $rc = 1 ] && grep -q "stage
 check "duplicate: #7 not created or started, #8 (and #70 is no match) goes on" '[ "$(grep -c "^orchestration task-create" "$T/state/calls")" = 1 ] && grep -q "^started: #8 lead" <<<"$out"'
 check "duplicate: recorded, no port held, queue drained" 'grep -q "^#7 lead.*duplicate of task_other" "$T/ledger/failed-starts" && ! grep -q "#7 lead" "$T/ledger/ports" && [ ! -s "$T/ledger/queue" ]'
 check "duplicate: end-turn line still printed" 'printf "%s" "$out" | grep -q "^next: end your turn"'
-reset; tasks '{"id":"task_dep","task_title":"#8 lead","status":"dispatched","spec":"Issue #8: depends on #7 and #17."}'
-q "#7 lead" lead 7 -- --agent claude
-out=$(NEXT start --ledger "$T/ledger" 2>&1); rc=$?
 reset; tasks '{"id":"task_f","task_title":"#8 lead (follow-up to #7)","status":"dispatched","spec":"x"},{"id":"task_b","task_title":"#3+#7 lead (batch)","status":"dispatched","spec":"x"}'
 q "#7 lead" lead 7 -- --agent claude
 out=$(NEXT start --ledger "$T/ledger" 2>"$T/err"); rc=$?
