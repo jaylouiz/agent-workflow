@@ -131,6 +131,13 @@ check "duplicate: end-turn line still printed" 'printf "%s" "$out" | grep -q "^n
 reset; tasks '{"id":"task_dep","task_title":"#8 lead","status":"dispatched","spec":"Issue #8: depends on #7 and #17."}'
 q "#7 lead" lead 7 -- --agent claude
 out=$(NEXT start --ledger "$T/ledger" 2>&1); rc=$?
+reset; tasks '{"id":"task_f","task_title":"#8 lead (follow-up to #7)","status":"dispatched","spec":"x"},{"id":"task_b","task_title":"#3+#7 lead (batch)","status":"dispatched","spec":"x"}'
+q "#7 lead" lead 7 -- --agent claude
+out=$(NEXT start --ledger "$T/ledger" 2>"$T/err"); rc=$?
+check "a batch title #3+#7 blocks #7, the follow-up title does not" '[ $rc = 1 ] && grep -q "task_b" "$T/err" && ! grep -q "task_f" "$T/err"'
+reset; tasks '{"id":"task_dep","task_title":"#8 lead","status":"dispatched","spec":"Issue #8: depends on #7 and #17."}'
+q "#7 lead" lead 7 -- --agent claude
+out=$(NEXT start --ledger "$T/ledger" 2>&1); rc=$?
 check "a Task that only mentions #7 in its spec text does not block #7" '[ $rc = 0 ] && printf "%s" "$out" | grep -q "^started: #7 lead"'
 NEXT watch --dispatch ctx_aaa111 --interval abc >/dev/null 2>&1; rc=$?; check "watch rejects a non-numeric interval (64)" '[ $rc = 64 ]'
 reset; tasks '{"id":"task_old","task_title":"#7 lead","status":"completed","spec":"Issue #7: Fix."}'

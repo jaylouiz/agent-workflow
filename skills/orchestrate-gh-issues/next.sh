@@ -28,7 +28,7 @@
 #
 # Step 5 starts queued tasks while a slot is free (dispatched workers in the Run < --max, default WF_MAX_WORKERS)
 # and a port is free (spec.sh exit 3 leaves the task queued): spec.sh > <ledger>/<n>-<stage>.spec, task-create,
-# worker-start. A queued task whose issue (`#<n>` in the title, or the spec's own `Issue #<n>` header) another
+# worker-start. A queued task whose issue (`#<n>` leading the title, `#7+#8` batch titles included, or the spec's own `Issue #<n>` header) another
 # non-terminal Task of the Run already names is skipped as `duplicate` (failed-starts, exit 1 at the end): a second
 # coordinator, or a rerun, must not start a second lead. A failed step is never retried and never hidden: the task goes to <ledger>/failed-starts, the
 # script exits 1 and names the stage (spec | task-create | start). A port reserved for a failed start stays
@@ -165,7 +165,7 @@ dup_task() { # dup_task <issue>: sets DUPINFO to id and status of a non-terminal
   orca_o duplicate task-list --json --full $(run_flag)
   jq -e '.result.tasks | type == "array"' "$TMP/out" >/dev/null 2>&1 || fail duplicate "unreadable task-list"
   DUPINFO=$(jq -r --arg n "$1" '.result.tasks[]? | select((.status // "") as $s | ["completed", "failed", "cancelled"] | index($s) | not)
-    | select(((.task_title // "") | test("#" + $n + "([^0-9]|$)")) or ((.spec // "")[0:60] | test("^ *Issue #" + $n + "([^0-9]|$)"))) | "\(.id) (\(.status))"' "$TMP/out" | head -1)
+    | select(([.task_title // "" | scan("^#[0-9]+(?:\\+#[0-9]+)*") | split("+") | map(ltrimstr("#")) | index($n)] | any(. != null)) or ((.spec // "")[0:60] | test("^ *Issue #" + $n + "([^0-9]|$)"))) | "\(.id) (\(.status))"' "$TMP/out" | head -1)
 }
 
 fill() {

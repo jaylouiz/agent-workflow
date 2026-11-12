@@ -41,9 +41,10 @@ cat >"$T/bin/gh" <<'EOF'
 case "$*" in
   "pr view 7 --json state,headRefName,baseRefName,labels,body")
     printf '{"state":"OPEN","headRefName":"feat/7-x","baseRefName":"main","labels":[],"body":"Closes #70\\n## Review\\nroute: lead · effort: low · by: sonnet\\nlows: 0\\n"}' ;;
-  "pr checks 7 --json name -q length")
-    if [ -f "$T/lenseq" ]; then l=$(head -1 "$T/lenseq"); tail -n +2 "$T/lenseq" >"$T/lenseq.t"; mv "$T/lenseq.t" "$T/lenseq"; echo "$l"
-    elif [ -f "$T/checks" ]; then jq length "$T/checks"; else exit 1; fi ;;
+  "pr checks 7 --json name")
+    if [ -f "$T/lenseq" ]; then l=$(head -1 "$T/lenseq"); tail -n +2 "$T/lenseq" >"$T/lenseq.t"; mv "$T/lenseq.t" "$T/lenseq"
+    elif [ -f "$T/checks" ]; then l=$(jq length "$T/checks"); else exit 1; fi
+    jq -nc --argjson n "$l" '[range($n) | {name: "c\(.)"}]'; exit 8 ;; # gh exits non-zero on pending/failed checks, JSON stays valid
   "pr checks 7 --json name,bucket") [ -f "$T/checks" ] || { echo "no checks reported on the 'x' branch" >&2; exit 1; }; cat "$T/checks" ;;
   "pr view 7 --json files"*) printf 'b\t1\t0\n' ;;
   "pr view 7 --json headRefOid"*) if [ -f "$T/stalehead" ]; then echo 0000stale; else git -C "$R/origin.git" rev-parse refs/heads/feat/7-x; fi ;;
@@ -119,11 +120,17 @@ eq "pushed head not reported yet: WAIT, no ready line" "$rc:$(printf '%s' "$out"
 ck '[{"name":"e2e","bucket":"pass"}]'
 eq "rerun with a stale head still WAITs (no push this time)" "$rc:$(printf '%s' "$out" | grep -c 'has not reported the pushed head')" "2:1"
 rm "$T/stalehead"
-# a pushed head with no check registered yet, the old head had some: WAIT, never a pass
+# a pushed head with fewer checks registered than the old head had: WAIT, and the rerun WAITs too (never a pass)
 echo g2 >g2; q add g2; q commit -qm g2; q push -q origin main 2>/dev/null
-printf '2\n0\n' >"$T/lenseq"
+printf '3\n1\n' >"$T/lenseq"
 ck '[]'
-eq "pushed head without checks while the old head had some: WAIT" "$rc:$(printf '%s' "$out" | grep -c 'CI has not started on the pushed head'):$(printf '%s' "$out" | grep -c '^ready:')" "2:1:0"
+eq "pushed head with fewer checks than the old head: WAIT" "$rc:$(printf '%s' "$out" | grep -c 'has not registered all 3 checks'):$(printf '%s' "$out" | grep -c '^ready:')" "2:1:0"
+printf '1\n' >"$T/lenseq"
+ck '[]'
+eq "rerun after that WAIT waits too" "$rc:$(printf '%s' "$out" | grep -c 'has not registered all 3 checks')" "2:1"
+printf '3\n' >"$T/lenseq"
+ck '[]'
+eq "all checks registered: past the guard" "$rc:$(printf '%s' "$out" | grep -c 'has not registered')" "0:0"
 rm -f "$T/lenseq"
 # remote head ahead of the worktree (gh pr update-branch): fast-forward instead of a failed push
 git clone -q "$R/origin.git" "$R/other" 2>/dev/null; git -C "$R/other" checkout -q feat/7-x

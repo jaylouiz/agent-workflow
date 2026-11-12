@@ -14,7 +14,8 @@
 #        failing review-check; then, in the PR's worktree (wf_install first when the base brought a package.json change),
 #        fast-forward to a remote head that moved ahead (gh pr update-branch; diverged = exit 64, nothing pushed),
 #        merge the base branch in when behind (no rebase, no force-push), wf_verify (+ wf_build when
-#        wf_build_needed), push, wait until GitHub reports the pushed commit as the PR head (else exit 2 WAIT); then
+#        wf_build_needed), push, wait until GitHub reports the pushed commit as the PR head and (10 min after a push)
+#        as many checks as the old head had (else exit 2 WAIT); then
 #        reads the checks of the head it leaves (WF_REQUIRED_CHECKS): failed or cancelled = NOT READY (exit 1; a failed check of
 #        a head prep replaced is not read), pending or a required check not
 #        reported yet = "WAIT #<pr>: CI pending: <names>" (exit 2, rerun prep later). Prints "ready: gh pr merge <pr> --merge".
@@ -110,6 +111,12 @@ ci_state() { # ci_state <pr>: "pass" | "fail: <names>" | "pending: <names>"; fai
   if [ -n "$failed" ]; then echo "fail:$failed"; elif [ -n "$pending" ]; then echo "pending:$pending"; else echo pass; fi
 }
 
+check_count() { # check_count <pr>: how many checks GitHub reports on the PR head (0 on any failure; gh may exit non-zero on pending/failed with valid JSON)
+  local out c
+  out=$(gh pr checks "$1" --json name 2>/dev/null); c=$(jq -r 'if type == "array" then length else 0 end' <<<"$out" 2>/dev/null)
+  echo "${c:-0}"
+}
+
 worktree_of() { # worktree path that has <branch> checked out
   git worktree list --porcelain | awk -v b="refs/heads/$1" '/^worktree /{p=substr($0,10)} $0=="branch " b {print p; exit}'
 }
@@ -191,11 +198,12 @@ case "$cmd" in
       if wf_has wf_build_needed && (cd "$wt" && wf_build_needed "origin/$base"); then
         (cd "$wt" && wf_run wf_build) || die "build failed on the combined head in $wt (nothing pushed)"
       fi
-      pre_n=$(gh pr checks "$pr" --json name -q length 2>/dev/null) || pre_n=0
+      pre_n=$(check_count "$pr")
       git -C "$wt" push -q origin "HEAD:$head" || die "push failed in $wt"
-      pushed=1
+      # remembered for a rerun after a WAIT: "<sha> <checks the old head had> <epoch>"
+      printf '%s %s %s\n' "$(git -C "$wt" rev-parse HEAD)" "$pre_n" "$(date +%s)" >"$(cd "$wt" && git rev-parse --absolute-git-dir)/prep-expect"
     else
-      echo "up to date with origin/$base, pushed"
+      echo "up to date with origin/$base, nothing to push"
     fi
     # gh pr checks reads the PR's head: until GitHub reports this commit as the head it shows the old head's checks
     # (also on a rerun after a WAIT, hence not only after a push)
@@ -207,9 +215,11 @@ case "$cmd" in
       fi
       sleep "${MERGE_PR_POLL_SECS:-2}"
     done
-    # a pushed head whose CI has not registered yet shows no checks at all: not a pass when the old head had some
-    if [ "${pushed:-0}" = 1 ] && [ "${pre_n:-0}" -gt 0 ] && [ "$(gh pr checks "$pr" --json name -q length 2>/dev/null || echo 0)" = 0 ]; then
-      printf 'WAIT #%s: CI has not started on the pushed head yet (rerun prep)\n' "$pr"; exit 2
+    # a pushed head whose CI has not registered yet shows no or fewer checks, which reads as a pass: for 10 minutes after
+    # the push, fewer checks than the old head had is a WAIT (a rerun included; a deliberately removed check passes then)
+    exp=$(awk -v s="$mine" -v now="$(date +%s)" '$1 == s && now - $3 < 600 {print $2}' "$(cd "$wt" && git rev-parse --absolute-git-dir)/prep-expect" 2>/dev/null)
+    if [ "${exp:-0}" -gt 0 ] && [ "$(check_count "$pr")" -lt "$exp" ]; then
+      printf 'WAIT #%s: CI has not registered all %s checks on the pushed head yet (rerun prep)\n' "$pr" "$exp"; exit 2
     fi
     ci=$(ci_state "$pr") || die "cannot read CI checks of PR #$pr after the push"
     case "$ci" in
@@ -252,5 +262,5 @@ case "$cmd" in
   sweep)
     for a in "$@"; do [ "$a" = --dry-run ] || die "sweep [--dry-run]"; done
     exec "$DIR/sweep.sh" "$@" ;;
-  *) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
+  *) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
 esac
