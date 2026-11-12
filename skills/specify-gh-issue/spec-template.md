@@ -39,6 +39,9 @@ Things someone might expect that this issue deliberately does not do.
 ## Accepted trade-offs
 Deliberate decisions that design reviews must respect, each with a reason. Delete when unused.
 
+## Hazards
+Only for an action that cannot be undone (a posted comment, a deletion, a send, a payment): the ways it fires wrongly or fails unseen (a held key's auto-repeat, state swapped under the input, a silent failure, a double submit), each with the AC or test that covers it. Delete otherwise.
+
 ## Implementation notes
 Files and components involved, store or service changes, design-system rules that apply, known pitfalls (risk areas and invariants from the profile, CLAUDE.md and the matching `.claude/rules/` files).
 
