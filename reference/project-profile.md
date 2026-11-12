@@ -81,7 +81,7 @@
 ## Verification
 
 - gate command: <e.g. npm run verify>
-- tests: <unit, E2E rules, visual baselines, ports>
+- tests: <unit, E2E rules, visual baselines, ports, repeat-run flags (`--workers=1` when workers share a server or fixture)>
 - extra greps: <checks that caught real misses before>
 
 ## Pull requests
