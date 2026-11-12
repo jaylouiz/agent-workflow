@@ -11,14 +11,19 @@
 #        `route: lead` where the route says reviewer. Else exit 1 with the reasons.
 #   merge-pr.sh prep <pr>
 #        refuse on a hold label, an open needs-decision, no `Closes #<n>` (opt-out: `No-issue: <reason>`) or a
-#        failing review-check or a failed GitHub check on the PR head (WF_REQUIRED_CHECKS); then, in the PR's worktree (wf_install first when the base brought a package.json change),
+#        failing review-check; then, in the PR's worktree (wf_install first when the base brought a package.json change),
+#        fast-forward to a remote head that moved ahead (gh pr update-branch; diverged = exit 64, nothing pushed),
 #        merge the base branch in when behind (no rebase, no force-push), wf_verify (+ wf_build when
-#        wf_build_needed), push; then re-reads the checks of the pushed head: failed = NOT READY (exit 1), pending or a required check not
+#        wf_build_needed), push, wait until GitHub reports the pushed commit as the PR head (else exit 2 WAIT); then
+#        reads the checks of the head it leaves (WF_REQUIRED_CHECKS): failed or cancelled = NOT READY (exit 1; a failed check of
+#        a head prep replaced is not read), pending or a required check not
 #        reported yet = "WAIT #<pr>: CI pending: <names>" (exit 2, rerun prep later). Prints "ready: gh pr merge <pr> --merge".
+#        Warns when the cwd is inside the PR's worktree (cleanup after the merge removes it).
 #   merge-pr.sh after <pr> "<summary>"
 #        PR must be merged: print its gate row (WF_CHECKS_TSV), wf_after_merge, wf_deploy_check, and post the
 #        summary on the closed issue via decide.sh note, then delete its coordination log, then sweep.sh --pr <pr>:
 #        remove the PR's worktree and branches (and every other finished one). A failing sweep never fails `after`.
+#        The hooks run with WF_KEEP_CWD = the caller's directory; WARN when it is gone afterwards.
 #   merge-pr.sh sweep [--dry-run]
 #        remove the worktrees and branches of finished work (sweep.sh has the rules): a <type>/<n>-* (or Orca's
 #        <gitUsername>/<type>-<n>-*) branch whose PR is merged or closed, a
@@ -149,8 +154,9 @@ case "$cmd" in
         for h in $WF_HOLD_LABELS; do [ "$l" = "$h" ] && stop="$stop\nhold: issue #$n label $l"; done
       done
     done
-    ci=$(ci_state "$pr") || die "cannot read CI checks of PR #$pr (nothing merged or pushed)"
-    case "$ci" in fail:*) stop="$stop\nCI: failed check(s):${ci#fail:}" ;; esac
+    # Only a fail-closed read here: a failed check of a head prep is about to replace (base merged in, commits pushed)
+    # is no refusal; the checks of the head prep leaves behind decide (below).
+    ci_state "$pr" >/dev/null || die "cannot read CI checks of PR #$pr (nothing merged or pushed)"
     r=$(route_pr "$pr") && [ -n "$r" ] || die "route for PR #$pr failed"
     echo "route $r"
     msg=$(review_check "$bodyf" "${r%%:*}") || stop="$stop\n$msg"
@@ -159,6 +165,13 @@ case "$cmd" in
     wt=$(worktree_of "$head")
     [ -n "$wt" ] || die "no local worktree has $head checked out; check it out (git worktree add) and rerun"
     git -C "$wt" fetch -q origin "$base" "$head" || die "fetch failed in $wt"
+    case "$(pwd -P)/" in "$wt"/*) echo "WARN: cwd is the PR's worktree: cd to the main checkout before gh pr merge and after (cleanup removes the worktree)" ;; esac
+    # remote head ahead of the local one (someone ran `gh pr update-branch`): fast-forward, never push over it
+    if ! git -C "$wt" merge-base --is-ancestor "origin/$head" HEAD && git -C "$wt" merge-base --is-ancestor HEAD "origin/$head"; then
+      git -C "$wt" merge -q --ff-only "origin/$head" || die "cannot fast-forward $wt to origin/$head (local changes?)"
+    fi
+    git -C "$wt" merge-base --is-ancestor HEAD "origin/$head" || git -C "$wt" merge-base --is-ancestor "origin/$head" HEAD ||
+      die "$wt and origin/$head have diverged (local $(git -C "$wt" rev-parse --short HEAD), remote $(git -C "$wt" rev-parse --short "origin/$head")): nothing pushed; route to a fix worker (merge origin/$head, resolve, push)"
     behind=0; git -C "$wt" merge-base --is-ancestor "origin/$base" HEAD || behind=1
     unpushed=0; [ "$(git -C "$wt" rev-parse HEAD)" = "$(git -C "$wt" rev-parse "origin/$head")" ] || unpushed=1
     if [ $behind = 1 ]; then
@@ -179,6 +192,15 @@ case "$cmd" in
         (cd "$wt" && wf_run wf_build) || die "build failed on the combined head in $wt (nothing pushed)"
       fi
       git -C "$wt" push -q origin "HEAD:$head" || die "push failed in $wt"
+      # gh pr checks reads the PR's head: until GitHub reports the pushed commit it still shows the old head's checks
+      pushed=$(git -C "$wt" rev-parse HEAD); i=0
+      until [ "$(gh pr view "$pr" --json headRefOid -q .headRefOid 2>/dev/null)" = "$pushed" ]; do
+        i=$((i + 1))
+        if [ $i -ge "${MERGE_PR_HEAD_POLLS:-15}" ]; then
+          printf 'WAIT #%s: GitHub has not reported the pushed head yet (rerun prep)\n' "$pr"; exit 2
+        fi
+        sleep "${MERGE_PR_POLL_SECS:-2}"
+      done
     else
       echo "up to date with origin/$base, pushed"
     fi
@@ -202,6 +224,8 @@ case "$cmd" in
     cd "$main" || die "cd $main failed"
     wf_load # the main checkout's config, not a worktree's copy
     rc=0
+    # the coordinator's own directory: a project cleanup hook must keep it (config template: WF_KEEP_CWD)
+    WF_KEEP_CWD=$(cd "$origcwd" 2>/dev/null && pwd -P) || WF_KEEP_CWD=$origcwd; export WF_KEEP_CWD
     wf_run wf_after_merge || { rc=1; echo "WARN: wf_after_merge failed in $main"; }
     wf_run wf_deploy_check || rc=1
     bodyf=$(mktemp); gh pr view "$pr" --json body -q .body >"$bodyf" || die "gh pr view $pr failed"
@@ -215,10 +239,11 @@ case "$cmd" in
       "$DIR/decide.sh" log --rm "$n" # the coordination log ends with the issue
     done
     rm -f "$bodyf"
+    [ -d "$origcwd" ] || { echo "WARN: your working directory $origcwd was removed during after: cd $main before the next command"; }
     "$DIR/sweep.sh" --pr "$pr" --cwd "$origcwd" || echo "WARN: sweep did not finish cleanly (see above); after is not affected"
     exit $rc ;;
   sweep)
     for a in "$@"; do [ "$a" = --dry-run ] || die "sweep [--dry-run]"; done
     exec "$DIR/sweep.sh" "$@" ;;
-  *) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
+  *) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
 esac

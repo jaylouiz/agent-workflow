@@ -19,13 +19,22 @@
 #        mediums"); an arg must not contain a tab or newline (use --extra <file> for long text).
 #        Queue only tasks whose dependencies are done: the queue order is the start order.
 #
+#   next.sh watch  --dispatch <id> [--dispatch <id>...] [--interval <s>] [--max-secs <s>] [--run <run_id>]
+#        fallback when this session gets no Orca wake (e.g. it runs as a background job): run it as a background
+#        command; it polls worker-show (takes no mail) and exits 0 with `changed: <dispatch> <status>` when a dispatch
+#        is no longer in the status it had at the first look (or already completed/failed then). Exit 2 `unchanged`
+#        after --max-secs (default: until a change), 1 on an unreadable worker-show.
+#   --force (start, settle): start a queued task although a non-terminal Task of the Run already names its issue.
+#
 # Step 5 starts queued tasks while a slot is free (dispatched workers in the Run < --max, default WF_MAX_WORKERS)
 # and a port is free (spec.sh exit 3 leaves the task queued): spec.sh > <ledger>/<n>-<stage>.spec, task-create,
-# worker-start. A failed step is never retried and never hidden: the task goes to <ledger>/failed-starts, the
+# worker-start. A queued task whose issue (`#<n>` in the title or the first 200 characters of the spec) another
+# non-terminal Task of the Run already names is skipped as `duplicate` (failed-starts, exit 1 at the end): a second
+# coordinator, or a rerun, must not start a second lead. A failed step is never retried and never hidden: the task goes to <ledger>/failed-starts, the
 # script exits 1 and names the stage (spec | task-create | start). A port reserved for a failed start stays
 # reserved until you have checked `worker-list` (an outcome_unknown start may be running).
 # Every run ends with the end-turn line: end your turn, Orca wakes you when a worker reports, asks or stops.
-# Exit: 0 ok (also: queue empty, slots full, no free port), 1 stage failed, 2 not settled, 64 usage.
+# Exit: 0 ok (also: queue empty, slots full, no free port), 1 stage failed or a duplicate skipped, 2 not settled, 64 usage.
 set -uo pipefail
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=lib.sh
@@ -46,7 +55,7 @@ orca_o() { # orca_o <stage> <orchestration args...>: stdout in $TMP/out; fail th
 run_flag() { [ -n "$run" ] && echo "--run $run"; return 0; }
 
 cmd=${1:-}
-[ -n "$cmd" ] || { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 64; }
+[ -n "$cmd" ] || { sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 64; }
 shift
 
 if [ "$cmd" = queue ]; then
@@ -59,6 +68,9 @@ if [ "$cmd" = queue ]; then
   [ "${1:-}" = -- ] && shift
   start=("$@")
   [ ${#spec[@]} -ge 2 ] || die "queue: spec.sh args need <stage> <issue>"
+  for ((i = 0; i < ${#spec[@]}; i++)); do # a missing notes file now, not a silently note-less spec at the later start
+    [ "${spec[i]}" = --extra ] && [ ! -r "${spec[i+1]:-}" ] && die "queue: --extra file not readable: ${spec[i+1]:-}"
+  done
   [ ${#start[@]} -gt 0 ] || start=(--agent claude)
   mkdir -p "$ledger"
   # One queue line: title TAB spec args TAB start args; the args of a field are joined by US (0x1f), so they keep spaces.
@@ -71,8 +83,38 @@ if [ "$cmd" = queue ]; then
   exit 0
 fi
 
+if [ "$cmd" = watch ]; then
+  ds=(); interval=20; maxs=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dispatch) ds+=("${2:?}"); shift 2 ;;
+      --interval) interval=${2:?}; shift 2 ;;
+      --max-secs) maxs=${2:?}; shift 2 ;;
+      --run) shift 2 ;; # accepted for symmetry; worker-show needs only the dispatch
+      *) die "watch: unknown flag $1" ;;
+    esac
+  done
+  [ ${#ds[@]} -gt 0 ] || die "watch: --dispatch <id> required"
+  first=(); t0=$SECONDS
+  while :; do
+    i=0
+    for d in "${ds[@]}"; do
+      orca_o watch worker-show --dispatch "$d" --json --full
+      st=$(jq -r '.result.dispatch.status // empty' "$TMP/out" 2>/dev/null)
+      [ -n "$st" ] || fail watch "worker-show $d unreadable"
+      if [ -z "${first[i]:-}" ]; then
+        first[i]=$st
+        case "$st" in completed | failed) echo "changed: $d $st"; exit 0 ;; esac
+      elif [ "$st" != "${first[i]}" ]; then echo "changed: $d $st"; exit 0; fi
+      i=$((i + 1))
+    done
+    if [ "$maxs" -gt 0 ] && [ $((SECONDS - t0)) -ge "$maxs" ]; then echo "unchanged: ${ds[*]}"; exit 2; fi
+    sleep "$interval"
+  done
+fi
+
 case "$cmd" in settle|start) ;; *) die "unknown command '$cmd'" ;; esac
-ledger=""; dispatch=""; port=""; max=""
+ledger=""; dispatch=""; port=""; max=""; force=0; DUP=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --ledger) ledger=${2:?}; shift 2 ;;
@@ -81,6 +123,7 @@ while [ $# -gt 0 ]; do
     --port) port=${2:?}; shift 2 ;;
     --run) run=${2:?}; shift 2 ;;
     --max) max=${2:?}; shift 2 ;;
+    --force) force=1; shift ;;
     *) die "unknown flag $1" ;;
   esac
 done
@@ -116,6 +159,14 @@ drop_line() { tail -n +2 "$ledger/queue" >"$ledger/queue.tmp"; mv "$ledger/queue
 free_port() { [ -z "${1:-}" ] || bash "$DIR/spec.sh" release-port "$1" --ledger "$ledger" >/dev/null 2>&1; return 0; }
 park_failed() { printf '%s\t%s\n' "$1" "$2" >>"$ledger/failed-starts"; }
 
+dup_task() { # dup_task <issue>: sets DUPINFO to id and status of a non-terminal Task of the Run that names #<issue> (title or spec head)
+  # shellcheck disable=SC2046
+  orca_o duplicate task-list --json --full $(run_flag)
+  jq -e '.result.tasks | type == "array"' "$TMP/out" >/dev/null 2>&1 || fail duplicate "unreadable task-list"
+  DUPINFO=$(jq -r --arg n "$1" '.result.tasks[]? | select((.status // "") as $s | ["completed", "failed", "cancelled"] | index($s) | not)
+    | select(((.task_title // "") + " " + ((.spec // "")[0:200])) | test("#" + $n + "([^0-9]|$)")) | "\(.id) (\(.status))"' "$TMP/out" | head -1)
+}
+
 fill() {
   local line title specs starts spec start stage n sf tid did p
   while [ -s "$ledger/queue" ]; do
@@ -127,6 +178,12 @@ fill() {
     IFS=$'\t' read -r title specs starts <<<"$line"
     IFS=$'\x1f' read -r -a spec <<<"$specs"; IFS=$'\x1f' read -r -a start <<<"$starts"
     stage=${spec[0]}; n=${spec[1]}; sf="$ledger/$n-$stage.spec"
+    DUPINFO=""; [ $force = 1 ] || dup_task "$n"
+    if [ -n "$DUPINFO" ]; then
+      drop_line; park_failed "$title" "duplicate of $DUPINFO"; DUP="$DUP $title"
+      echo "next.sh: stage duplicate: '$title' skipped, Task $DUPINFO already names #$n (another coordinator, or a rerun); --force starts it anyway" >&2
+      continue
+    fi
     bash "$DIR/spec.sh" "${spec[@]}" --ledger "$ledger" >"$sf" 2>"$TMP/err"; local rc=$?
     if [ $rc = 3 ]; then echo "port: none free, '$title' stays queued"; return 0; fi
     if [ $rc != 0 ]; then
@@ -158,4 +215,5 @@ fill() {
 [ "$cmd" = settle ] && settle
 fill
 endturn
+[ -z "$DUP" ] || exit 1
 exit 0

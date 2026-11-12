@@ -28,7 +28,7 @@ q checkout -q -b main
 mkdir .claude
 cat >.claude/issue-workflow.sh <<'EOF'
 wf_verify() { [ ! -f FAILVERIFY ] || { echo verify-failed; return 1; }; echo verify-ok; }
-wf_after_merge() { echo "after-merge in $(basename "$PWD") on $(git branch --show-current)"; }
+wf_after_merge() { echo "after-merge in $(basename "$PWD") on $(git branch --show-current) keep=$WF_KEEP_CWD"; [ -z "${WF_TEST_RM:-}" ] || rm -rf "$WF_TEST_RM"; }
 EOF
 echo a >a; q add -A; q commit -qm init; q push -q origin main 2>/dev/null
 q worktree add -q -b feat/7-x "$R/wt" 2>/dev/null
@@ -43,6 +43,7 @@ case "$*" in
     printf '{"state":"OPEN","headRefName":"feat/7-x","baseRefName":"main","labels":[],"body":"Closes #70\\n## Review\\nroute: lead · effort: low · by: sonnet\\nlows: 0\\n"}' ;;
   "pr checks 7 --json name,bucket") [ -f "$T/checks" ] || { echo "no checks reported on the 'x' branch" >&2; exit 1; }; cat "$T/checks" ;;
   "pr view 7 --json files"*) printf 'b\t1\t0\n' ;;
+  "pr view 7 --json headRefOid"*) if [ -f "$T/stalehead" ]; then echo 0000stale; else git -C "$R/origin.git" rev-parse refs/heads/feat/7-x; fi ;;
   "pr view 7 --json state,headRefOid") printf '{"state":"MERGED","headRefOid":"abc"}' ;;
   "pr view 7 --json state,headRefName,headRefOid,isCrossRepository") printf '{"state":"MERGED","headRefName":"feat/7-x","headRefOid":"%s"}' "$(cat "$OIDFILE")" ;;
   "pr list --state all --head feat/7-x"*) [ ! -f "$T/ghfail" ] || exit 1; printf '[{"number":7,"state":"MERGED","headRefOid":"%s"}]' "$(cat "$OIDFILE")" ;;
@@ -53,7 +54,7 @@ case "$*" in
 esac
 EOF
 chmod +x "$T/bin/gh"
-export OIDFILE="$T/oid" T
+export OIDFILE="$T/oid" T R MERGE_PR_HEAD_POLLS=2 MERGE_PR_POLL_SECS=0
 git -C "$R/wt" rev-parse HEAD >"$OIDFILE"
 export PATH="$T/bin:$PATH" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 
@@ -96,6 +97,41 @@ eq "all pass/skipping is ready" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" 
 rm "$T/checks"
 out=$(bash "$DIR/merge-pr.sh" prep 7 2>&1); eq "no checks reported is ready" "$?:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"
 
+# #9: a failed check of a head prep replaces is no refusal; the pushed head's checks decide.
+FAILCK='[{"name":"e2e","bucket":"cancel"}]'
+echo e >e; q add e; q commit -qm e; q push -q origin main 2>/dev/null
+ck "$FAILCK"
+eq "behind + failed check: merges, pushes, then refuses" "$rc:$(printf '%s' "$out" | grep -c 'behind origin/main: merging'):$(printf '%s' "$out" | grep -c 'NOT READY #7')" "1:1:1"
+git -C "$R/main" fetch -q origin
+eq "behind + failed check: the merged head was pushed" "$(git -C "$R/main" merge-base --is-ancestor origin/main origin/feat/7-x && echo yes)" yes
+ck "$FAILCK"
+eq "up to date + failed check: refuses, no verify" "$rc:$(printf '%s' "$out" | grep -c 'CI: failed check(s): e2e'):$(printf '%s' "$out" | grep -c verify-ok)" "1:1:0"
+ck '[{"name":"e2e","bucket":"pass"}]'
+eq "up to date + passing check: ready" "$rc:$(printf '%s' "$out" | grep -c '^ready:')" "0:1"
+echo f >f; q add f; q commit -qm f; q push -q origin main 2>/dev/null
+touch "$T/stalehead"
+ck '[{"name":"e2e","bucket":"pass"}]'
+eq "pushed head not reported yet: WAIT, no ready line" "$rc:$(printf '%s' "$out" | grep -c 'WAIT #7: GitHub has not reported the pushed head'):$(printf '%s' "$out" | grep -c '^ready:')" "2:1:0"
+rm "$T/stalehead"
+# remote head ahead of the worktree (gh pr update-branch): fast-forward instead of a failed push
+git clone -q "$R/origin.git" "$R/other" 2>/dev/null; git -C "$R/other" checkout -q feat/7-x
+echo g >"$R/other/g"; q -C "$R/other" add g; q -C "$R/other" commit -qm g; q -C "$R/other" push -q origin feat/7-x 2>/dev/null
+ck '[{"name":"e2e","bucket":"pass"}]'
+eq "remote ahead: fast-forwards and is ready" "$rc:$(printf '%s' "$out" | grep -c '^ready:'):$([ -f "$R/wt/g" ] && echo ff)" "0:1:ff"
+# diverged: local commit and a different remote commit
+(cd "$R/wt" && echo h >h && q add h && q commit -qm h)
+echo i >"$R/other/i"; q -C "$R/other" add i; q -C "$R/other" commit -qm i; q -C "$R/other" push -q origin feat/7-x 2>/dev/null
+bash "$DIR/merge-pr.sh" prep 7 >"$T/o" 2>&1; rc=$?
+eq "diverged: exit 64, names the cause, nothing pushed" "$rc:$(grep -c 'have diverged' "$T/o"):$(git -C "$R/origin.git" rev-parse refs/heads/feat/7-x | cut -c1-7)" "64:1:$(git -C "$R/other" rev-parse --short=7 HEAD)"
+git -C "$R/wt" fetch -q origin; git -C "$R/wt" reset -q --hard origin/feat/7-x
+rm -rf "$R/other"; rm -f "$T/checks"
+
+# #11 item 4: prep warns when the coordinator stands in the PR's worktree
+out=$(cd "$R/wt" && bash "$DIR/merge-pr.sh" prep 7 2>&1)
+eq "prep warns about a cwd inside the PR worktree" "$(printf '%s' "$out" | grep -c "WARN: cwd is the PR's worktree")" 1
+out=$(cd "$R/main" && bash "$DIR/merge-pr.sh" prep 7 2>&1)
+eq "prep: no warning from the main checkout" "$(printf '%s' "$out" | grep -c "WARN: cwd")" 0
+
 # M1: a conflict aborts the merge and leaves the worktree clean.
 echo d >d; q add d; q commit -qm d; q push -q origin main 2>/dev/null
 (cd "$R/wt" && echo conflict >d && q add d && q commit -qm d2 && q push -q 2>/dev/null)
@@ -109,6 +145,7 @@ eq "after runs in the main checkout" "$(printf '%s' "$out" | grep -o 'after-merg
 
 # #41: after sweeps finished work. From inside the PR worktree it is the current directory: kept; the main checkout's
 # own run removes it and its branches. A sweep that cannot run (gh down) never fails after.
+eq "after hands the hook the coordinator's directory (WF_KEEP_CWD)" "$(printf '%s' "$out" | grep -o 'keep=.*')" "keep=$(cd "$R/wt" && pwd -P)"
 eq "after kept the worktree it ran in" "$(printf '%s' "$out" | grep -c "kept .*/wt (feat/7-x): current directory")" 1
 eq "after: keeping the cwd worktree is not a sweep failure" "$(printf '%s' "$out" | grep -c WARN)" 0
 eq "after: remote head branch deleted although the worktree stays" "$(printf '%s' "$out" | grep -c '^deleted remote branch origin/feat/7-x')" 1
@@ -124,6 +161,10 @@ eq "after from the main checkout removes the PR worktree" "$rc:$([ -d "$R/wt" ] 
 eq "after removed the local branch" "$(git -C "$R/main" show-ref --verify -q refs/heads/feat/7-x && echo yes || echo no)" no
 eq "remote head branch is gone" "$(git -C "$R/main" ls-remote --exit-code --heads origin feat/7-x >/dev/null 2>&1 && echo yes || echo no)" no
 eq "after prints one line per removal" "$(printf '%s' "$out" | grep -c '^removed worktree\|^removed branch')" 2
+# #11 item 4: a hook that removes the coordinator's directory: warned, exit code unchanged
+mkdir "$R/main/scr"
+out=$(cd "$R/main/scr" && WF_TEST_RM="$R/main/scr" bash "$DIR/merge-pr.sh" after 7 "done" 2>&1); rc=$?
+eq "after warns when its cwd was removed, exit unchanged" "$rc:$(printf '%s' "$out" | grep -c "WARN: your working directory .*scr was removed during after: cd .*main")" "0:1"
 # the sweep subcommand: dry run changes nothing
 eq "sweep rejects other flags" "$(bash "$DIR/merge-pr.sh" sweep --nope >/dev/null 2>&1; echo $?)" 64
 eq "sweep --dry-run via merge-pr.sh" "$(cd "$R/main" && bash "$DIR/merge-pr.sh" sweep --dry-run 2>&1 | grep -c 'dry run')" 1

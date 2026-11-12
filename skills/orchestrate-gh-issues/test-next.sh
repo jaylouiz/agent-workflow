@@ -21,6 +21,7 @@ case "$2" in
     n=$(cat "$S/active"); printf '{"ok":true,"result":{"workers":[{"dispatchId":"ctx_old","dispatchStatus":"completed"}'
     for ((i = 0; i < n; i++)); do printf ',{"dispatchId":"ctx_w%s","dispatchStatus":"dispatched"}' "$i"; done
     printf ']}}\n' ;;
+  task-list) if [ -f "$S/tasks" ]; then cat "$S/tasks"; else echo '{"ok":true,"result":{"tasks":[]}}'; fi ;;
   task-create)
     if [ -f "$S/fail_create" ]; then echo "create boom" >&2; exit 1; fi
     echo '{"ok":true,"result":{"task":{"id":"task_0123456789ab"}}}' ;;
@@ -37,7 +38,7 @@ echo 'WF_PORTS=39201-39202' >.claude/issue-workflow.sh
 
 fail=0; n=0
 check() { n=$((n + 1)); if eval "$2"; then :; else fail=$((fail + 1)); echo "FAIL [$1]"; fi; }
-reset() { : >"$T/state/calls"; rm -f "$T/state/fail_start" "$T/state/fail_create"; echo completed >"$T/state/dispatch_status"; echo 0 >"$T/state/active"; rm -rf "$T/ledger"; mkdir -p "$T/ledger"; }
+reset() { : >"$T/state/calls"; rm -f "$T/state/fail_start" "$T/state/fail_create" "$T/state/tasks"; echo completed >"$T/state/dispatch_status"; echo 0 >"$T/state/active"; rm -rf "$T/ledger"; mkdir -p "$T/ledger"; }
 NEXT() { bash "$DIR/next.sh" "$@"; }
 q() { NEXT queue --ledger "$T/ledger" "$@" >/dev/null; }
 
@@ -48,7 +49,7 @@ q "#7 lead" lead 7 --tier Standard -- --agent claude --model sonnet --effort hig
 out=$(NEXT settle --dispatch ctx_aaa111 --delivery d1 --port 39201 --ledger "$T/ledger" --run run_x 2>"$T/err"); rc=$?
 calls=$(cat "$T/state/calls")
 check "happy: exit 0" '[ $rc = 0 ]'
-check "happy: order proof, release, slots, create, start (no ack)" '[ "$(printf "%s\n" "$calls" | awk "{print \$2}" | tr "\n" " ")" = "worker-show worker-release worker-list task-create worker-start " ]'
+check "happy: order proof, release, slots, create, start (no ack)" '[ "$(printf "%s\n" "$calls" | awk "{print \$2}" | tr "\n" " ")" = "worker-show worker-release worker-list task-list task-create worker-start " ]'
 check "happy: release passes dispatch" 'printf "%s" "$calls" | grep -q "^orchestration worker-release --dispatch ctx_aaa111"'
 check "happy: port 39201 released, next task got a port" '! grep -q "^39201 #4" "$T/ledger/ports" && grep -q "#7 lead" "$T/ledger/ports"'
 check "happy: no check call (V3: no ack, no waiter)" '! printf "%s" "$calls" | grep -q "^orchestration check"'
@@ -115,6 +116,53 @@ printf '39201 #1 lead\n39202 #2 lead\n' >"$T/ledger/ports"
 q "#7 lead" lead 7 -- --agent claude
 out=$(NEXT start --ledger "$T/ledger" 2>&1); rc=$?
 check "no port: exit 0, stays queued, nothing created" '[ $rc = 0 ] && [ -s "$T/ledger/queue" ] && ! grep -q "task-create" "$T/state/calls" && printf "%s" "$out" | grep -q "port: none free"'
+
+# #11 item 1: a non-terminal Task of the Run that names the issue blocks a second start
+reset
+tasks() { printf '{"ok":true,"result":{"tasks":[%s]}}' "$1" >"$T/state/tasks"; }
+q "#7 lead" lead 7 -- --agent claude
+q "#8 lead" lead 8 -- --agent claude
+tasks '{"id":"task_other","task_title":"build 7 (other session)","status":"dispatched","spec":"Issue #7: Fix. Stage: lead."},{"id":"task_x","task_title":"#70 lead","status":"dispatched","spec":"Issue #70: y"}'
+out=$(NEXT start --ledger "$T/ledger" 2>"$T/err"); rc=$?
+check "duplicate: exit 1, names Task and --force" '[ $rc = 1 ] && grep -q "stage duplicate" "$T/err" && grep -q "task_other (dispatched)" "$T/err" && grep -q -- "--force" "$T/err"'
+check "duplicate: #7 not created or started, #8 (and #70 is no match) goes on" '[ "$(grep -c "^orchestration task-create" "$T/state/calls")" = 1 ] && grep -q "^started: #8 lead" <<<"$out"'
+check "duplicate: recorded, no port held, queue drained" 'grep -q "^#7 lead.*duplicate of task_other" "$T/ledger/failed-starts" && ! grep -q "#7 lead" "$T/ledger/ports" && [ ! -s "$T/ledger/queue" ]'
+check "duplicate: end-turn line still printed" 'printf "%s" "$out" | grep -q "^next: end your turn"'
+reset; tasks '{"id":"task_old","task_title":"#7 lead","status":"completed","spec":"Issue #7: Fix."}'
+q "#7 lead" lead 7 -- --agent claude
+out=$(NEXT start --ledger "$T/ledger" 2>&1); rc=$?
+check "terminal Task of the same issue does not block (retry)" '[ $rc = 0 ] && printf "%s" "$out" | grep -q "^started: #7 lead"'
+reset; tasks '{"id":"task_live","task_title":"#7 lead","status":"dispatched","spec":""}'
+q "#7 lead" lead 7 -- --agent claude
+out=$(NEXT start --ledger "$T/ledger" --force 2>&1); rc=$?
+check "--force starts anyway" '[ $rc = 0 ] && printf "%s" "$out" | grep -q "^started: #7 lead"'
+reset; echo 'not json' >"$T/state/tasks"
+q "#7 lead" lead 7 -- --agent claude
+NEXT start --ledger "$T/ledger" >/dev/null 2>"$T/err"; rc=$?
+check "unreadable task-list fails closed, nothing created" '[ $rc = 1 ] && grep -q "stage duplicate failed" "$T/err" && ! grep -q "task-create" "$T/state/calls"'
+
+# #11 item 3: a missing --extra file is refused at queue time
+reset
+NEXT queue --ledger "$T/ledger" "#7 lead" lead 7 --extra "$T/nope.md" >/dev/null 2>"$T/err"; rc=$?
+check "queue rejects a missing --extra file" '[ $rc = 64 ] && grep -q "not readable" "$T/err" && [ ! -s "$T/ledger/queue" ]'
+echo notes >"$T/notes.md"
+NEXT queue --ledger "$T/ledger" "#7 lead" lead 7 --extra "$T/notes.md" >/dev/null 2>&1; rc=$?
+check "queue accepts a readable --extra file" '[ $rc = 0 ] && [ -s "$T/ledger/queue" ]'
+
+# #11 item 2: watch polls worker-show, never takes mail
+reset; echo dispatched >"$T/state/dispatch_status"
+out=$(NEXT watch --dispatch ctx_aaa111 --interval 0 --max-secs 1 2>&1); rc=$?
+check "watch: unchanged after --max-secs exits 2" '[ $rc = 2 ] && printf "%s" "$out" | grep -q "^unchanged: ctx_aaa111"'
+check "watch: reads worker-show only (no check)" 'grep -q "^orchestration worker-show" "$T/state/calls" && ! grep -q "^orchestration check" "$T/state/calls"'
+echo completed >"$T/state/dispatch_status"
+out=$(NEXT watch --dispatch ctx_aaa111 --interval 0 2>&1); rc=$?
+check "watch: already settled reports at once" '[ $rc = 0 ] && [ "$out" = "changed: ctx_aaa111 completed" ]'
+# a change between polls: the stub flips the status after the first call
+echo dispatched >"$T/state/dispatch_status"
+( sleep 1; echo failed >"$T/state/dispatch_status" ) &
+out=$(NEXT watch --dispatch ctx_aaa111 --interval 1 --max-secs 20 2>&1); rc=$?; wait
+check "watch: a status change exits 0" '[ $rc = 0 ] && [ "$out" = "changed: ctx_aaa111 failed" ]'
+NEXT watch >/dev/null 2>&1; rc=$?; check "watch without --dispatch exits 64" '[ $rc = 64 ]'
 
 # empty queue
 reset
