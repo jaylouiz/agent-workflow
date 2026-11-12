@@ -38,7 +38,7 @@ Choose the action in this order; the first that works wins:
 
 ## 4. Converge
 
-Measure the files in the profile's "Context files" (`wc -w`; `wc -l` too for each `CLAUDE.md`) and add a row to the running log. Run a convergence pass when the total grew since the last row, an always-loaded `CLAUDE.md` reaches the line budget (global CLAUDE.md "Budget", which also binds step 5 edits), a ledger has `rule-overload` entries, or the last pass is 5+ retros old:
+Measure the files in the profile's "Context files" (`wc -w`; `wc -c` too for each `CLAUDE.md`) and add a row to the running log. Run a convergence pass when the total grew since the last row, an always-loaded `CLAUDE.md` reaches the size budget (global CLAUDE.md "Budget", which also binds step 5 edits), a ledger has `rule-overload` entries, or the last pass is 5+ retros old:
 
 - merge rules that say the same thing in two places (one home, pointers elsewhere);
 - delete rules that restate the code, a tool's `--help` or another skill, and rules with no hit (no ledger entry, no `win`) whose failure would be cheap;
@@ -60,7 +60,7 @@ Measure the files in the profile's "Context files" (`wc -w`; `wc -l` too for eac
 | date | run | <file> | <file> | ... | total | note |
 ```
 
-`CLAUDE.md` cells are `<words> / <lines>`; older rows hold words only.
+`CLAUDE.md` cells are `<words> / <bytes>`; rows before 2026-11-13 hold `<words> / <lines>` or words only.
 
 ```markdown
 

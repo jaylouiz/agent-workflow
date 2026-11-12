@@ -23,7 +23,7 @@ Change, in order (skip a step whose result already exists: the issue is `ready` 
    ```
    A finding you could not fix in 2 rounds stays `-> open` (the coordinator holds the merge and reports it).
 5. worker_done --outcome succeeded with a body starting `READY #{{N}} PR <url> route=<lead|reviewer>` (or `PARKED #{{N}} D<k>`, `ROUTED #{{N}} needs-design`; failure: --outcome failed, `FAILED #{{N}}: <reason>`).
-Subagents: stuck on a root cause for more than 15 minutes, at most one `Agent` call with `model: opus` on that question (say so in the PR); mechanical sweeps (`rg` audits, copy or i18n sweeps, PR-body checks) may use `Agent` with `model: haiku`. A design-gate critique (profile "Design quality") always spawns its two isolated assessment sub-agents as the profile says; running it inline is a failed gate, not a budget saving.
+Subagents: stuck on a root cause for more than 15 minutes, at most one `Agent` call with `model: opus` on that question (say so in the PR); mechanical sweeps (`rg` audits, copy or i18n sweeps, PR-body checks) may use `Agent` with `model: haiku`. A design gate (profile "Design quality") spawns the isolated sub-agent the profile asks for; running it inline is a failed gate, not a budget saving.
 Ownership: issue body, comments and labels; worktree {{BRANCH}} only.
 Observable acceptance: PR URL with `Closes #{{N}}`, checks green per the profile, `## Review` in the format above.
 <!-- /stage -->

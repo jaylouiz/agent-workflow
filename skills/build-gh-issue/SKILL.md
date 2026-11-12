@@ -58,7 +58,7 @@ Run these and fix what they find:
 1. Tests and typecheck for the touched code, then everything the profile's "Verification" lists that applies to this change. Test sequences, not single calls (A -> B -> A, failure then refresh, restart mid-state, the host unmounting mid-state). If the profile defines a testing mode, apply it: write and run only the tests and checks it asks for in the current mode.
 2. **UI only:**
    - Screenshots per the profile's "Screenshots" (all widths), saved under the scratchpad.
-   - The profile's "gate" (before and after), then its "polish / detector".
+   - The profile's "gate" as soon as the change renders, before the first full E2E pass (its findings change the UI), then its "polish / detector".
    - The relevant E2E specs and visual baselines per the profile's "Verification" (and whatever it asks the PR body to name for the merge gate); E2E reads of stored state or the DOM after async work retry (`expect.poll`), never a one-shot read. A new focus or timing assertion asserts that the state holds (not a one-frame window) and passes `--repeat-each=10 --retries=0` with the worker count the profile's "Verification" (repeat-run flags) names (default `--workers=4`; `--workers=1` when workers share one server or fixture) before the PR: the merge gate runs it under load.
 3. Before you call it done, check **each acceptance criterion** against evidence (command output, screenshot, test name); each behaviour entry under the spec's `Accepted trade-offs` and each `Hazards` entry gets a test too (it is spec, not an excuse). Do not tick a box you did not verify.
 
