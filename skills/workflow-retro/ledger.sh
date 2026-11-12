@@ -7,6 +7,7 @@
 #   ledger.sh [-f FILE] path          print the ledger file
 #   ledger.sh dir [NAME]              print (and create) the shared ledger dir, e.g. one per orchestration run
 #   ledger.sh kinds                   list entry kinds
+#   ledger.sh due [PATH...]           is a retro worth running? exit 0 = due, 1 = skip (the ledgers stay for the next one)
 #
 # Default FILE: <git common dir>/agent-ledgers/<branch>-<session>.md (outside the work tree, survives worktree
 # removal, visible to every worktree of the repo). Orchestrated workers get an explicit -f from their spec.
@@ -68,5 +69,21 @@ case "$cmd" in
   dir)
     d="$(base_dir)${1:+/$1}"; mkdir -p "$d" && printf '%s\n' "$d" ;;
   kinds) printf '%s\n' "$KINDS" ;;
+  due)
+    # Due when the unprocessed ledgers hold RETRO_MIN_MINUTES (default 5) of friction, or any entry whose kind
+    # means an instruction or a check was wrong (escaped, wrong-instruction). Wins and [check] lines do not count.
+    # PATH: ledger files or dirs (searched two levels deep); default: every unprocessed ledger of this repository.
+    [ $# -gt 0 ] || set -- "$(base_dir)"
+    lines=$(for p in "$@"; do
+      if [ -d "$p" ]; then find "$p" -maxdepth 2 -name '*.md' -exec cat {} + 2>/dev/null; elif [ -f "$p" ]; then cat "$p"; fi
+    done | grep -E '^- \[[a-z-]+\] [0-9]+m -> ' | grep -v '^- \[win\]')
+    entries=$(printf '%s' "$lines" | grep -c . || true)
+    mins=$(printf '%s\n' "$lines" | sed -n 's/^- \[[a-z-]*\] \([0-9]*\)m -> .*/\1/p' | awk '{s+=$1} END {print s+0}')
+    strong=$(printf '%s\n' "$lines" | grep -cE '^- \[(escaped|wrong-instruction)\]' || true)
+    if [ "$mins" -ge "${RETRO_MIN_MINUTES:-5}" ] || [ "$strong" -gt 0 ]; then
+      echo "retro due: $entries entries, $mins min, $strong escaped or wrong-instruction"; exit 0
+    fi
+    echo "retro skipped: $entries entries, $mins min, none escaped or wrong-instruction (ledgers kept for the next retro)"; exit 1
+    ;;
   *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
 esac

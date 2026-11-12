@@ -8,7 +8,7 @@ This is the author's working setup, published as is: opinionated, built around C
 
 - [Claude Code](https://claude.com/claude-code), [`gh`](https://cli.github.com) logged in, `git`, `bash` (3.2 is enough), `jq`, `python3`. macOS is the tested platform.
 - [Orca](https://github.com/stablyai/orca) and its `orca` CLI for `/orchestrate-gh-issues` (workers, messages) and the Orca update check. The single-issue skills (`/design-gh-issue`, `/specify-gh-issue`, `/build-gh-issue`) run without it.
-- Skills and plugins the skills call but this repo does not ship: the [superpowers](https://github.com/obra/superpowers) plugin, `/code-review` (Claude Code), and optionally `/wayfinder`, `/gh-inbox-dispatcher`, `/ui-canvas`, `harvesting-session-knowledge` and the Impeccable plugin. A step whose tool is missing is skipped or reported, not guessed.
+- Skills and plugins the skills call but this repo does not ship: `/code-review` (Claude Code), and optionally `/wayfinder`, `/gh-inbox-dispatcher`, `/ui-canvas`, `harvesting-session-knowledge` and the Impeccable plugin. A step whose tool is missing is skipped or reported, not guessed.
 
 ## Install
 

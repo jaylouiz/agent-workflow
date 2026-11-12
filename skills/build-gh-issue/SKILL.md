@@ -33,11 +33,11 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 
 ## 2. Isolate
 
-Invoke `superpowers:using-git-worktrees`. Branch name per the profile's "Branches". Already on such a branch inside a worktree (e.g. one Orca created): skip creating a worktree and branch. Follow the profile's worktree notes.
+Work in a worktree of its own (`git worktree add`), never in the main checkout. Branch name per the profile's "Branches". Already on such a branch inside a worktree (e.g. one Orca created): skip creating a worktree and branch. Follow the profile's worktree notes.
 
 ## 3. Plan
 
-For anything beyond a trivial change, invoke `superpowers:writing-plans` and keep the plan next to the criteria. Use `superpowers:test-driven-development` for logic (stores, services, server routes).
+For anything beyond a trivial change, write a short plan (files, order, tests) next to the criteria. Logic (stores, services, server routes): write the failing test first.
 
 ## 4. Implement
 
@@ -60,7 +60,7 @@ Run these and fix what they find:
    - Screenshots per the profile's "Screenshots" (all widths), saved under the scratchpad.
    - The profile's "gate" (before and after), then its "polish / detector".
    - The relevant E2E specs and visual baselines per the profile's "Verification" (and whatever it asks the PR body to name for the merge gate); E2E reads of stored state or the DOM after async work retry (`expect.poll`), never a one-shot read. A new focus or timing assertion asserts that the state holds (not a one-frame window) and passes `--repeat-each=10 --retries=0` with the worker count the profile's "Verification" (repeat-run flags) names (default `--workers=4`; `--workers=1` when workers share one server or fixture) before the PR: the merge gate runs it under load.
-3. `superpowers:verification-before-completion`: check **each acceptance criterion** against evidence (command output, screenshot, test name); each behaviour entry under the spec's `Accepted trade-offs` and each `Hazards` entry gets a test too (it is spec, not an excuse). Do not tick a box you did not verify.
+3. Before you call it done, check **each acceptance criterion** against evidence (command output, screenshot, test name); each behaviour entry under the spec's `Accepted trade-offs` and each `Hazards` entry gets a test too (it is spec, not an excuse). Do not tick a box you did not verify.
 
 ## 6. Close the loop on design records
 

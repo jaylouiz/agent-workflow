@@ -6,7 +6,9 @@ argument-hint: "[run_id | ledger dir | ledger file]"
 
 # Workflow retro
 
-Turn what agents logged *while* working (`ledger.sh`, global CLAUDE.md) into fewer round trips, fewer errors and checks sized to the change, without growing the instructions. The session owner runs it; workers only hand over their ledger. A retro whose only output is deleting or merging rules is a good retro; zero edits is a fine outcome.
+Turn what agents logged *while* working (`ledger.sh`, global CLAUDE.md) into fewer round trips, fewer errors and checks sized to the change, without growing the instructions. Workers only hand over their ledger. A retro whose only output is deleting or merging rules is a good retro; zero edits is a fine outcome.
+
+**Due, and in a fresh context.** The session owner first runs `bash <this skill's dir>/ledger.sh due [run ledger dir]`. Exit 1 (under 5 minutes of friction, nothing `escaped` or `wrong-instruction`): no retro, say so in one line; the ledgers stay and count towards the next one. Exit 0: the owner does not run the steps below in its own long context but starts one `Agent` with `model: sonnet` and the prompt `/workflow-retro <ledger dir or file>` plus the run's `measures` line and anything the ledgers do not hold, then relays its report. Run it inline only when no `Agent` tool exists or the user asks for the retro directly.
 
 ## 1. Collect
 

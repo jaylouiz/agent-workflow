@@ -57,7 +57,7 @@ Decide and write the reason in one line:
 ## 6. Build the round
 
 **Prototype.** Invoke the `prototype` skill and follow its UI branch (prefer sub-shape A: variants on the existing route, `?variant=`, switcher bar), with these overrides from the profile's "Prototype":
-- Work on branch `proto/$issue-<slug>` in its own worktree (`superpowers:using-git-worktrees`; an Orca worker uses the worktree it was given and renames its branch). Never open a PR, never merge.
+- Work on branch `proto/$issue-<slug>` in its own worktree (`git worktree add`; an Orca worker uses the worktree it was given and renames its branch). Never open a PR, never merge.
 - The proto branch never reaches main, so the switcher renders whenever `?variant` is present, also in production builds of that branch (preview deploys). Do not gate it on dev mode.
 - Prototype rules: hardcoded copy (real wording, not i18n keys), no tests, no error handling beyond running, read-only or local data. Keep the app building.
 - Loop locally on the dev server with HMR on your assigned port. Push once per round, not per edit (each push builds a preview).

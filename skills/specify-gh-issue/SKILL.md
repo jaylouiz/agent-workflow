@@ -50,7 +50,7 @@ Read the profile's "Sources", then run its current-state review on the current i
 
 ## 4. Technical options
 
-1. Invoke `superpowers:brainstorming` for scope: in, out, what done looks like. Workers do not invoke it (it prompts the user); they assert the answers from the issue and the docs.
+1. Settle the scope: in, out, what done looks like. Interactive: ask the user what the issue leaves open. Workers assert the answers from the issue and the docs.
 2. When the build is open, produce **2-3 technical approaches**: one paragraph each, trade-offs, risk (name the profile's "Risk areas" touched), rough size, the conventions they rely on. When only one approach is sensible (most bugs, most issues after Design), write that one and say why.
 3. Light UI without a UX decision: one ASCII sketch at desktop and mobile width, box-and-label only, real copy and names from the profile's "Sources". Anything that needs more than ASCII is an open direction (step 1.5).
 
