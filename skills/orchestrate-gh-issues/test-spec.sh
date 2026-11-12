@@ -50,6 +50,9 @@ check "extra appended" 'printf "%s" "$out4" | grep -qF "extra note for #10"'
 bash "$DIR/spec.sh" lead 10 --ledger "$T/ledger" --extra "$T/missing.md" >"$T/o" 2>"$T/err"; rc=$?
 check "missing --extra file: exit 64, names it, no spec" '[ $rc = 64 ] && grep -q "missing.md" "$T/err" && [ ! -s "$T/o" ]'
 
+bash "$DIR/spec.sh" lead 10 --ledger "$T/ledger" --extra >/dev/null 2>&1; rc=$?
+check "a trailing --extra is a usage error (64), not an unbound variable" '[ $rc = 64 ]'
+
 out5=$(bash "$DIR/spec.sh" lead 13 --interactive --ledger "$T/ledger" 2>&1)
 check "interactive routes questions through ask" 'printf "%s" "$out5" | grep -qF "Interactive issue"'
 check "interactive drops no-questions line" '! printf "%s" "$out5" | grep -qF "No questions to the user."'

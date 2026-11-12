@@ -191,18 +191,25 @@ case "$cmd" in
       if wf_has wf_build_needed && (cd "$wt" && wf_build_needed "origin/$base"); then
         (cd "$wt" && wf_run wf_build) || die "build failed on the combined head in $wt (nothing pushed)"
       fi
+      pre_n=$(gh pr checks "$pr" --json name -q length 2>/dev/null) || pre_n=0
       git -C "$wt" push -q origin "HEAD:$head" || die "push failed in $wt"
-      # gh pr checks reads the PR's head: until GitHub reports the pushed commit it still shows the old head's checks
-      pushed=$(git -C "$wt" rev-parse HEAD); i=0
-      until [ "$(gh pr view "$pr" --json headRefOid -q .headRefOid 2>/dev/null)" = "$pushed" ]; do
-        i=$((i + 1))
-        if [ $i -ge "${MERGE_PR_HEAD_POLLS:-15}" ]; then
-          printf 'WAIT #%s: GitHub has not reported the pushed head yet (rerun prep)\n' "$pr"; exit 2
-        fi
-        sleep "${MERGE_PR_POLL_SECS:-2}"
-      done
+      pushed=1
     else
       echo "up to date with origin/$base, pushed"
+    fi
+    # gh pr checks reads the PR's head: until GitHub reports this commit as the head it shows the old head's checks
+    # (also on a rerun after a WAIT, hence not only after a push)
+    mine=$(git -C "$wt" rev-parse HEAD); i=0
+    until [ "$(gh pr view "$pr" --json headRefOid -q .headRefOid 2>/dev/null)" = "$mine" ]; do
+      i=$((i + 1))
+      if [ $i -ge "${MERGE_PR_HEAD_POLLS:-15}" ]; then
+        printf 'WAIT #%s: GitHub has not reported the pushed head yet (rerun prep)\n' "$pr"; exit 2
+      fi
+      sleep "${MERGE_PR_POLL_SECS:-2}"
+    done
+    # a pushed head whose CI has not registered yet shows no checks at all: not a pass when the old head had some
+    if [ "${pushed:-0}" = 1 ] && [ "${pre_n:-0}" -gt 0 ] && [ "$(gh pr checks "$pr" --json name -q length 2>/dev/null || echo 0)" = 0 ]; then
+      printf 'WAIT #%s: CI has not started on the pushed head yet (rerun prep)\n' "$pr"; exit 2
     fi
     ci=$(ci_state "$pr") || die "cannot read CI checks of PR #$pr after the push"
     case "$ci" in
@@ -239,8 +246,8 @@ case "$cmd" in
       "$DIR/decide.sh" log --rm "$n" # the coordination log ends with the issue
     done
     rm -f "$bodyf"
-    [ -d "$origcwd" ] || { echo "WARN: your working directory $origcwd was removed during after: cd $main before the next command"; }
     "$DIR/sweep.sh" --pr "$pr" --cwd "$origcwd" || echo "WARN: sweep did not finish cleanly (see above); after is not affected"
+    [ -d "$origcwd" ] || { echo "WARN: your working directory $origcwd was removed during after: cd $main before the next command"; }
     exit $rc ;;
   sweep)
     for a in "$@"; do [ "$a" = --dry-run ] || die "sweep [--dry-run]"; done

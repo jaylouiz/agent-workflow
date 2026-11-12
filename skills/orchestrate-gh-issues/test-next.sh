@@ -128,6 +128,11 @@ check "duplicate: exit 1, names Task and --force" '[ $rc = 1 ] && grep -q "stage
 check "duplicate: #7 not created or started, #8 (and #70 is no match) goes on" '[ "$(grep -c "^orchestration task-create" "$T/state/calls")" = 1 ] && grep -q "^started: #8 lead" <<<"$out"'
 check "duplicate: recorded, no port held, queue drained" 'grep -q "^#7 lead.*duplicate of task_other" "$T/ledger/failed-starts" && ! grep -q "#7 lead" "$T/ledger/ports" && [ ! -s "$T/ledger/queue" ]'
 check "duplicate: end-turn line still printed" 'printf "%s" "$out" | grep -q "^next: end your turn"'
+reset; tasks '{"id":"task_dep","task_title":"#8 lead","status":"dispatched","spec":"Issue #8: depends on #7 and #17."}'
+q "#7 lead" lead 7 -- --agent claude
+out=$(NEXT start --ledger "$T/ledger" 2>&1); rc=$?
+check "a Task that only mentions #7 in its spec text does not block #7" '[ $rc = 0 ] && printf "%s" "$out" | grep -q "^started: #7 lead"'
+NEXT watch --dispatch ctx_aaa111 --interval abc >/dev/null 2>&1; rc=$?; check "watch rejects a non-numeric interval (64)" '[ $rc = 64 ]'
 reset; tasks '{"id":"task_old","task_title":"#7 lead","status":"completed","spec":"Issue #7: Fix."}'
 q "#7 lead" lead 7 -- --agent claude
 out=$(NEXT start --ledger "$T/ledger" 2>&1); rc=$?
