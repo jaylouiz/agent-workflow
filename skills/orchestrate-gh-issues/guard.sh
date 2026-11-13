@@ -5,7 +5,8 @@
 #   2. `gh issue comment`: body carries a `<!-- decision-` marker, so `decide.sh status` never reads an agent
 #      comment as the user's (use `decide.sh note`; with --attach, put `<!-- decision-note -->` in the file),
 #      and stays scannable (`decide.sh check`: visible length cap, no wall-of-text line).
-#   3. `gh issue edit|create` and `gh pr edit` with a body: the body is not empty (a truncated or empty
+#   3. `gh issue edit|create` and `gh pr edit` with a body: the body is not empty; a `gh pr edit` body also has
+#      `Closes #<n>` and the attribution (not a fragment) (a truncated or empty
 #      --body-file once wiped an issue spec, #614).
 #   4. Orca V3 (1.4.246+): no `orca orchestration check --wait` at all (coordinators end their turn and Orca wakes
 #      them; a waiter takes the mail Orca would wake them with), and `ask` never ends in a trailing `&`.
@@ -205,7 +206,9 @@ def findings(segs, seps):
             yield "pr-create\t%s\t%s" % body(s)
         elif exe == "gh" and s[1:3] == ["issue", "comment"]:
             yield "issue-comment\t%s\t%s" % body(s)
-        elif exe == "gh" and s[1:3] in (["issue", "edit"], ["issue", "create"], ["pr", "edit"]):
+        elif exe == "gh" and s[1:3] == ["pr", "edit"]:
+            yield "pr-edit\t%s\t%s" % body(s)
+        elif exe == "gh" and s[1:3] in (["issue", "edit"], ["issue", "create"]):
             yield "body-write\t%s\t%s" % body(s)
         elif exe == "orca" and s[1:2] == ["orchestration"] and s[2:3] == ["check"] and "--wait" in s:
             yield "check-wait\tnone\t"
@@ -268,6 +271,12 @@ while IFS=$'\t' read -r kind bkind value; do
       if wf_has wf_pr_body_check; then
         msg=$(wf_pr_body_check "$f" 2>&1) || block "project check (.claude/issue-workflow.sh wf_pr_body_check): $msg"
       fi ;;
+    pr-edit)
+      # A PR body written whole must still be a whole body: a fragment (one review line) once replaced PR #253's body.
+      case "$bkind" in unverifiable|none) continue ;; esac
+      f=$(body_file "$bkind" "$value"); [ -n "$f" ] || continue
+      grep -q '[^[:space:]]' "$f" || block "refusing an empty issue/PR body ($value): it would wipe the current body."
+      grep -Eqi '(closes|fixes|resolves) +(#|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#)[0-9]+' "$f" && grep -Fq 'Generated with [Claude Code]' "$f" || block "gh pr edit --body replaces the WHOLE body, and this one lacks 'Closes #<n>' or the attribution line (a fragment?). Fetch it ('gh pr view <n> --json body -q .body > file'), change the section, write the whole file back with --body-file." ;;
     body-write)
       case "$bkind" in unverifiable|none) continue ;; esac
       f=$(body_file "$bkind" "$value"); [ -n "$f" ] || continue

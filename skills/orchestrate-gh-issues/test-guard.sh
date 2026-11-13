@@ -49,6 +49,7 @@ expect 0 "issue comment file missing at hook time" "gh issue comment 5 --body-fi
 expect 2 "issue edit empty body-file" "gh issue edit 5 --body-file $T/empty.md"
 expect 2 "issue edit whitespace body-file" "gh issue edit 5 --body-file $T/blank.md"
 expect 2 "pr edit empty inline body" "gh pr edit 5 --body ''"
+expect 2 "pr edit fragment body" "gh pr edit 5 --body 'Review: ok'"
 expect 0 "issue edit good body-file" "gh issue edit 5 --body-file $T/plain.md"
 expect 0 "issue edit labels only" "gh issue edit 5 --add-label ready"
 expect 0 "issue edit body-file missing at hook time" "gh issue edit 5 --body-file /nonexistent/x.md"

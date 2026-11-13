@@ -48,7 +48,7 @@ Files and components involved, store or service changes, design-system rules tha
 ## Verification
 Which tests (unit, E2E, visual baselines) and which design-quality commands prove the criteria. Name only test files that exist (list the test folder), and `grep` for existing assertions and baselines the change moves.
 
-E2E at risk: <basenames of the `tests/e2e/*.spec.ts` that exercise the touched areas (the profile's risk areas and `.claude/hooks/e2e-gate.json` show what the gate maps by itself; name what it cannot know, e.g. a flow reached through a shared component); omit the line when nothing is at risk (the builder copies these names into the PR's `E2E-specs:` line)>
+E2E at risk: <basenames of the `tests/e2e/*.spec.ts` that exercise the touched areas (the profile's risk areas and `.claude/hooks/e2e-gate.json` show what the gate maps by itself; name what it cannot know: `rg` every touched component name, `data-testid` and removed or moved title across `tests/e2e` and list the specs that hit, e.g. a flow reached through a shared component; run 4 of 13 PRs missed specs the gate map did not hold); omit the line when nothing is at risk (the builder copies these names into the PR's `E2E-specs:` line)>
 
 ## Original notes
 The author's original text, unchanged. Omit if the original body was empty.

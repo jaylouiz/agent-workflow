@@ -19,3 +19,5 @@ printf '%s\n' "$input" | sed -n '/^{/,$p' | grep -v '^\[exited with code' | jq -
               elif .kind == "worker_start" then "worker-start (no worker left)"
               else tojson end) end))
     end' -r 2>/dev/null || { echo "unparseable output; tail:"; printf '%s\n' "$input" | tail -c 800; }
+# Sweep the user's decision answers on every wake (SKILL.md section 5); a skipped sweep once left five answers unseen for 1.5 h.
+bash "$(dirname "${BASH_SOURCE[0]}")/decide.sh" status 2>&1 | head -20 | sed 's/^/decide status: /' || true
