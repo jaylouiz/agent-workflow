@@ -75,7 +75,7 @@ Decide and write the reason in one line:
 ## 7. Show it
 
 1. Screenshots of every variant at the profile's widths (desktop and mobile), via the profile's screenshot tool. Helper scripts (screenshot, axe) and their output live in the scratchpad, never in the worktree: an untracked file makes the cleanup hook skip the worktree. Prototype: one per `?variant=` key and width; sketch: export the frames.
-2. Prototype: commit and push the proto branch (`git push -u origin HEAD`), then get the preview URL as the profile's "share" says. Push failures or no preview: give the local URL and say so.
+2. Prototype: commit and push the proto branch (`git push -u origin HEAD`), then get the preview URL as the profile's "share" says; not built yet: wait for it (a few minutes), the `Preview:` line must outlive your session. Only a failed push or failed preview build gives the local URL, said so; a worker then also names it in its `PARKED` body, so the coordinator keeps it served.
 3. Post **one** round comment: `gh issue comment $issue --body-file <file> --attach <png>#<alt>…`, run from the worktree (`gh` needs the repo as cwd; files may stay in the scratchpad by absolute path). It is machine-read (Tandem builds a screenshot gallery from it), so keep this shape; the guard hook blocks unmarked agent comments and runs `decide.sh check` (visible length cap):
    ```markdown
    <!-- decision-note round R<k> -->
