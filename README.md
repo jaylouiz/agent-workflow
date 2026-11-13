@@ -68,7 +68,7 @@ Cloud sessions (Claude Code on the web) do not get these skills (only the attach
 | UAC | User acceptance criterion: behaviour the user can observe. Layers and owners: [reference/issue-rules.md](reference/issue-rules.md). |
 | Spec | The issue body after Specify: the issue standard's layers plus approach, technical ACs, implementation notes, verification. The only input Build needs. |
 | Profile | The project's tracked file with the facts these skills leave open (`.claude/issue-workflow.md`). |
-| Ledger | One line per friction, written the moment it happens (`workflow-retro/ledger.sh`, global CLAUDE.md); outside the work tree, deleted after the retro. |
+| Ledger | One line per friction, written the moment it happens (`workflow-retro/ledger.sh`, global CLAUDE.md); outside the work tree, archived by the retro (`ledger.sh close`). |
 | Retro | `/workflow-retro` at the end of a run or session: ledgers → causes → the cheapest fix, plus a convergence pass when the instructions grow. |
 | One-way / two-way decision | One-way: costly to undo or the user's call by definition (Design round, held merge, the profile's "Decisions" list); only these reach the user. Two-way: everything else; the agent decides, records it and continues. |
 | Coordination log | Per-issue Markdown file for agent-to-agent progress (stage starts, milestones, PR link, fix rounds, resume text): `decide.sh log`, at `~/.claude/issue-logs/<owner>/<repo>/<n>.md`, outside the work tree; deleted by `merge-pr.sh after`. The issue thread keeps only what the user reads. |

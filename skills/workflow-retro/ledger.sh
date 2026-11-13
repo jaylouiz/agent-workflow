@@ -8,6 +8,7 @@
 #   ledger.sh dir [NAME]              print (and create) the shared ledger dir, e.g. one per orchestration run
 #   ledger.sh kinds                   list entry kinds
 #   ledger.sh due [PATH...]           is a retro worth running? exit 0 = due, 1 = skip (the ledgers stay for the next one)
+#   ledger.sh close [PATH...]         after a retro: move every ledger with entries into processed/<date>/ (kept 30 days)
 #
 # Default FILE: <git common dir>/agent-ledgers/<branch>-<session>.md (outside the work tree, survives worktree
 # removal, visible to every worktree of the repo). Orchestrated workers get an explicit -f from their spec.
@@ -75,7 +76,7 @@ case "$cmd" in
     # PATH: ledger files or dirs (searched two levels deep); default: every unprocessed ledger of this repository.
     [ $# -gt 0 ] || set -- "$(base_dir)"
     lines=$(for p in "$@"; do
-      if [ -d "$p" ]; then find "$p" -maxdepth 2 -name '*.md' -exec cat {} + 2>/dev/null; elif [ -f "$p" ]; then cat "$p"; fi
+      if [ -d "$p" ]; then find "$p" -maxdepth 2 -name '*.md' -not -path '*/processed/*' -exec cat {} + 2>/dev/null; elif [ -f "$p" ]; then cat "$p"; fi
     done | grep -E '^- \[[a-z-]+\] [0-9]+m -> ' | grep -v '^- \[win\]')
     entries=$(printf '%s' "$lines" | grep -c . || true)
     mins=$(printf '%s\n' "$lines" | sed -n 's/^- \[[a-z-]*\] \([0-9]*\)m -> .*/\1/p' | awk '{s+=$1} END {print s+0}')
@@ -85,5 +86,19 @@ case "$cmd" in
     fi
     echo "retro skipped: $entries entries, $mins min, none escaped or wrong-instruction (ledgers kept for the next retro)"; exit 1
     ;;
-  *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
+  close)
+    # Processed ledgers leave the scan without being destroyed: a ledger that stays behind would keep `due` true
+    # for ever, and a deleted one cannot be checked again. Only files that hold entries move; specs, receipts and
+    # notes in a run dir stay where they are.
+    [ $# -gt 0 ] || set -- "$(base_dir)"
+    dest="$(base_dir)/processed/$(date +%F)"; moved=0
+    for p in "$@"; do
+      if [ -d "$p" ]; then find "$p" -maxdepth 2 -name '*.md' -not -path '*/processed/*' 2>/dev/null; elif [ -f "$p" ]; then printf '%s\n' "$p"; fi
+    done | while IFS= read -r f; do
+      grep -qE '^- \[[a-z-]+\] ' "$f" 2>/dev/null || continue
+      mkdir -p "$dest" && mv "$f" "$dest/$(basename "$(dirname "$f")")-$(basename "$f")" && echo "closed $f"
+    done
+    find "$(base_dir)/processed" -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -r {} + 2>/dev/null
+    ;;
+  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
 esac

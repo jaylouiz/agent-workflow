@@ -13,6 +13,7 @@ Turn what agents logged *while* working (`ledger.sh`, global CLAUDE.md) into few
 ## 1. Collect
 
 - Ledgers: the run's dir (`bash <this skill's dir>/ledger.sh dir <run_id>`), or this session's file (`ledger.sh path`), plus your own.
+- Usage: `python3 <this skill's dir>/usage.py summary --since <run or session start date>` (sessions, estimated cost and peak context per role, skills invoked).
 - Metrics: per stage wall time (orchestrated: `orca orchestration task-list --run <id> --json --full` (the concise view has no timestamps), `created_at` → `completed_at`), fix rounds, review findings by severity, every `[check]` line, and the profile's "Retro" metric sources (e.g. hook logs).
 - The running log (path in the profile's "Retro") and the last context-size row.
 
@@ -29,6 +30,8 @@ Update each matching watch-list row (seen count, last run) or add one; find rows
 - **Act** on a cause seen in 2+ runs, or once when it cost ≥ 15 min or an instruction was plainly wrong.
 - **Effect check**: a `fixed` row whose cause shows up again means the fix did not work; mark it `recurred` and pick a stronger action below, never a second sentence of the same rule.
 - **Drop** rows not seen in the last 5 retros.
+- **No endless watching**: a `watching` row seen 5 times gets a decision now: an action from the list below, or `accepted: <why the current handling is enough>`.
+- **Trials**: a line in the profile that starts with `trial` names its own end condition and what is recorded. Check each one; when it has ended, put the comparison in the report and delete the line.
 
 Choose the action in this order; the first that works wins:
 1. Delete or correct a wrong or unused instruction.
@@ -38,10 +41,10 @@ Choose the action in this order; the first that works wins:
 
 ## 4. Converge
 
-Measure the files in the profile's "Context files" (`wc -w`; `wc -c` too for each `CLAUDE.md`) and add a row to the running log. Run a convergence pass when the total grew since the last row, an always-loaded `CLAUDE.md` reaches the size budget (global CLAUDE.md "Budget", which also binds step 5 edits), a ledger has `rule-overload` entries, or the last pass is 5+ retros old:
+Measure the files in the profile's "Context files" (`wc -w`; `wc -c` too for each `CLAUDE.md`) and what a session really starts with: `python3 <this skill's dir>/usage.py start-context` (tokens of the first model call, median of the latest interactive sessions). Add a row to the running log, the measured value in its note as `start <tokens>`. When it grew by more than 2,000 tokens against the last row that has one, the same command shows where (tool definitions, skill listing, instruction files): name the cause in the report and fix it or hand it to the user, because every 1,000 tokens here are paid on every call of every session. Run a convergence pass when the total grew since the last row, an always-loaded `CLAUDE.md` reaches the size budget (global CLAUDE.md "Budget", which also binds step 5 edits), a ledger has `rule-overload` entries, or the last pass is 5+ retros old:
 
 - merge rules that say the same thing in two places (one home, pointers elsewhere);
-- delete rules that restate the code, a tool's `--help` or another skill, and rules with no hit (no ledger entry, no `win`) whose failure would be cheap;
+- delete rules that restate the code, a tool's `--help` or another skill, and rules with no hit (no ledger entry, no `win`) whose failure would be cheap; an instruction to invoke a skill that `usage.py summary` shows was never invoked is dead: delete the call and keep its one-line rule inline;
 - move out of always-loaded files to the targets "Budget" names, and workflow facts to the profile;
 - keep anything a `win` entry vouches for.
 
@@ -50,7 +53,7 @@ Measure the files in the profile's "Context files" (`wc -w`; `wc -c` too for eac
 - Small, certain edits: apply now with the writing rules of `harvesting-session-knowledge` (read first, replace don't append). Method changes go to the agent-workflow repo (`~/.claude/agent-workflow`, a link to its checkout; commit and push); project facts go where the profile's "Retro" says.
 - Larger or uncertain ones: an `inbox` issue in the repo that owns the target (global CLAUDE.md rules).
 - Watch-list rows you acted on get `fixed <date> <file>` plus the expected effect, so the next retro can check it.
-- Delete the processed ledgers (the log holds what matters).
+- `ledger.sh close <the paths you processed>` (moves the ledgers into `processed/`, kept 30 days; never `rm` them). Then `ledger.sh due` on the same paths must say skipped: a ledger left behind would trigger a retro at every session end.
 - Report one line per change (what, where, which cause) plus the context-size delta. Spell ids out for the user ("watch list item 7", not "W7").
 
 ## Running log format
