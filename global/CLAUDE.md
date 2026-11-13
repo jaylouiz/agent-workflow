@@ -26,7 +26,7 @@ Goal: fewer round trips, fewer errors, checks sized to the change, and instructi
 
 ## Multiple issues -> screen all first
 
-When handed several issues at once, read and screen all of them first (size, area overlap, dependencies, lane) and derive the order and parallelisation before dispatching anything.
+When handed several issues at once, read and screen all of them first (size, area overlap, dependencies, lane) and derive the order, the parallelisation and the batches before dispatching anything: issues in the same area, dependent on each other or each small share one branch and one PR (one verification, one E2E gate, one review, no merge conflict between them), unless one of them must be revertible alone.
 
 ## Commit and push without asking
 

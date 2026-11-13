@@ -39,12 +39,13 @@ Before creating the Run or any Task, read every in-scope issue yourself (`gh iss
 
 - per issue: **lane** by the triage rule (fog / `needs-design` / `needs-spec` / `ready`; relabel when the current label is wrong, the reason into `decide.sh log`, not a comment), UI or non-UI, rough size, touched areas (for unshaped issues, guess and mark the guess as uncertain)
 - the issue standard (issue rules): you never write Problem, job, stories or ACs into an issue. A clear, standard issue that already meets the standard goes to `ready` (its lead skips Specify); one that does not goes to `needs-spec`, with `--extra` "Specify: Complete track" for its lead when the build is obvious
-- dependencies and overlaps (same area or file): dependency edges, so they never run in parallel (the profile's "Orchestration")
+- **batches**, looked for in every run without the user asking: issues that would each pay for their own verification, E2E gate, baseline round, review and merge go into one lead and one PR when they touch the same area or files (the overlap that would otherwise force a sequence or a merge conflict), depend on each other, or are each small. Limits: 2-4 issues and a diff one review can still hold; an issue still in Design or parked on a decision stays out until it is settled; an issue that changes persisted data or hits another one-way item ships alone, so it can be reverted alone. The plan names each batch with its reason and the issues kept apart with theirs
+- dependencies and overlaps (same area or file) that are not batched: dependency edges, so they never run in parallel (the profile's "Orchestration")
 - order and waves (max workers per the profile): quick, independent wins and Design/Specify stages first; issues in the profile's "Risk areas" serialized
 - issues with fog: pulled out, reported up front
 - guard results and hold labels (the profile's "Labels")
 
-`inbox` issues join only when the user names them or asks for "all": run `/gh-inbox-dispatcher` yourself first (you count as the user caller); only issues it routes join. An epic (`/specify-gh-issue`'s epic check) runs Specify only; its sub-issues go into a follow-up run. **Batch** small, low-risk issues with disjoint files into one lead: Specify per issue in turn (if needed), one branch, one verification and E2E pass, one PR (`Closes` per issue), one review (`--extra` names the issues and the shared branch).
+`inbox` issues join only when the user names them or asks for "all": run `/gh-inbox-dispatcher` yourself first (you count as the user caller); only issues it routes join. An epic (`/specify-gh-issue`'s epic check) runs Specify only; its sub-issues go into a follow-up run. A **batch** runs as one lead: Specify per issue in turn (if needed), one branch, one verification and E2E pass, one PR (`Closes` per issue), one review (`--extra` names the issues and the shared branch).
 
 ## 2. Pipeline
 
