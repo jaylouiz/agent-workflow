@@ -19,6 +19,7 @@ Commands:
   worker-show        Inspect one supervised worker Dispatch
   worker-read        Read bounded output from one supervised worker
   worker-stop        Fence one Dispatch and stop its supervised agent terminal and its helpers
+  deny               Deny a worker's permission prompt with a reason; the worker carries on
   worker-abandon     Fence a worker without claiming its process stopped
   worker-release     Release the terminal of one settled supervised worker
   worker-keep-open   Keep a worker open after it finishes
