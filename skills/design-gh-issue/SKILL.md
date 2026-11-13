@@ -30,6 +30,13 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 5. **Issue standard**: no `## Problem`, `Job:` or `## Solution` in the body yet: infer them per the issue rules ("Infer, then record") and write them in before the brief; the request's own idea goes to Solution, never into Problem.
 6. `gh label create needs-design --force --description "UX direction open: prototype or sketch before spec"` and `gh label create phase:design --force --color 5319E7 --description "Phase UX Design: a design round is running or waits on feedback"`, then `gh issue edit $issue --add-label phase:design` (kept while rounds run and park, removed at the handover).
 
+**Several issues on one surface** (a design batch: the task names them, or the user asks for it). Everything below runs once for all of them, on one branch `proto/<lowest n>-<slug>` and in one prototype, so the user reviews the surface as a whole:
+- guard, phase label and brief per issue; current-state review, screenshots and tech check once for the shared surface
+- variants per issue's question. Questions that do not interact get their own switcher key (the user combines them freely); questions that interact are shown as combined variants. Say which in the round comment
+- each issue gets its own round comment and its own decision request (its variants, its question), all with the same `Preview:` and all posted in one go, so the digest shows them together and the user answers in bulk
+- at the handover each issue gets its own `## UX decision` linking the shared prototype, and its labels move with the others
+- more open questions than one round can show clearly: finish the first issues' round, then the next on the same branch, and say so in the report; the PR still converges unless the coordinator or the user keeps an issue apart
+
 ## 2. Brief
 
 1. Redesign of an existing surface: run the profile's current-state review on it first, so variants start from real findings. Capture current screenshots per the profile's "Screenshots".
