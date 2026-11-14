@@ -11,6 +11,7 @@ WF_IGNORE_GLOBS=(package-lock.json)   # not counted for the diff-size route
 WF_REVIEW_LINES=400                   # changed lines above which the route is reviewer
 WF_HOLD_LABELS="on-hold-after-spec do-not-merge"   # PR or issue labels that hold a merge
 WF_REQUIRED_CHECKS=""                 # GitHub checks prep waits for, comma-separated names as GitHub shows them (e.g. "CI / quality, build"); empty = every reported check must not fail
+WF_NO_WAIT_CI=0                      # 1 = prep does not WAIT for pending checks (a failed check still blocks)
 WF_CHECKS_TSV=""                      # gate log with the PR head SHA per row, printed by merge-pr.sh after
 
 # cwd: the PR's worktree, after the base branch was merged in.
