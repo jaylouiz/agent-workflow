@@ -17,7 +17,7 @@ Change, in order (skip a step whose result already exists: the issue is `ready` 
 4. Write `## Review` into the PR body, exactly this format (merge-pr.sh parses it):
    ```
    ## Review
-   route: lead · effort: <level> · by: <your model>
+   route: lead · by: <your model>
    - [medium|high|critical] <finding> (<file:line>) -> fixed <sha> | dismissed: <reason> | open
    lows: <n> (<one line>)
    ```
@@ -39,7 +39,7 @@ Change: run `/code-review {{PR}}` (never `ultra`), findings only: no code edits,
 Then write only the `## Review` section of the PR body (replace the lead's `route: reviewer` line), in this format:
 ```
 ## Review
-route: reviewer · effort: <level> · by: {{MODEL}}
+route: reviewer · by: {{MODEL}}
 - [medium|high|critical] <finding> (<file:line>) -> open | dismissed: <reason>
 lows: <n> (<one line>)
 ```
