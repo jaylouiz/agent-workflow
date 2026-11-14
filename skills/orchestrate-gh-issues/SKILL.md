@@ -20,7 +20,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 
 ## 0. Preflight
 
-1. Load the version-matched guide first: `orca skills get orchestration`. This skill adds only workflow policy; the guide's role check, loop (Orca V3: start workers, end your turn, Orca wakes you), safety floor (positive proof before stop, retry or release; the reclaimable check before ending the turn), task-spec contract and action-gate references apply unchanged. A live preamble with Task and Dispatch IDs makes you a worker: do only that Task.
+1. Load the version-matched guide first: `orca skills get orchestration`. This skill adds only workflow policy; the guide's role check, loop (Orca V3: start workers, end your turn, Orca wakes you), safety floor (positive proof before stop, retry or release; the reclaimable check before ending the turn), task-spec contract and action-gate references apply unchanged. A live preamble with Task and Dispatch IDs makes you a worker: do only that Task. A wave coordinator's brief (section 1c) is such a Task: coordinating its wave by this skill.
 2. Read the profile.
 3. Sweep finished work: `merge-pr.sh sweep` removes worktrees and branches of merged or closed PRs and closed `proto/` issues (it keeps dirty, unpushed and in-use ones with a reason; a failure never blocks the run). Work from the main checkout, never from an in-scope PR's worktree: `after` cleans that up.
 
@@ -47,6 +47,16 @@ Before creating the Run or any Task, read every in-scope issue yourself (`gh iss
 - guard results and hold labels (the profile's "Labels")
 
 `inbox` issues join only when the user names them or asks for "all": run `/gh-inbox-dispatcher` yourself first (you count as the user caller); only issues it routes join. An epic (`/specify-gh-issue`'s epic check) runs Specify only; its sub-issues go into a follow-up run. A **batch** runs as one lead: Specify per issue in turn (if needed), one branch, one verification and E2E pass, one PR (`Closes` per issue), one review (`--extra` names the issues and the shared branch).
+
+## 1c. Waves (many issues)
+
+A hand-off of about 7 or more issues (more leads than one round of the profile's max workers), or one the user asks to split, runs as **waves**, so the stages of early issues do not pile up in your context. You are then the **main coordinator**: you screen (1b), cut the plan into waves, and per wave start one **wave coordinator**, an Orca worker that runs this whole skill for its issues with its own Run. You start no stage workers, read no worker mail but the wave reports, and merge nothing.
+
+- **Cut**: a wave is what one coordinator can hold, about 4-6 leads or design rounds. Wave 1 takes Design rounds (they need the user soonest), quick wins and the inbox triage; issues that overlap a wave's batches, or share a risk area with them, go into a later wave. Post the wave plan to the user, then start wave 1 without waiting.
+- **Start**: fill `wave-template.md` into a file and run `orca orchestration worker-start --spec-file <file> --task-title "Wave <k> coordinator: #a #b …" --worktree current --agent claude` (no `--model`: it runs on the user's model, like you). One wave at a time: they share the main checkout, the ports and the merge order. Then end your turn.
+- **While it runs**: an `escalation` "stopped without reporting" from a wave coordinator is its own end of turn between wakes: leave it, unless its last output shows it is stuck. An answer the user gives you goes onto the issue (`decide.sh note` or `answer`) and to the coordinator with `send`; a `question` from it is answered as section 5 says.
+- **Between waves**: read the `worker_done` report, relay it to the user in short, and build the next wave from what is left: the planned issues, issues whose parked decision is now answered, and the new `inbox` issues the report lists (the next coordinator triages them; one that needs the user first stays parked). Ask the user the parked questions (`AskUserQuestion`) after starting the next wave, never instead of it. Repeat until nothing runnable is left: follow-up waves for new inbox issues need no new go from the user.
+- **End**: check the default branch's last CI run and deploy yourself (a background `gh run watch`, never a poll loop), then the final report of section 7 from the wave reports: per wave the merged PRs, then what waits on the user. Retros ran per wave; you run none unless your own ledger is due.
 
 ## 2. Pipeline
 
