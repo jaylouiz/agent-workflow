@@ -216,9 +216,9 @@ case "$cmd" in
       sleep "${MERGE_PR_POLL_SECS:-2}"
     done
     # a pushed head whose CI has not registered yet shows no or fewer checks, which reads as a pass: for 10 minutes after
-    # the push, fewer checks than the old head had is a WAIT (a rerun included; a deliberately removed check passes then)
+    # the push, fewer checks than the old head had is a WAIT (a rerun included; a deliberately removed check passes then; not with WF_NO_WAIT_CI=1, which waits for no CI)
     exp=$(awk -v s="$mine" -v now="$(date +%s)" '$1 == s && now - $3 < 600 {print $2}' "$(cd "$wt" && git rev-parse --absolute-git-dir)/prep-expect" 2>/dev/null)
-    if [ "${exp:-0}" -gt 0 ] && [ "$(check_count "$pr")" -lt "$exp" ]; then
+    if [ "${WF_NO_WAIT_CI:-0}" != 1 ] && [ "${exp:-0}" -gt 0 ] && [ "$(check_count "$pr")" -lt "$exp" ]; then
       printf 'WAIT #%s: CI has not registered all %s checks on the pushed head yet (rerun prep)\n' "$pr" "$exp"; exit 2
     fi
     ci=$(ci_state "$pr") || die "cannot read CI checks of PR #$pr after the push"
