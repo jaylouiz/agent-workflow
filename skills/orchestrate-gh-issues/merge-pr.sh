@@ -224,7 +224,8 @@ case "$cmd" in
     ci=$(ci_state "$pr") || die "cannot read CI checks of PR #$pr after the push"
     case "$ci" in
       fail:*) printf 'NOT READY #%s:\nCI: failed check(s):%s\n' "$pr" "${ci#fail:}"; exit 1 ;;
-      pending:*) printf 'WAIT #%s: CI pending:%s (rerun prep when it is done)\n' "$pr" "${ci#pending:}"; exit 2 ;;
+      pending:*) if [ "${WF_NO_WAIT_CI:-0}" = 1 ]; then printf 'note: CI pending:%s, not waited for (WF_NO_WAIT_CI=1)\n' "${ci#pending:}"
+                 else printf 'WAIT #%s: CI pending:%s (rerun prep when it is done)\n' "$pr" "${ci#pending:}"; exit 2; fi ;;
     esac
     echo "ready: gh pr merge $pr --merge" ;;
   after)
