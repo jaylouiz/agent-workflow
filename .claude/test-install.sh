@@ -99,6 +99,20 @@ eq "interactive: budget strong" "$(setting WF_MODEL_STRONG)" sonnet
 eq "interactive: rules off" "$(setting WF_INSTALL_GLOBAL_RULES)" off
 check "interactive: shows the rule headings" 'grep -q "Out-of-scope opportunities" "$T/out"'
 
+# custom models with the template copied as the settings file (no active model lines): Enter takes the defaults
+new; cp "$ROOT/reference/global-settings.sh" "$C/agent-workflow-settings.sh"
+printf 'custom\n\n\n\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1; rc=$?
+eq "custom from the template: exit 0" "$rc" 0
+eq "custom from the template: default tier" "$(setting WF_MODEL_DEFAULT)" sonnet
+eq "custom from the template: fast tier" "$(setting WF_MODEL_FAST)" haiku
+check "custom from the template: skills linked" '[ -L "$C/skills/build-gh-issue" ]'
+
+# a template line uncommented as the template says (value plus trailing comment) reads as the bare value
+new; printf 'WF_MODEL_DEFAULT=opus     # lead workers\nWF_MODEL_STRONG=opus\nWF_MODEL_FAST=haiku\n' >"$C/agent-workflow-settings.sh"
+printf 'custom\n\n\n\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1
+eq "uncommented line: kept as the bare value" "$(sed -n 's/^WF_MODEL_DEFAULT=\([a-z]*\).*/\1/p' "$C/agent-workflow-settings.sh")" opus
+check "uncommented line: header shows the bare value" 'grep -qF "now opus/opus/haiku" "$T/out"'
+
 # --check: missing jq fails and changes nothing
 new; CLAUDE_CONFIG_DIR=$C PATH="$T/bin" bash "$ROOT/install.sh" --check >"$T/out" 2>&1; rc=$?
 eq "check without jq: exit 1" "$rc" 1

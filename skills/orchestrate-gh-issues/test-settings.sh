@@ -62,5 +62,14 @@ echo 'WF_COMMENT_CAP=10' >"$WF_GLOBAL_SETTINGS"
 printf 'eleven char' >"$T/c.md"
 bash "$DIR/decide.sh" check "$T/c.md" >/dev/null 2>&1; eq "decide.sh cap from global" "$?" 65
 
+# decide.sh runs with set -e: a settings file whose command returns non-zero, or that does not parse, must not kill it
+printf 'command -v no-such-tool-xyz >/dev/null && WF_PM=pnpm\n' >"$WF_GLOBAL_SETTINGS"
+printf 'short' >"$T/ok.md"
+bash "$DIR/decide.sh" check "$T/ok.md" >/dev/null 2>&1; eq "decide.sh survives a false last line" "$?" 0
+printf 'WF_X=(\n' >"$WF_GLOBAL_SETTINGS"
+bash "$DIR/decide.sh" check "$T/ok.md" >/dev/null 2>"$T/err2"; eq "decide.sh survives an unparsable global file" "$?" 0
+check "unparsable global file: stderr names it" 'grep -qF "$WF_GLOBAL_SETTINGS" "$T/err2"'
+rm -f "$WF_GLOBAL_SETTINGS"
+
 echo "$((n - fail))/$n passed"
 [ "$fail" = 0 ]

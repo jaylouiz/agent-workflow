@@ -34,14 +34,17 @@ wf_defaults() {
 
 wf_source() { # wf_source <file>: source a settings file with globbing off; a missing file is fine, a broken one warns once
   [ -f "$1" ] || return 0
-  if ! bash -n "$1" 2>/dev/null; then
+  # bash 3.2's -n reports some parse errors (an unclosed `(`) and still exits 0: any output counts as a syntax error.
+  if ! bash -n "$1" >/dev/null 2>&1 || [ -n "$(bash -n "$1" 2>&1)" ]; then
     echo "agent-workflow: $1: syntax error, not loaded (using the other settings)" >&2
     return 0
   fi
   # Globbing off while sourcing: an unquoted `store/**` must stay a pattern, not expand to files.
+  # `|| :` also keeps a failing command in the file (a false last line, a parse error bash -n missed) from ending a
+  # caller that runs with set -e (decide.sh, guard.sh through it).
   set -f
   # shellcheck disable=SC1090
-  . "$1"
+  . "$1" || :
   set +f
   return 0
 }

@@ -2,7 +2,7 @@
 name: init-issue-workflow
 description: Set up or update agent-workflow for the current repo. Detects scripts, CI checks, UI and docs, drafts `.claude/issue-workflow.md` and `.claude/issue-workflow.sh`, asks only what it could not detect, creates the labels and commits the setup as a PR. Use when a repo has no issue-workflow profile yet, when a skill says the profile is missing, or when asked to set up, initialise, onboard or update the workflow for a project.
 argument-hint: "[update]"
-allowed-tools: Bash(gh *) Bash(git *) Bash(bash *)
+allowed-tools: Bash(gh auth status*) Bash(gh repo view *) Bash(gh label *) Bash(gh pr create *) Bash(gh pr list *) Bash(git status *) Bash(git diff *) Bash(git log *) Bash(git switch *) Bash(git add *) Bash(git commit *) Bash(git push *) Bash(git remote *)
 ---
 
 # Set up agent-workflow in this repo

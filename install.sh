@@ -32,7 +32,7 @@ CHANGES=""
 changed() { CHANGES="$CHANGES
   - $*"; }
 
-YES=0 MODELS="" RULES="" DEV="" MODE=install
+YES=0 MODELS="" RULES="" DEV="" MODE=install CUSTOM=""
 while [ $# -gt 0 ]; do
   case $1 in
     --yes) YES=1 ;;
@@ -96,7 +96,11 @@ unlink_ours() { # unlink_ours <path>: remove a symlink into this checkout
 }
 
 # --- recorded choices in the global settings file ---
-recorded() { [ -f "$SETTINGS_FILE" ] && sed -n "s/^$1=//p" "$SETTINGS_FILE" | tail -1 | tr -d "\"'"; }
+recorded() { # the active value of KEY, without quotes or a trailing comment; empty when unset
+  [ -f "$SETTINGS_FILE" ] || return 0
+  sed -n "s/^$1=//p" "$SETTINGS_FILE" | tail -1 | sed 's/[[:space:]]*#.*$//' | tr -d "\"'"
+}
+rec_or() { local r; r=$(recorded "$1"); echo "${r:-$2}"; } # rec_or KEY DEFAULT
 set_setting() { # set_setting KEY VALUE: replace the active line, else the commented default, else append
   [ -f "$SETTINGS_FILE" ] || { mkdir -p "$(dirname "$SETTINGS_FILE")"; cp "$ROOT/reference/global-settings.sh" "$SETTINGS_FILE"; changed "created $SETTINGS_FILE"; }
   [ "$(recorded "$1")" = "$2" ] && return 0
@@ -201,6 +205,7 @@ if [ "$INTERACTIVE" = 1 ]; then
     MODELS=$(ask "Models ($([ "$def" = keep ] && printf 'keep, ')balanced, quality, budget, custom)" "$def")
     [ "$MODELS" = keep ] && MODELS=""
   fi
+  [ "$MODELS" != custom ] || CUSTOM="$(ask "  Default tier" "$(rec_or WF_MODEL_DEFAULT sonnet)") $(ask "  Strong tier" "$(rec_or WF_MODEL_STRONG opus)") $(ask "  Fast tier" "$(rec_or WF_MODEL_FAST haiku)")"
   say ""
   say "Global rules (global/CLAUDE.md, the author's habits for every project):"
   grep '^## ' "$ROOT/global/CLAUDE.md" | sed 's/^## /  - /'
@@ -213,12 +218,14 @@ case $MODELS in
   balanced) m="sonnet opus haiku" ;;
   quality) m="opus opus sonnet" ;;
   budget) m="sonnet sonnet haiku" ;;
-  custom) m="$(ask "Default tier" "$(recorded WF_MODEL_DEFAULT || echo sonnet)") $(ask "Strong tier" "$(recorded WF_MODEL_STRONG || echo opus)") $(ask "Fast tier" "$(recorded WF_MODEL_FAST || echo haiku)")" ;;
+  custom) m=$CUSTOM ;;
   *) m="" ;;
 esac
 [ -n "$m" ] || [ -n "$(recorded WF_MODEL_DEFAULT)" ] || m="sonnet opus haiku"
 if [ -n "$m" ]; then
+  # shellcheck disable=SC2086
   set -- $m
+  [ $# = 3 ] || { warn "three models expected (default strong fast), got '$m'"; exit 2; }
   set_setting WF_MODEL_DEFAULT "$1"; set_setting WF_MODEL_STRONG "$2"; set_setting WF_MODEL_FAST "$3"
 fi
 

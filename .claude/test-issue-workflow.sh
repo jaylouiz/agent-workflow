@@ -5,6 +5,7 @@ set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 LIB="$DIR/../skills/orchestrate-gh-issues/lib.sh"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
 fail=0; n=0
 eq() { n=$((n + 1)); [ "$2" = "$3" ] || { fail=$((fail + 1)); echo "FAIL [$1] want '$3' got '$2'"; }; }
 q() { git -c user.email=t@t -c user.name=t -c commit.gpgsign=false -c core.hooksPath=/dev/null "$@"; }
