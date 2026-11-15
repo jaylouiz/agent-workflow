@@ -22,7 +22,7 @@
 #   decide.sh digest [--due FILE] [--idle] [--cap SEC]
 #                                  bundled list of waiting requests. With --due: print and exit 0 only when the
 #                                  run is idle (--idle) or the oldest request not yet listed in FILE is older
-#                                  than --cap (default 7200); then add the listed ids to FILE. Else exit 1.
+#                                  than --cap (default: the settings' WF_DIGEST_CAP, 2h); then add the listed ids to FILE. Else exit 1.
 #
 # The repo is $WF_REPO (owner/repo) when set, else the current checkout's origin; with neither, every subcommand
 # but `check` exits 64 before writing anything (a worker in /tmp must not post to a guessed repo, or to none).
@@ -38,6 +38,7 @@ set -euo pipefail
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=lib.sh
 . "$DIR/lib.sh"
+wf_load # the comment cap and the issue-log dir may come from the settings files (an exported value wins)
 
 die() { echo "decide.sh: $*" >&2; exit 64; }
 
@@ -225,7 +226,7 @@ case "$cmd" in
     done
     ;;
   digest)
-    due=""; idle=0; cap=7200
+    due=""; idle=0; cap=$(wf_seconds "$WF_DIGEST_CAP") || cap=7200
     while [ $# -gt 0 ]; do
       case "$1" in
         --due) due=${2:?}; shift 2 ;;

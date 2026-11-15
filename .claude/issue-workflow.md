@@ -11,7 +11,7 @@
 
 ## Sources
 
-- method and vocabulary: `README.md`; project templates: `reference/project-profile.md`, `reference/project-config.sh`
+- method and vocabulary: `README.md`; templates: `reference/project-profile.md`, `reference/project-config.sh`, `reference/global-settings.sh`; per-repo setup: `/init-issue-workflow`
 - no product doc, design system or design backlog
 
 ## Risk areas
@@ -40,11 +40,10 @@
 
 - one-way: the default list (orchestrate-gh-issues section 5) plus anything that edits `~/.claude` settings or runs `install.sh` outside `wf_after_merge`.
 - two-way: script internals, test layout, wording of skills, what goes into the profile.
-- digest cap: 2h
 
 ## Orchestration
 
-- runner: Orca; max workers: 3
+- runner: Orca; max workers: the default 3 (`WF_MAX_WORKERS`)
 - executable facts: `.claude/issue-workflow.sh` (risk globs, verify, after-merge); no build, deploy check or PR-body check
 - merge gate: no pre-merge hook, no CI. `merge-pr.sh prep` runs `wf_verify`; `merge-pr.sh after` fast-forwards the main checkout and reruns `install.sh` when `skills/*` dirs or `install.sh` changed.
 

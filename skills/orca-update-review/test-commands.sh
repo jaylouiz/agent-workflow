@@ -4,6 +4,7 @@
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
 mkdir -p "$T/bin" "$T/home" "$T/skills/orca-update-review" "$T/skills/other" "$T/snap/help" "$T/updates"
 cp "$DIR/touchpoints.sh" "$DIR/prepare.sh" "$DIR/snapshot.sh" "$DIR/lib.sh" "$T/skills/orca-update-review/"
 S=$T/skills/orca-update-review

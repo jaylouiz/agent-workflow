@@ -3,6 +3,7 @@
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
 mkdir -p "$T/repo" "$T/bin"; git -C "$T/repo" init -q; git -C "$T/repo" remote add origin https://github.com/acme/widgets.git
 cd "$T/repo" || exit 1
 export WF_ISSUE_LOG_DIR="$T/logs" PATH="$T/bin:$PATH"

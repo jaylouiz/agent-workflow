@@ -3,6 +3,7 @@
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
 mkdir -p "$T/bin" "$T/snap" "$T/updates" "$T/skill"
 cp "$DIR/check.sh" "$DIR/lib.sh" "$T/skill/"
 printf '#!/usr/bin/env bash\necho "$@" >"%s/prepared"\n' "$T" >"$T/skill/prepare.sh"

@@ -4,6 +4,7 @@
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
 mkdir -p "$T/bin"
 # Stub orca: `worker-list` prints $T/workers.json (or fails when $T/orca_fail exists).
 cat >"$T/bin/orca" <<'EOF2'
