@@ -23,6 +23,27 @@ wf_verify() {
   done
 }
 
+# Task-level gate: only the suites of the skill dirs (and .claude/) that differ from origin/main; any other changed path
+# (install.sh, global/, reference/, README) falls back to the full wf_verify. Run wf_verify itself before the PR.
+wf_verify_changed() {
+  local f p d suites=() full=0
+  while IFS= read -r p; do
+    case "$p" in
+      skills/*/*) d=${p#skills/}; d=skills/${d%%/*}; for f in "$d"/test-*.sh; do [ -f "$f" ] && suites+=("$f"); done ;;
+      .claude/*) for f in .claude/test-*.sh; do [ -f "$f" ] && suites+=("$f"); done ;;
+      *) full=1 ;;
+    esac
+  done < <({ git diff --name-only origin/main; git ls-files --others --exclude-standard; } | sort -u)
+  [ "$full" = 1 ] && { wf_verify; return; }
+  local out
+  for f in $(printf '%s\n' ${suites[@]+"${suites[@]}"} | sort -u); do
+    if ! out=$(bash "$f" 2>&1); then
+      echo "verify failed: $f"; printf '%s\n' "$out" | tail -n 20
+      return 1
+    fi
+  done
+}
+
 # Reruns install.sh (relinks ~/.claude/skills, the global CLAUDE.md and the SessionStart hook). Tests override it.
 wf_install_skills() { bash "$PWD/install.sh"; }
 

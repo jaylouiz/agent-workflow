@@ -28,7 +28,7 @@
 
 ## Verification
 
-- gate command: `wf_verify` = every `skills/*/test-*.sh` and `.claude/test-*.sh`, first failure stops. Run the suites that touch your change while working, `wf_verify` before the PR.
+- gate command: `wf_verify` = every `skills/*/test-*.sh` and `.claude/test-*.sh`, first failure stops. While working (per task) run `wf_verify_changed` (only the suites of touched skill dirs; ~4 min full gate otherwise), `wf_verify` once before the PR.
 - shellcheck on touched scripts when installed (it was not on this machine).
 - extra greps: after renaming or removing a script, skill or section, `rg` the old name in `skills/`, `global/`, `README.md`, `reference/` (skills point to profile sections by name: "the profile's X").
 
