@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Tests for the settings layer: lib.sh wf_load (defaults → global file → repo config, env for the caps) and settings.sh.
+# Run: bash skills/orchestrate-gh-issues/test-settings.sh
+set -u
+DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+export WF_GLOBAL_SETTINGS="$T/global.sh"
+unset WF_COMMENT_CAP WF_ISSUE_LOG_DIR WF_REPO
+R="$T/repo"; mkdir -p "$R/.claude"; git -C "$R" init -q
+cd "$R" || exit 1
+fail=0; n=0
+eq() { n=$((n + 1)); [ "$2" = "$3" ] || { fail=$((fail + 1)); echo "FAIL [$1] want '$3' got '$2'"; }; }
+check() { n=$((n + 1)); if eval "$2"; then :; else fail=$((fail + 1)); echo "FAIL [$1]"; fi; }
+S="$DIR/settings.sh"
+reset() { rm -f "$WF_GLOBAL_SETTINGS" "$R/.claude/issue-workflow.sh"; }
+
+eq "path before the global file exists" "$(bash "$S" path | head -1)" "global: $T/global.sh (absent)"
+
+reset
+eq "default strong tier" "$(bash "$S" get WF_MODEL_STRONG)" opus
+eq "default digest cap" "$(bash "$S" get WF_DIGEST_CAP)" 2h
+check "show marks defaults" 'bash "$S" show | grep -q "^WF_MAX_WORKERS=3 *(default)$"'
+
+echo 'WF_MODEL_DEFAULT=opus' >"$WF_GLOBAL_SETTINGS"
+eq "global over default" "$(bash "$S" get WF_MODEL_DEFAULT)" opus
+check "show marks global" 'bash "$S" show | grep -q "^WF_MODEL_DEFAULT=opus *(global)$"'
+
+echo 'WF_MAX_WORKERS=5' >"$WF_GLOBAL_SETTINGS"; echo 'WF_MAX_WORKERS=1' >"$R/.claude/issue-workflow.sh"
+eq "repo over global" "$(bash "$S" get WF_MAX_WORKERS)" 1
+check "show marks repo" 'bash "$S" show | grep -q "^WF_MAX_WORKERS=1 *(repo)$"'
+
+reset; echo 'WF_COMMENT_CAP=900' >"$WF_GLOBAL_SETTINGS"
+eq "global comment cap" "$(bash "$S" get WF_COMMENT_CAP)" 900
+eq "env wins for the comment cap" "$(WF_COMMENT_CAP=1200 bash "$S" get WF_COMMENT_CAP)" 1200
+check "show marks env" 'WF_COMMENT_CAP=1200 bash "$S" show | grep -q "^WF_COMMENT_CAP=1200 *(env)$"'
+reset
+eq "env does not win for other settings" "$(WF_MAX_WORKERS=9 bash "$S" get WF_MAX_WORKERS)" 3
+
+mkdir -p "$R/src/a"; touch "$R/src/a/b"
+echo 'WF_RISK_GLOBS=(src/**)' >"$WF_GLOBAL_SETTINGS"
+check "global globs stay patterns" 'bash "$S" show | grep -qF "WF_RISK_GLOBS=(src/**)"'
+
+echo 'WF_X=(' >"$WF_GLOBAL_SETTINGS"
+out=$(bash "$S" get WF_MAX_WORKERS 2>"$T/err"); rc=$?
+eq "broken global: exit 0" "$rc" 0
+eq "broken global: defaults" "$out" 3
+check "broken global: one stderr line naming the file" '[ "$(wc -l <"$T/err" | tr -d " ")" = 1 ] && grep -qF "$WF_GLOBAL_SETTINGS" "$T/err"'
+
+reset
+bash "$S" get WF_NOPE >/dev/null 2>&1; eq "unknown name exits 1" "$?" 1
+bash "$S" frob >/dev/null 2>&1; eq "usage exits 64" "$?" 64
+
+# decide.sh takes the comment cap from the global file
+echo 'WF_COMMENT_CAP=10' >"$WF_GLOBAL_SETTINGS"
+printf 'eleven char' >"$T/c.md"
+bash "$DIR/decide.sh" check "$T/c.md" >/dev/null 2>&1; eq "decide.sh cap from global" "$?" 65
+
+echo "$((n - fail))/$n passed"
+[ "$fail" = 0 ]

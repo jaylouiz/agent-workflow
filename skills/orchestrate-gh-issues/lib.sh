@@ -1,24 +1,61 @@
 # Shared helpers for the orchestrate-gh-issues scripts (sourced, bash 3.2 compatible).
-# Project facts come from <repo>/.claude/issue-workflow.sh (template: reference/project-config.sh).
+# Settings: built-in defaults, then the global file (wf_global_settings; template reference/global-settings.sh), then
+# <repo>/.claude/issue-workflow.sh (template: reference/project-config.sh). settings.sh shows the result.
 
 wf_root() { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || ROOT=$PWD; }
 
-wf_load() { # defaults, then the project's config
-  wf_root
-  WF_PORTS=3101-3105
+# Every setting settings.sh reports, in its order. Any of them may go in the global file or the repo config.
+WF_SETTINGS="WF_MODEL_DEFAULT WF_MODEL_STRONG WF_MODEL_FAST WF_MAX_WORKERS WF_DIGEST_CAP WF_COMMENT_CAP WF_ISSUE_LOG_DIR WF_NO_WAIT_CI WF_PORTS WF_RISK_GLOBS WF_IGNORE_GLOBS WF_REVIEW_LINES WF_HOLD_LABELS WF_REQUIRED_CHECKS WF_CHECKS_TSV WF_INSTALL_GLOBAL_RULES WF_INSTALL_DEV"
+WF_ENV_SETTINGS="WF_COMMENT_CAP WF_ISSUE_LOG_DIR" # an exported value wins over both files (WF_REPO is read where used)
+
+wf_global_settings() { # the global settings file (template: reference/global-settings.sh)
+  echo "${WF_GLOBAL_SETTINGS:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-workflow-settings.sh}"
+}
+
+wf_defaults() {
+  WF_MODEL_DEFAULT=sonnet
+  WF_MODEL_STRONG=opus
+  WF_MODEL_FAST=haiku
   WF_MAX_WORKERS=3
-  WF_REVIEW_LINES=400
+  WF_DIGEST_CAP=2h
+  WF_COMMENT_CAP=1500
+  WF_ISSUE_LOG_DIR="$HOME/.claude/issue-logs"
+  WF_NO_WAIT_CI=0
+  WF_PORTS=3101-3105
   WF_RISK_GLOBS=()
   WF_IGNORE_GLOBS=(package-lock.json)
+  WF_REVIEW_LINES=400
   WF_HOLD_LABELS="on-hold-after-spec do-not-merge"
-  WF_CHECKS_TSV=""
   WF_REQUIRED_CHECKS=""
-  WF_NO_WAIT_CI=0
-  # Globbing off while sourcing: an unquoted `store/**` in the config must stay a pattern, not expand to files.
+  WF_CHECKS_TSV=""
+  WF_INSTALL_GLOBAL_RULES=off
+  WF_INSTALL_DEV=0
+}
+
+wf_source() { # wf_source <file>: source a settings file with globbing off; a missing file is fine, a broken one warns once
+  [ -f "$1" ] || return 0
+  if ! bash -n "$1" 2>/dev/null; then
+    echo "agent-workflow: $1: syntax error, not loaded (using the other settings)" >&2
+    return 0
+  fi
+  # Globbing off while sourcing: an unquoted `store/**` must stay a pattern, not expand to files.
   set -f
-  # shellcheck disable=SC1091
-  [ -f "$ROOT/.claude/issue-workflow.sh" ] && . "$ROOT/.claude/issue-workflow.sh"
+  # shellcheck disable=SC1090
+  . "$1"
   set +f
+  return 0
+}
+
+wf_load() { # defaults, then the global settings file, then the project's config; exported caps win
+  local v saved=""
+  wf_root
+  for v in $WF_ENV_SETTINGS; do
+    [ -n "${!v+x}" ] && saved="$saved $v=$(printf %q "${!v}")"
+  done
+  wf_defaults
+  wf_source "$(wf_global_settings)"
+  wf_source "$ROOT/.claude/issue-workflow.sh"
+  [ -z "$saved" ] || eval "$saved"
   return 0
 }
 

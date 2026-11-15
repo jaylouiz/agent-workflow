@@ -3,6 +3,7 @@
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
 mkdir -p "$T/repo/.claude"; git -C "$T/repo" init -q; cd "$T/repo" || exit 1
 cat >.claude/issue-workflow.sh <<'EOF'
 WF_RISK_GLOBS=(store/** composables/useTaskSync.ts)

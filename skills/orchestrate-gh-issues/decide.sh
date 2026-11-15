@@ -38,6 +38,7 @@ set -euo pipefail
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=lib.sh
 . "$DIR/lib.sh"
+wf_load # the comment cap and the issue-log dir may come from the settings files (an exported value wins)
 
 die() { echo "decide.sh: $*" >&2; exit 64; }
 

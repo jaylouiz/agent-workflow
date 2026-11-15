@@ -3,6 +3,7 @@
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
 mkdir -p "$T/bin" "$T/repo/.claude" "$T/ledger"; git -C "$T/repo" init -q
 cat >"$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
