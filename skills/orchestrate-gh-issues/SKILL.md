@@ -46,7 +46,7 @@ Before creating the Run or any Task, read every in-scope issue yourself (`gh iss
 - issues with fog: pulled out, reported up front
 - guard results and hold labels (the profile's "Labels")
 
-`inbox` issues join only when the user names them or asks for "all": run `/gh-inbox-dispatcher` yourself first (you count as the user caller); only issues it routes join. An epic (`/specify-gh-issue`'s epic check) runs Specify only; its sub-issues go into a follow-up run. A **batch** runs as one lead: Specify per issue in turn (if needed), one branch, one verification and E2E pass, one PR (`Closes` per issue), one review (`--extra` names the issues and the shared branch).
+`inbox` issues join only when the user names them or asks for "all": run `/gh-inbox-dispatcher` yourself first (you count as the user caller); only issues it routes join. An issue that turns into an epic (Design's handover or `/specify-gh-issue`'s epic check) keeps its goal: when the hand-off was to get it built, its sub-issues join this Run as soon as they exist (screened as in this section, in dependency order, the user's model choice for the parent applies to them); they wait for a later run only when the user asked for the structure alone (design or specify only). User feedback 2026-11-15. A **batch** runs as one lead: Specify per issue in turn (if needed), one branch, one verification and E2E pass, one PR (`Closes` per issue), one review (`--extra` names the issues and the shared branch).
 
 ## 1c. Waves (many issues)
 
