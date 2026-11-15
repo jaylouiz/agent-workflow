@@ -1,11 +1,14 @@
 # shellcheck shell=bash
 # issue-workflow config: <project>/.claude/issue-workflow.sh, sourced by the orchestrate-gh-issues scripts
 # (spec.sh, merge-pr.sh, guard.sh). Executable project facts only; prose facts stay in .claude/issue-workflow.md.
-# Every variable has a default (lib.sh); a function left undefined means that step does not apply.
+# Every variable has a default (lib.sh); a function left undefined means that step does not apply. Load order: defaults,
+# then ~/.claude/agent-workflow-settings.sh (models, max workers, digest cap for every repo; template
+# reference/global-settings.sh), then this file, which wins. /init-issue-workflow writes it; check the result with
+# bash ~/.claude/skills/orchestrate-gh-issues/settings.sh show
 # Functions run with the cwd noted; keep them quiet on success and print one line on failure.
 
 WF_PORTS=3101-3105                    # dev-server/E2E ports, one per concurrent worker (spec.sh)
-WF_MAX_WORKERS=3                      # concurrent workers in the Run (next.sh starts queued tasks up to this)
+# WF_MAX_WORKERS=3                    # concurrent workers in the Run; usually set globally, here only to differ
 WF_RISK_GLOBS=()                      # quoted globs, e.g. ('store/**' 'server/**'): PRs touching them get a separate reviewer; ** = any depth
 WF_IGNORE_GLOBS=(package-lock.json)   # not counted for the diff-size route
 WF_REVIEW_LINES=400                   # changed lines above which the route is reviewer

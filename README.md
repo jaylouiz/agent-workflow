@@ -4,26 +4,54 @@ Claude Code skills that take a GitHub issue from rough idea to merged PR, with U
 
 This is the author's working setup, published as is: opinionated, built around Claude Code, GitHub issues and [Orca](https://github.com/stablyai/orca) workers, and used daily on a few personal projects. Take what fits.
 
+## Quickstart
+
+```sh
+git clone https://github.com/jaylouiz/agent-workflow.git
+bash agent-workflow/install.sh       # checks the requirements, asks two questions, links the skills
+cd <your repo> && claude             # then: /init-issue-workflow
+```
+
+`/init-issue-workflow` reads the repo (scripts, CI checks, UI or not, docs), drafts the project's profile and config, asks only what it could not tell, creates the labels and opens a PR with the setup. Then take an issue through it: `/specify-gh-issue <n>` or `/build-gh-issue <n>` for a clear one, `/design-gh-issue <n>` when the UX is open, `/orchestrate-gh-issues <issues>` for several at once with Orca. Rerun `/init-issue-workflow update` when the project changes.
+
 ## Requirements
 
-- [Claude Code](https://claude.com/claude-code), [`gh`](https://cli.github.com) logged in, `git`, `bash` (3.2 is enough), `jq`, `python3`. macOS is the tested platform.
-- [Orca](https://github.com/stablyai/orca) and its `orca` CLI for `/orchestrate-gh-issues` (workers, messages) and the Orca update check. The single-issue skills (`/design-gh-issue`, `/specify-gh-issue`, `/build-gh-issue`) run without it.
+- [Claude Code](https://claude.com/claude-code), [`gh`](https://cli.github.com) logged in, `git`, `bash` (3.2 is enough), `jq`, `python3`. macOS is the tested platform. `install.sh --check` checks them and changes nothing.
+- [Orca](https://github.com/stablyai/orca) and its `orca` CLI for `/orchestrate-gh-issues` (workers, messages). The single-issue skills (`/design-gh-issue`, `/specify-gh-issue`, `/build-gh-issue`) run without it.
 - Skills and plugins the skills call but this repo does not ship: `/code-review` (Claude Code), and optionally `/wayfinder`, `/gh-inbox-dispatcher`, `/ui-canvas`, `harvesting-session-knowledge` and the Impeccable plugin. A step whose tool is missing is skipped or reported, not guessed.
 
 ## Install
 
-```sh
-git clone https://github.com/jaylouiz/agent-workflow.git
-bash agent-workflow/install.sh                 # add --global-rules to also install the author's global CLAUDE.md
-```
+`install.sh` links every `skills/*` into `~/.claude/skills/` (or `$CLAUDE_CONFIG_DIR/skills/`) and this checkout to `~/.claude/agent-workflow` (the skills read `reference/` through it). In a terminal it asks two things and records the answers in `~/.claude/agent-workflow-settings.sh`:
 
-Links every `skills/*` into `~/.claude/skills/` and this checkout to `~/.claude/agent-workflow` (the skills read `reference/` through it). It also registers a global SessionStart hook (`orca-update-review/check.sh`) in `~/.claude/settings.json` (a backup is kept as `settings.json.bak`): when a newly installed Orca version has not been reviewed against this workflow (`skills/orca-update-review/snapshot/version`), the hook writes an impact report and starts `/orca-update-review` in the first interactive session of the day (`initialUserMessage`); the skill asks before it changes anything. Edit skills in this repo only; rerun after adding, renaming or removing a skill.
+- **Models**: `balanced` (sonnet / opus / haiku for the default / strong / fast tier, the default), `quality` (opus / opus / sonnet), `budget` (sonnet / sonnet / haiku) or `custom`.
+- **Global rules**: the author's [global/CLAUDE.md](global/CLAUDE.md) (inbox issues for side findings, `/wayfinder` for vague goals, the friction ledger and retro, screening several issues first, committing without asking). Off by default. On: linked as `~/.claude/CLAUDE.md`, or, when you have your own, one import line `@~/.claude/agent-workflow/global/CLAUDE.md` appended to it (a timestamped backup is kept).
 
-`--global-rules` links [global/CLAUDE.md](global/CLAUDE.md) as `~/.claude/CLAUDE.md`: the author's global rules (inbox issues for side findings, `/wayfinder` for vague goals, the friction ledger and retro). Optional; the script never overwrites an existing file.
+Rerun it after `git pull` or after adding, renaming or removing a skill: without a terminal (or with `--yes`) it keeps every recorded choice. It never overwrites a real file where a link belongs. Flags: `--yes`, `--models <preset>`, `--global-rules` / `--no-global-rules`, `--check`, `--uninstall` (removes the links and the global rules, keeps the settings file). Edit skills in this repo only.
 
-Per project: copy [reference/project-profile.md](reference/project-profile.md) to `<project>/.claude/issue-workflow.md`, fill it in and commit it. Executable facts (ports, risk globs, verify, after-merge, PR-body checks) go into `<project>/.claude/issue-workflow.sh` from [reference/project-config.sh](reference/project-config.sh), read by the orchestrate scripts.
+Maintainer only: `--dev` also links `/orca-update-review` and registers its SessionStart hook (`orca-update-review/check.sh`, backup `settings.json.bak`): when a newly installed Orca version has not been reviewed against this workflow (`skills/orca-update-review/snapshot/version`), the hook writes an impact report and starts `/orca-update-review` in the first interactive session of the day; the skill asks before it changes anything. Users get the result through `git pull`.
+
+Per project without the skill: copy [reference/project-profile.md](reference/project-profile.md) to `<project>/.claude/issue-workflow.md` and [reference/project-config.sh](reference/project-config.sh) to `<project>/.claude/issue-workflow.sh`, fill them in and commit them.
 
 Cloud sessions (Claude Code on the web) do not get these skills (only the attached repo, no `gh issue`/`gh pr`, no plugins); what works there lives in each project's `CLAUDE.md`.
+
+## Settings
+
+Choices that differ per person or project live in two sourced bash files, read in this order (later wins): built-in defaults, the global `~/.claude/agent-workflow-settings.sh` (template [reference/global-settings.sh](reference/global-settings.sh)), the repo's `.claude/issue-workflow.sh` (template [reference/project-config.sh](reference/project-config.sh)). Any setting may go in either file. `bash ~/.claude/skills/orchestrate-gh-issues/settings.sh show` prints every value with its source; `settings.sh get <NAME>` one value.
+
+| Setting | Default | Usually set | What it does |
+|---|---|---|---|
+| `WF_MODEL_DEFAULT` | `sonnet` | global | lead, design, fix and delta-review workers; Design's tech check; the retro agent |
+| `WF_MODEL_STRONG` | `opus` | global | reviewer workers, the one root-cause subagent of a stuck lead |
+| `WF_MODEL_FAST` | `haiku` | global | mechanical subagents (`rg` audits, copy sweeps) |
+| `WF_MAX_WORKERS` | `3` | global or repo | concurrent Orca workers in a Run |
+| `WF_DIGEST_CAP` | `2h` | global or repo | how long the oldest unannounced decision request waits for the digest |
+| `WF_COMMENT_CAP` | `1500` | global | visible characters per agent issue comment |
+| `WF_ISSUE_LOG_DIR` | `~/.claude/issue-logs` | global | per-issue coordination logs |
+| `WF_NO_WAIT_CI` | `0` | global or repo | `1`: merge prep does not wait for pending checks |
+| `WF_PORTS`, `WF_RISK_GLOBS`, `WF_IGNORE_GLOBS`, `WF_REVIEW_LINES`, `WF_HOLD_LABELS`, `WF_REQUIRED_CHECKS`, `WF_CHECKS_TSV`, `wf_*` functions | see the template | repo | ports, review routing, holds, CI gate, verify / build / after-merge steps |
+
+`WF_COMMENT_CAP` and `WF_ISSUE_LOG_DIR` may also come from the environment, which wins. Fixed on purpose: label names and colours (clients such as Tandem read them), the retro thresholds and the CI wait windows.
 
 ## Vocabulary
 
@@ -67,7 +95,7 @@ Cloud sessions (Claude Code on the web) do not get these skills (only the attach
 | User story | `As <who>, when <situation>, I want <what>, so that <outcome>`: the level under a job where concrete behaviour lives. |
 | UAC | User acceptance criterion: behaviour the user can observe. Layers and owners: [reference/issue-rules.md](reference/issue-rules.md). |
 | Spec | The issue body after Specify: the issue standard's layers plus approach, technical ACs, implementation notes, verification. The only input Build needs. |
-| Profile | The project's tracked file with the facts these skills leave open (`.claude/issue-workflow.md`). |
+| Profile | The project's tracked file with the facts these skills leave open (`.claude/issue-workflow.md`), written by `/init-issue-workflow`. |
 | Ledger | One line per friction, written the moment it happens (`workflow-retro/ledger.sh`, global CLAUDE.md); outside the work tree, archived by the retro (`ledger.sh close`). |
 | Retro | `/workflow-retro` at the end of a run or session: ledgers → causes → the cheapest fix, plus a convergence pass when the instructions grow. |
 | One-way / two-way decision | One-way: costly to undo or the user's call by definition (Design round, held merge, the profile's "Decisions" list); only these reach the user. Two-way: everything else; the agent decides, records it and continues. |
@@ -79,7 +107,7 @@ Cloud sessions (Claude Code on the web) do not get these skills (only the attach
 | Parked | An issue waiting on a decision request. Its worker has ended; a fresh one resumes after the answer. |
 | Agent decision | A two-way decision recorded in the body's `## Decisions` and a marked comment, label `agent-decided`. Never blocks; removing the label accepts it, a comment asks for a change. |
 | Push | [Tandem](https://github.com/jaylouiz/tandem) telling the coordinator that Feedback arrived or a Card should start: `orca orchestration send --to run:<id> --type status --subject "tandem push: <owner/repo>#<n> <feedback\|start>"` to the newest Run whose coordinator terminal is live in that repo; with no Run it launches `/orchestrate-gh-issues #<n>`. The coordinator handles it in its message read (orchestrate section 6). |
-| Digest | The coordinator's one bundled ping of all open decision requests: when the run goes idle, or when the oldest unannounced one passes the profile's cap. |
+| Digest | The coordinator's one bundled ping of all open decision requests: when the run goes idle, or when the oldest unannounced one passes `WF_DIGEST_CAP`. |
 | Running log | The project's committed watch list of recurring causes and the context-size history (path in the profile's "Retro"). Never loaded into a session. |
 
 ## Issue standard and triage rule
@@ -103,7 +131,7 @@ Diagram sources: `docs/diagrams/render.py` (writes the HTML; rasterize with the 
 - **Skill**: a method, a step order, a tool-agnostic rule.
 - **Profile** (or the project's `CLAUDE.md`): anything that names the project's files, commands, labels, URLs, tools, invariants or quirks. Facts already in `CLAUDE.md` are referenced from the profile, not copied.
 
-When a skill says "the profile's X", read that section of `.claude/issue-workflow.md`. A missing section means the step does not apply to this project; say so in the report instead of guessing.
+When a skill says "the profile's X", read that section of `.claude/issue-workflow.md`. A missing section means the step does not apply to this project; say so in the report instead of guessing. A repo without a profile works the same way (every section missing); the skills point to `/init-issue-workflow` once.
 
 ## Background
 
