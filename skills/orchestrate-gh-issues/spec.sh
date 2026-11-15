@@ -2,7 +2,7 @@
 # Print a complete Orca task spec for one issue and stage, from task-template.md (orchestrate-gh-issues section 4).
 #
 #   spec.sh <lead|design|review|delta-review|fix> <issue> --ledger <run ledger dir>
-#           [--tier <text>] [--model <alias>] [--branch <b>] [--pr <n>] [--wt <path>] [--extra <file>] [--no-port] [--interactive]
+#           [--tier <text>] [--model <alias>: default the settings' WF_MODEL_STRONG for review, else WF_MODEL_DEFAULT] [--branch <b>] [--pr <n>] [--wt <path>] [--extra <file>] [--no-port] [--interactive]
 #   spec.sh release-port <port> --ledger <dir>     drop a reservation when its worker settled
 #
 # Assigns the first port in the project's WF_PORTS (.claude/issue-workflow.sh) that is neither listening nor
@@ -18,7 +18,7 @@ die() { echo "spec.sh: $*" >&2; exit 64; }
 stage=${1:-}; n=${2:-}
 [ -n "$stage" ] && [ -n "$n" ] || { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 64; }
 shift 2
-tier="Standard - default"; model=sonnet; branch=""; pr=""; wt=""; ledger=""; extra=""; want_port=1; interactive=0
+tier="Standard - default"; model=""; branch=""; pr=""; wt=""; ledger=""; extra=""; want_port=1; interactive=0
 while [ $# -gt 0 ]; do
   case "$1" in --no-port|--interactive) ;; --*) case "${2-}" in ""|--*) die "$1 needs a value, got '${2-}' (an empty unquoted variable is dropped by zsh)" ;; esac ;; esac
   case "$1" in
@@ -46,6 +46,7 @@ case "$stage" in lead|design|review|delta-review|fix) ;; *) die "unknown stage '
 grep -q "<!-- stage:$stage -->" "$DIR/task-template.md" || die "no template block for $stage"
 
 wf_load
+if [ -z "$model" ]; then [ "$stage" = review ] && model=$WF_MODEL_STRONG || model=$WF_MODEL_DEFAULT; fi
 port=""
 if [ "$want_port" = 1 ]; then
   lo=${WF_PORTS%-*}; hi=${WF_PORTS#*-}
@@ -76,7 +77,7 @@ else
 fi
 
 TITLE=$title N=$n STAGE=$stage TIER=$tier MODEL=$model BRANCH=$branch PR=${pr:-"(see issue)"} WT=${wt:-"(this worktree)"} \
-PORT=${port:-"(none: no dev server for this stage)"} LEDGER=$ledger SKILLDIR="~/.claude/skills/orchestrate-gh-issues" DECIDE="$decide" \
+MODEL_STRONG=$WF_MODEL_STRONG MODEL_FAST=$WF_MODEL_FAST PORT=${port:-"(none: no dev server for this stage)"} LEDGER=$ledger SKILLDIR="~/.claude/skills/orchestrate-gh-issues" DECIDE="$decide" \
 QUESTIONS=$questions STAGEKEY=$stage python3 -I -c '
 import os, re, sys
 t = open(sys.argv[1], encoding="utf-8").read()
@@ -84,7 +85,7 @@ def block(name):
     m = re.search(r"<!-- %s -->\n(.*?)<!-- /%s -->" % (re.escape(name), name.split(":")[0]), t, re.S)
     return m.group(1)
 out = block("common") + block("stage:" + os.environ["STAGEKEY"])
-out = re.sub(r"\{\{([A-Z]+)\}\}", lambda m: os.environ.get(m.group(1), m.group(0)), out)
+out = re.sub(r"\{\{([A-Z_]+)\}\}", lambda m: os.environ.get(m.group(1), m.group(0)), out)
 sys.stdout.write(out)
 ' "$DIR/task-template.md"
 [ -n "$extra" ] && { echo "Notes:"; for x in $extra; do cat "$x"; echo; done; }

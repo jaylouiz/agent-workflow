@@ -59,6 +59,16 @@ wf_load() { # defaults, then the global settings file, then the project's config
   return 0
 }
 
+wf_seconds() { # wf_seconds <2h | 90m | 300s | 300>: seconds; fails on anything else
+  case "$1" in
+    *[!0-9hms]* | "" | [hms]*) return 1 ;;
+    *h) echo $((${1%h} * 3600)) ;;
+    *m) echo $((${1%m} * 60)) ;;
+    *s) echo "${1%s}" ;;
+    *) echo "$1" ;;
+  esac
+}
+
 wf_main_root() { # the main checkout (first worktree), wherever the script runs from
   git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print substr($0, 10); exit}'
 }

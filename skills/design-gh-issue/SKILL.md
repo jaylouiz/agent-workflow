@@ -49,7 +49,7 @@ Draft 2-4 **structurally different** variants, one paragraph each: layout, infor
 
 ## 4. Tech check
 
-One read-only sub-agent (`Explore` or `Plan` type, `model: sonnet`; a dispatched worker that may not spawn sub-agents does it inline, same output) gets the variant paragraphs, the profile's "Risk areas", the project's `CLAUDE.md` and the `.claude/rules/*.md` files whose `paths:` cover the touched area, and returns per variant: build cost S/M/L, the risk areas it touches, conflicts with recorded invariants or design decisions, whether it duplicates an existing Pattern, one line why. It does not write a spec.
+One read-only sub-agent (`Explore` or `Plan` type, `model:` the default tier, `bash ~/.claude/skills/orchestrate-gh-issues/settings.sh get WF_MODEL_DEFAULT`; a dispatched worker that may not spawn sub-agents does it inline, same output) gets the variant paragraphs, the profile's "Risk areas", the project's `CLAUDE.md` and the `.claude/rules/*.md` files whose `paths:` cover the touched area, and returns per variant: build cost S/M/L, the risk areas it touches, conflicts with recorded invariants or design decisions, whether it duplicates an existing Pattern, one line why. It does not write a spec.
 
 - Drop variants rated L or touching a risk area in a way that does not pay off, unless the user explicitly asked for them. Keep one line per dropped variant: `considered, dropped: <reason>`.
 - At least two variants survive; otherwise redraft.

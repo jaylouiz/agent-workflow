@@ -50,6 +50,13 @@ reset
 bash "$S" get WF_NOPE >/dev/null 2>&1; eq "unknown name exits 1" "$?" 1
 bash "$S" frob >/dev/null 2>&1; eq "usage exits 64" "$?" 64
 
+# wf_seconds: the digest cap as seconds
+. "$DIR/lib.sh"
+eq "2h" "$(wf_seconds 2h)" 7200
+eq "90m" "$(wf_seconds 90m)" 5400
+eq "plain seconds" "$(wf_seconds 300)" 300
+wf_seconds soon >/dev/null 2>&1; eq "junk fails" "$?" 1
+
 # decide.sh takes the comment cap from the global file
 echo 'WF_COMMENT_CAP=10' >"$WF_GLOBAL_SETTINGS"
 printf 'eleven char' >"$T/c.md"

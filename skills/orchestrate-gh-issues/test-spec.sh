@@ -28,7 +28,7 @@ for want in "/specify-gh-issue 7" "/build-gh-issue 7" "merge-pr.sh route" "## Re
   check "lead contains $want" 'printf "%s" "$out" | grep -qF -- "$want"'
 done
 check "decide.sh calls carry WF_REPO (workers run them outside a checkout)" 'printf "%s" "$out" | grep -qF "\`WF_REPO=acme/widgets ~/.claude/skills/orchestrate-gh-issues/decide.sh record 7 <file>\`" && printf "%s" "$out" | grep -qF "\$(WF_REPO=acme/widgets ~/.claude/skills/orchestrate-gh-issues/decide.sh log --path 7)"'
-check "no unfilled placeholder" '! printf "%s" "$out" | grep -Eq "\{\{[A-Z]+\}\}"'
+check "no unfilled placeholder" '! printf "%s" "$out" | grep -Eq "\{\{[A-Z_]+\}\}"'
 p1=$(printf '%s' "$out" | sed -n 's/^PORT=//p')
 check "port assigned" '[ -n "$p1" ]'
 out2=$(bash "$DIR/spec.sh" design 8 --ledger "$T/ledger" 2>&1)
@@ -43,6 +43,19 @@ check "review writes only ## Review" 'printf "%s" "$out3" | grep -qF "write only
 check "review has by line" 'printf "%s" "$out3" | grep -qF "by: opus"'
 check "review names PR and worktree" 'printf "%s" "$out3" | grep -qF "PR #42" && printf "%s" "$out3" | grep -qF "/x/wt"'
 check "no-port gives no PORT line" '! printf "%s" "$out3" | grep -q "^PORT="'
+
+# Model tiers come from the settings (defaults sonnet / opus / haiku; review defaults to the strong tier).
+out7=$(bash "$DIR/spec.sh" review 9 --pr 42 --wt /x --no-port --ledger "$T/ledger" 2>&1)
+check "review defaults to strong" 'printf "%s" "$out7" | grep -qF "by: opus"'
+printf 'WF_MODEL_STRONG=fable\nWF_MODEL_FAST=sonnet\n' >"$WF_GLOBAL_SETTINGS"
+out8=$(bash "$DIR/spec.sh" lead 15 --no-port --ledger "$T/ledger" 2>&1)
+check "lead names the strong tier" 'printf "%s" "$out8" | grep -qF "model: fable" && ! printf "%s" "$out8" | grep -qF "model: opus"'
+check "lead names the fast tier" 'printf "%s" "$out8" | grep -qF "model: sonnet" && ! printf "%s" "$out8" | grep -qF "haiku"'
+out9=$(bash "$DIR/spec.sh" review 9 --pr 42 --wt /x --no-port --ledger "$T/ledger" 2>&1)
+check "review respects the global strong tier" 'printf "%s" "$out9" | grep -qF "by: fable"'
+out10=$(bash "$DIR/spec.sh" review 9 --pr 42 --wt /x --no-port --model sonnet --ledger "$T/ledger" 2>&1)
+check "--model still wins" 'printf "%s" "$out10" | grep -qF "by: sonnet"'
+rm -f "$WF_GLOBAL_SETTINGS"
 
 echo "extra note for #10" >"$T/extra.md"
 out4=$(bash "$DIR/spec.sh" fix 10 --pr 43 --wt /y --ledger "$T/ledger" --extra "$T/extra.md" 2>&1)

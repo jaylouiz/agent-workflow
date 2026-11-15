@@ -1,7 +1,6 @@
 ---
 name: build-gh-issue
 description: "Build stage for a GitHub issue with a confirmed spec (label `ready`): implement it on its own branch and worktree, verify it with tests and the project's design-quality gate, and open a PR that closes the issue. Never merges."
-model: sonnet
 argument-hint: <issue-number>
 arguments: [issue]
 allowed-tools: Bash(gh issue view *) Bash(gh issue comment *) Bash(gh issue edit *) Bash(gh label create *) Bash(gh pr list *) Bash(gh pr create *) Bash(git worktree *) Bash(git branch *) Bash(git status *) Bash(git diff *) Bash(git log *) Bash(git add *) Bash(git commit *) Bash(git push *)
