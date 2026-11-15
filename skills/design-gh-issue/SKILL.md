@@ -32,7 +32,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 
 **Several issues on one surface** (a design batch: the task names them, or the user asks for it). Everything below runs once for all of them, on one branch `proto/<lowest n>-<slug>` and in one prototype, so the user reviews the surface as a whole:
 - guard, phase label and brief per issue; current-state review, screenshots and tech check once for the shared surface
-- variants per issue's question. Questions that do not interact get their own switcher key (the user combines them freely); questions that interact are shown as combined variants. Say which in the round comment
+- variants per issue's question. Questions that do not interact become axes: each gets its own switcher key and its own `Axis` line in the round comment (section 7), and the user combines them freely; questions that interact are shown as combined variants
 - each issue gets its own round comment and its own decision request (its variants, its question), all with the same `Preview:` and all posted in one go, so the digest shows them together and the user answers in bulk
 - at the handover each issue gets its own `## UX decision` linking the shared prototype, and its labels move with the others
 - more open questions than one round can show clearly: finish the first issues' round, then the next on the same branch, and say so in the report; the PR still converges unless the coordinator or the user keeps an issue apart
@@ -82,6 +82,7 @@ Decide and write the reason in one line:
    ## Design round <k>: <issue title>
    Preview: <the route plus the seed that shows the change and the first variant, e.g. <preview>/tasks?seed=<seed>&variant=<first key>>
    Variants: <key>, <key>, …
+   Axis <name>: <key>, <key>, … (<what this axis decides, a few words>)
    <brief summary, at most 2 lines>
    <details><summary>Job, stories, checks</summary>
 
@@ -94,10 +95,16 @@ Decide and write the reason in one line:
    <details><summary>Details</summary> <the variant paragraph> </details>
 
    <!-- one section per variant; keep the blank line after </details>, or GitHub shows the next heading as raw text -->
+   ### <axis name> <key>: <variant name>
+   <one line> · tech check: <S|M|L, risk areas>
+
+   <!-- one section per option of each axis, after the variants, in the order of the Axis lines -->
    Dropped: <name: reason, one line each>
-   **Question:** <the choice the user makes>
+   **Question:** <the choice the user makes; with axes, name each: "Which layout (a or b), which slide (o or a) and which way back (o or a)?">
    ```
-   Every screenshot is attached with alt `R<k> · <variant key> · <desktop|mobile>` (sketch frames too), in variant order, desktop first. The same `Preview:` line goes into the decision request, which the digest shows. Keep it scannable on a phone.
+   Every screenshot is attached with alt `R<k> · <variant key> · <desktop|mobile>` (an axis's option: `R<k> · <axis name> <key> · <desktop|mobile>`; sketch frames too), in variant order, desktop first. The same `Preview:` line goes into the decision request, which the digest shows. Keep it scannable on a phone.
+
+   **Axes** (only when the round asks more than one independent question in one prototype, e.g. a layout plus how steps move): one `Axis` line per further question, a short lowercase name the user will say back (`slide`, `back`), its keys (`o` = today's behaviour) and in parentheses what it decides; leave the line out otherwise. Each axis has its own switcher key in the prototype, and the user picks one option per axis. Their answer reads `b, slide a, back a`; Tandem writes it as `- pick: b`, `- pick slide: a`, `- pick back: a`. The decision request names its recommendation the same way (`Recommendation: a, slide a, back a`).
 4. Ask for the choice. Interactive: `AskUserQuestion`, one option per variant (short description, no image). Unattended or worker: `~/.claude/skills/orchestrate-gh-issues/decide.sh request` with your recommendation, then park (`/orchestrate-gh-issues` section 5); never prompt locally. A resumed round starts from that request's answer.
 
 ## 8. Iterate
