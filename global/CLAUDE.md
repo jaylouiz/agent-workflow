@@ -4,7 +4,7 @@
 
 Worthwhile things noticed outside the current task (bugs, design debt, refactors, missing tests, ideas) are neither fixed in the current change nor lost:
 
-- File one GitHub issue per opportunity with label `inbox` (`gh label create inbox --force --description "Unsorted out-of-scope finding, needs triage"`, then `gh issue create --label inbox`).
+- File one GitHub issue per opportunity with label `inbox` (`gh label create inbox --force --description "Unsorted out-of-scope finding, needs triage"`, then `gh issue create --label inbox --title "…" --body-file <file>`). Each as its own plain call with the body in a file: a chained or piped command, or an inline body with backticks, misses the allow rule and auto mode denies it.
 - Body: what was noticed, where (file:line), why it matters, how it was found (skill/task/PR). No spec, no solution design; triage happens later (`inbox` -> a lane).
 - Dedupe first: `gh issue list --search "<keywords>" --state all`; comment on an existing issue instead of opening a duplicate.
 - Only in repos the user owns/works in and whose tracker is GitHub. Never in public or third-party repos without asking. Skip if there is no `gh` auth.
