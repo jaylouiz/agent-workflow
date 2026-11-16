@@ -72,6 +72,7 @@ if [ "$cmd" = queue ]; then
   for ((i = 0; i < ${#spec[@]}; i++)); do # a missing notes file now, not a silently note-less spec at the later start
     [ "${spec[i]}" = --extra ] && [ ! -r "${spec[i+1]:-}" ] && die "queue: --extra file not readable: ${spec[i+1]:-}"
   done
+  for a in "${start[@]}"; do [ "$a" = --force ] && die "queue: --force is a next.sh start/settle flag, not a worker-start arg (worker-start would fail); pass it to 'next.sh start --force'"; done
   [ ${#start[@]} -gt 0 ] || start=(--agent claude)
   mkdir -p "$ledger"
   # One queue line: title TAB spec args TAB start args; the args of a field are joined by US (0x1f), so they keep spaces.
