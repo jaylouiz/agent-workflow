@@ -111,6 +111,8 @@ Decide and write the reason in one line:
 
 Feedback like "header from B, list from C", "B but calmer" is the normal case. Apply it on the same branch (or canvas page), then a new round: screenshots, push, one new round comment (`R<k+1>`). Progress between rounds ("round 2 started") goes to `decide.sh log`, not onto the issue. Feedback that gives a reason ("because…") also goes through the profile's "Design feedback" flow, when it has one: the reason is challenged and proposed as a rule, never written unasked. After 3 rounds without convergence, stop and hand back to the user with what is still open.
 
+**Flow walk-through before the decision.** When the change moves, removes or rewrites anything by itself (a rule, a trigger, a sync, a rollover), the last round walks the whole flow with the user, not only the screens: the main path, each skip and edge path, absence or night work, what is written to a connection and when, and who or what triggers each change. The user confirms it; only then write `## UX decision` and cut sub-issues. A rule reversed after the build (kan-do #356, then #387) cost a day.
+
 ## 9. Decide and hand over
 
 1. One bounded current-state-review pass of the profile's tool on the **chosen** variant only (prototype: rendered page; sketch: the frames). Unattended: one pass, no overlay, no live server. Findings that change the design go into the decision; others become "known issues" in it.
@@ -119,7 +121,7 @@ Feedback like "header from B, list from C", "B but calmer" is the normal case. A
    ## UX decision
    **Chosen:** <variant name> (round <k>), because <one line>. Rejected: <names, one line each>.
    **Stories:** <the final user stories, one line each>
-   **Flow:** <steps the user takes, one line each>
+   **Flow:** <steps the user takes, one line each; with automatic changes also the skip and edge paths, connection writes and triggers, as confirmed in the walk-through>
    **Layout:** <structure at desktop and at mobile width; link the screenshots comment>
    **States:** empty / loading / error / first run / many items: <behaviour each>
    **Copy intent:** <what each key text says, in the UI language; final keys come in Build>
