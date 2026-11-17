@@ -25,7 +25,7 @@ Options:
   --peek
   --all
   --types
-  --format <png|jpeg>    Screenshot image format
+  --format               Also render the returned rows as local text
   --wait
   --timeout-ms <ms>     Maximum wait time before timing out
   --retry-request <id>  Reissue an earlier request by its ID; replays its result instead of repeating it
