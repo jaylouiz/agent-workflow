@@ -87,15 +87,15 @@ thread() {
 status() { thread "$T/needs.json" "$@"; cp "$T/needs.json" "$T/agent.json"; bash "$D" status; }
 eq "challenge to D2 while D3 is open: D3 stays waiting, D2 is a change" \
   "$(status 'rec D2' 'req D3' 'D2: change it')" "waiting  #7 D3 (0m): Pick D3?
-change   #7 D2: D2: change it"
+change   #7 D2: D2: change it (a request on #7 is still waiting: this may be its answer under the wrong D<k>)"
 eq "answer to D3 written after rec D2: D3 answered, D2 untouched" \
   "$(status 'req D3' 'rec D2' 'D3: B')" "answered #7 D3: D3: B"
 eq "unprefixed reply keeps the nearest earlier marker (D2)" "$(status 'req D3' 'rec D2' 'B')" "waiting  #7 D3 (0m): Pick D3?
-change   #7 D2: B"
+change   #7 D2: B (a request on #7 is still waiting: this may be its answer under the wrong D<k>)"
 eq "unprefixed 'change D1' attaches to D1" "$(status 'rec D1' 'change D1')" "change   #7 D1: change D1"
 eq "prefix naming an unknown id attaches to the nearest marker" "$(status 'rec D1' 'D9: x')" "change   #7 D1: D9: x"
 eq "prefix before its request exists does not count" "$(status 'rec D1' 'D2: early' 'req D2')" "waiting  #7 D2 (0m): Pick D2?
-change   #7 D1: D2: early"
+change   #7 D1: D2: early (a request on #7 is still waiting: this may be its answer under the wrong D<k>)"
 eq "replies of one decision are joined in thread order" "$(status 'rec D1' 'req D2' 'D1: a' 'D2: b' 'D1: c')" "answered #7 D2: D2: b
 change   #7 D1: D1: a / D1: c"
 eq "prefixed comment after a note still names its decision" "$(status 'rec D1' 'note' 'D1: x')" "change   #7 D1: D1: x"

@@ -221,8 +221,12 @@ case "$cmd" in
         echo "waiting  #$n $id ($(age "$secs")): $q"
       fi
     done
+    waiting=$(pending | awk -F'\037' '$3 == "request" && $7 == "" {print $1}')
     scan agent-decided open | while IFS=$'\x1f' read -r n url kind id q secs ans _prev; do
-      if { [ "$kind" = record ] || [ "$kind" = followup ]; } && [ -n "$ans" ]; then echo "change   #$n $id: $ans"; fi
+      if { [ "$kind" = record ] || [ "$kind" = followup ]; } && [ -n "$ans" ]; then
+        hint=""; printf '%s\n' "$waiting" | grep -qx "$n" && hint=" (a request on #$n is still waiting: this may be its answer under the wrong D<k>)"
+        echo "change   #$n $id: $ans$hint"
+      fi
     done
     ;;
   digest)

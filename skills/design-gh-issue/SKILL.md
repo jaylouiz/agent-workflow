@@ -67,7 +67,7 @@ Decide and write the reason in one line:
 - Work on branch `proto/$issue-<slug>` in its own worktree (`git worktree add`; an Orca worker uses the worktree it was given and renames its branch). Never open a PR, never merge.
 - The proto branch never reaches main, so the switcher renders whenever `?variant` is present, also in production builds of that branch (preview deploys). Do not gate it on dev mode.
 - Prototype rules: hardcoded copy (real draft wording under the profile's "Copy" draft rules, not i18n keys, not polished: final copy comes from the copy pass in section 9), no tests, no error handling beyond running, read-only or local data. Keep the app building. Feedback on wording alone is noted for the copy pass, not answered with a new round.
-- Loop locally on the dev server with HMR on your assigned port. Push once per round, not per edit (each push builds a preview).
+- Loop locally on the dev server with HMR on your assigned port. Push once per round, not per edit (each push builds a preview). A dev server in an Orca worktree misses edits (5 hits): no `hmr update` line after an edit means restart it before the screenshot.
 - Once the structure is chosen and only an element's look is open, use the profile's "element look" tool on the proto branch instead of more structural variants.
 
 **Sketch.** Follow `/ui-canvas variants` (frames per variant, desktop and mobile).
