@@ -68,7 +68,7 @@ if [ -z "$branch" ]; then
 fi
 # decide.sh gets the repo from WF_REPO, so a worker running it from /tmp or a scratch dir still posts to the right issue
 # from the ledger dir (inside the run repo's .git), not the caller's cwd: a cwd in the skill dir read agent-workflow's origin
-repo=$(cd "$ledger" && wf_repo_slug) || repo=""
+repo=$(cd "$ledger" && wf_repo_slug 2>/dev/null) || repo=$(wf_repo_slug) || repo=""
 decide="~/.claude/skills/orchestrate-gh-issues/decide.sh"
 [ -z "$repo" ] || decide="WF_REPO=$repo $decide"
 if [ $interactive = 1 ]; then
