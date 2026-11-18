@@ -1,0 +1,23 @@
+orca agent read
+
+Usage: orca agent read <id> [--limit <n>] [--json]
+
+Read what an agent said, by its Orca session ID
+
+Options:
+  --help                 Show this help message
+  --json                 Emit machine-readable JSON
+  --pairing-code <code>  Run against a remote Orca server using an orca://pair?... code
+  --environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them
+  --id <id>              The agent's orca_session_id: ID; also accepted positionally
+  --limit <n>            Newest entries to return (default 20, at most 100)
+
+Notes:
+  Reads the conversation, not a terminal screen: a chat's history, or a terminal agent's own transcript. The agent need not be running, and reading never starts it.
+  --limit is the number of newest entries (default 20, at most 100).
+  The output can start with a state for the latest turn this history records: `working` means it shows an unfinished turn, so its reply may not be there yet. A terminal agent that exited mid-turn may keep reading `working`; check `orca agent show`. No state means unknown, never done. `orca agent list` and `show` report the last state known to Orca, which may differ.
+  A terminal agent can be read while Orca knows where its transcript is: while it is open, or asleep in a workspace. On Windows, a sleeping agent that ran in WSL can be read once its tab is reopened.
+
+Examples:
+  $ orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --limit 10
+  $ orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json

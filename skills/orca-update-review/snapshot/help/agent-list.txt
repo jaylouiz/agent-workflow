@@ -1,0 +1,24 @@
+orca agent list
+
+Usage: orca agent list [--worktree <selector>] [--state <state>] [--json]
+
+List agents, chats and terminals, with their Orca session IDs
+
+Options:
+  --help                 Show this help message
+  --json                 Emit machine-readable JSON
+  --pairing-code <code>  Run against a remote Orca server using an orca://pair?... code
+  --environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them
+  --worktree <selector>  Worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id> (where the command takes folder workspaces), name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
+  --state <state>        Only agents in this state: working, blocked, waiting or done
+
+Notes:
+  Lists agents in this Orca host's workspaces: chats and terminal agents alike, each with its `orca_session_id:` ID. A terminal agent shows no ID until it first reports to Orca.
+  A chat keeps its ID across /clear; a terminal agent gets a new one when /clear starts a new conversation.
+  --state keeps agents in one state: working, blocked, waiting or done.
+  Agents on other hosts are not listed here; the output names those hosts and the `--environment` that lists them.
+  A finished terminal agent stays listed as done while asleep, even after Orca restarts, unless it was reopened and slept again before doing anything new. An agent put to sleep mid-turn is not listed. After reopening, a terminal agent reappears only once it reports to Orca (for Codex, on its next turn). `orca agent read <id>` still reads it, except a sleeping WSL agent on Windows.
+
+Examples:
+  $ orca agent list --json
+  $ orca agent list --worktree active --state working
