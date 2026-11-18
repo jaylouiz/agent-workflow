@@ -264,7 +264,7 @@ while IFS=$'\t' read -r kind bkind value; do
       [ "$bkind" = unverifiable ] && continue
       [ "$bkind" = none ] && block "gh pr create needs --body-file (or --body) with 'Closes #<n>' and the PR attribution line; --fill is not enough."
       f=$(body_file "$bkind" "$value"); [ -n "$f" ] || continue
-      grep -Eqi '(closes|fixes|resolves) +(#|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#)[0-9]+' "$f" || block "PR body lacks 'Closes #<n>' (the issue it closes)."
+      { grep -Eqi '(closes|fixes|resolves) +(#|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#)[0-9]+' "$f" || grep -Eq '^No-issue: [^[:space:]]' "$f"; } || block "PR body lacks 'Closes #<n>' (the issue it closes) or a line-leading 'No-issue: <reason>' (ad-hoc PR)."
       grep -Fq 'Generated with [Claude Code]' "$f" || block "PR body lacks the attribution line from the session's attribution instructions ('🤖 Generated with [Claude Code](...)')."
       # shellcheck source=lib.sh
       . "$DIR/lib.sh"; wf_load
@@ -276,7 +276,7 @@ while IFS=$'\t' read -r kind bkind value; do
       case "$bkind" in unverifiable|none) continue ;; esac
       f=$(body_file "$bkind" "$value"); [ -n "$f" ] || continue
       grep -q '[^[:space:]]' "$f" || block "refusing an empty issue/PR body ($value): it would wipe the current body."
-      grep -Eqi '(closes|fixes|resolves) +(#|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#)[0-9]+' "$f" && grep -Fq 'Generated with [Claude Code]' "$f" || block "gh pr edit --body replaces the WHOLE body, and this one lacks 'Closes #<n>' or the attribution line (a fragment?). Fetch it ('gh pr view <n> --json body -q .body > file'), change the section, write the whole file back with --body-file."
+      { grep -Eqi '(closes|fixes|resolves) +(#|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#)[0-9]+' "$f" || grep -Eq '^No-issue: [^[:space:]]' "$f"; } && grep -Fq 'Generated with [Claude Code]' "$f" || block "gh pr edit --body replaces the WHOLE body, and this one lacks 'Closes #<n>' or the attribution line (a fragment?). Fetch it ('gh pr view <n> --json body -q .body > file'), change the section, write the whole file back with --body-file."
       # The edited body must pass the project's body check too (PR 460: results in parentheses on the E2E-specs line, found only at merge).
       # shellcheck source=lib.sh
       . "$DIR/lib.sh"; wf_load
