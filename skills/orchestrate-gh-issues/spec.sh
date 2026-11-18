@@ -7,7 +7,7 @@
 #
 # Assigns the first port in the project's WF_PORTS (.claude/issue-workflow.sh) that is neither listening nor
 # reserved in <ledger>/ports, records it there ("<port> #<n> <stage>") and ends the spec with `PORT=<port>`.
-# Pass --no-port for stages that start no dev server (review, delta-review).
+# Pass --no-port only for stages that start no dev server (delta-review, or a review of a PR with no UI or layout change); a review of a UI or page-layout PR keeps its port so the reviewer can render findings.
 # Exit: 3 no free port, 64 usage.
 set -uo pipefail
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
