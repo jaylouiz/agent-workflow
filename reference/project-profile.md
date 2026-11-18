@@ -82,6 +82,15 @@
 - flow: <challenge the reason against convention, product principles and the design system; one verdict; propose; unattended runs file a candidate issue>
 - writes: <nothing is written before the user's explicit yes>
 
+## Copy
+<!-- ui -->
+
+<!-- Optional. UI copy as its own step: Design decides what text goes where and why (a copy inventory), a copy pass in a fresh context writes the final wording once structure and look are decided. -->
+- draft rules: <the few rules prototype copy follows; real draft wording, never lorem ipsum>
+- copy inventory: <what Design records per text element: where, purpose, or `convention`>
+- copy pass: <skill or procedure that turns the inventory into the `### UI copy` table; rules and vocabulary files>
+- Build: <implement the table verbatim; without a table, run the copy pass before the PR>
+
 ## Screenshots
 <!-- ui -->
 

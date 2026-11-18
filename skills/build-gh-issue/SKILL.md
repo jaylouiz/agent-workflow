@@ -45,6 +45,7 @@ For anything beyond a trivial change, write a short plan (files, order, tests) n
 2. Run the profile's "Pattern check" (when it has one) for every element you create or change: find the existing Pattern for its user job and decide reuse, align, diverge or new yourself, never asking. The record lines go into the PR body (step 7). A diverge reason is also a design reason: hand it to the profile's "Design feedback" flow.
 3. Build with the profile's "build" tool, passing the UX decision (or brief) and the ACs.
 4. If the spec leaves a look choice open, use the profile's "element look" tool with the user and record the choice for the PR.
+5. Copy (when the profile has a "Copy" section): implement the issue's `### UI copy` table verbatim. No table: once the change renders, run the profile's copy pass as one sub-agent (default tier) on the surface's copy inventory and screenshots, apply its table, and put the table into the PR body.
 
 **Non-UI issues**: implement normally, following the conventions in `CLAUDE.md`.
 

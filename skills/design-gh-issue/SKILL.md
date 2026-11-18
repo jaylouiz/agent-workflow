@@ -45,7 +45,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 
 ## 3. Draft variants
 
-Draft 2-4 **structurally different** variants, one paragraph each: layout, information hierarchy, primary affordance, mobile behaviour. Use the profile's "variant lenses" to push them apart (e.g. one radically simpler, one built around the empty/first-run state). Three tweaks of one layout are one variant. Name each (`A: inline editor`, `B: side sheet`, …). Each variant also states which existing Pattern it reuses or aligns with, or why it diverges (the profile's "Pattern check", when it has one).
+Draft 2-4 **structurally different** variants, one paragraph each: layout, information hierarchy, primary affordance, mobile behaviour. Use the profile's "variant lenses" to push them apart (e.g. one radically simpler, one built around the empty/first-run state). Three tweaks of one layout are one variant. Name each (`A: inline editor`, `B: side sheet`, …). Each variant also states which existing Pattern it reuses or aligns with, or why it diverges (the profile's "Pattern check", when it has one). Decide *what text goes where and why*, not the final wording: each variant keeps a **copy inventory**, every text element (title, label, hint, button, empty and error text) with its purpose, or `convention` when it is there only because the component has the slot or it is the usual thing (keep it if it does no harm; the copy pass and the user see the mark).
 
 ## 4. Tech check
 
@@ -66,7 +66,7 @@ Decide and write the reason in one line:
 **Prototype.** Invoke the `prototype` skill and follow its UI branch (prefer sub-shape A: variants on the existing route, `?variant=`, switcher bar), with these overrides from the profile's "Prototype":
 - Work on branch `proto/$issue-<slug>` in its own worktree (`git worktree add`; an Orca worker uses the worktree it was given and renames its branch). Never open a PR, never merge.
 - The proto branch never reaches main, so the switcher renders whenever `?variant` is present, also in production builds of that branch (preview deploys). Do not gate it on dev mode.
-- Prototype rules: hardcoded copy (real wording, not i18n keys), no tests, no error handling beyond running, read-only or local data. Keep the app building.
+- Prototype rules: hardcoded copy (real draft wording under the profile's "Copy" draft rules, not i18n keys, not polished: final copy comes from the copy pass in section 9), no tests, no error handling beyond running, read-only or local data. Keep the app building. Feedback on wording alone is noted for the copy pass, not answered with a new round.
 - Loop locally on the dev server with HMR on your assigned port. Push once per round, not per edit (each push builds a preview).
 - Once the structure is chosen and only an element's look is open, use the profile's "element look" tool on the proto branch instead of more structural variants.
 
@@ -116,7 +116,8 @@ Feedback like "header from B, list from C", "B but calmer" is the normal case. A
 ## 9. Decide and hand over
 
 1. One bounded current-state-review pass of the profile's tool on the **chosen** variant only (prototype: rendered page; sketch: the frames). Unattended: one pass, no overlay, no live server. Findings that change the design go into the decision; others become "known issues" in it.
-2. Write the decision into the issue body: keep the existing body, rewrite `## Solution` to the chosen shape (2-5 lines), add or replace a `## UX decision` section, and below it `## Acceptance criteria` with the UACs: observable behaviour of the chosen variant, one line per story and per state named under **States**, then the profile's default ACs for UI. Specify adds technical ACs below them and does not rewrite them.
+2. **Copy pass** (when the profile has a "Copy" section): one sub-agent (`model:` the default tier) runs the profile's copy pass with the chosen variant's copy inventory, its screenshots and the decision draft, in a fresh context. It returns the `### UI copy` table plus `Structure changes` (copy elements added, removed or merged, each with a reason; never layout or flow) and `Convention-only`. No new round for them: name them in the Decision comment, so the user sees every change made after their choice.
+3. Write the decision into the issue body: keep the existing body, rewrite `## Solution` to the chosen shape (2-5 lines), add or replace a `## UX decision` section, and below it `## Acceptance criteria` with the UACs: observable behaviour of the chosen variant, one line per story and per state named under **States**, then the profile's default ACs for UI. Specify adds technical ACs below them and does not rewrite them.
    ```markdown
    ## UX decision
    **Chosen:** <variant name> (round <k>), because <one line>. Rejected: <names, one line each>.
@@ -124,14 +125,17 @@ Feedback like "header from B, list from C", "B but calmer" is the normal case. A
    **Flow:** <steps the user takes, one line each; with automatic changes also the skip and edge paths, connection writes and triggers, as confirmed in the walk-through>
    **Layout:** <structure at desktop and at mobile width; link the screenshots comment>
    **States:** empty / loading / error / first run / many items: <behaviour each>
-   **Copy intent:** <what each key text says, in the UI language; final keys come in Build>
+   **Copy intent:** <only without a profile "Copy" section: what each key text says, in the UI language; final keys come in Build>
    **Patterns:** <the chosen variant's Pattern-check lines, when the profile has a Pattern check>
    **Known issues:** <from the review pass, or none>
    **Prototype:** branch `proto/<n>-<slug>` (reference only: rebuild properly, never merge or cherry-pick) · preview <url>
+
+   ### UI copy
+   <the copy pass's table, Structure changes and Convention-only lines, verbatim; Specify and Build keep it as is>
    ```
-3. Relabel: `--remove-label needs-design --remove-label phase:design --add-label needs-spec --add-label ux-impact` (`gh label create ux-impact --force --color C5DEF5 --description "Changes what the user sees: Look after Done"`). The issue is back in the Backlog until Specify or Build starts. Straight to `ready` only when the tech check rated the chosen variant S with no risk area **and** the UACs need no technical ACs to be buildable.
-4. Post a short "Decision" comment (chosen variant, label change, link to the body section).
-5. Leave the proto branch pushed (it is the record) and remove its local worktree only if you created it and it is clean.
+4. Relabel: `--remove-label needs-design --remove-label phase:design --add-label needs-spec --add-label ux-impact` (`gh label create ux-impact --force --color C5DEF5 --description "Changes what the user sees: Look after Done"`). The issue is back in the Backlog until Specify or Build starts. Straight to `ready` only when the tech check rated the chosen variant S with no risk area **and** the UACs need no technical ACs to be buildable.
+5. Post a short "Decision" comment (chosen variant, label change, the copy pass's structure changes, link to the body section).
+6. Leave the proto branch pushed (it is the record) and remove its local worktree only if you created it and it is clean.
 
 ## Report
 
