@@ -70,7 +70,7 @@ Apply the profile's "design records" rules (pattern extraction, design-doc updat
 
 1. Conventional commit(s), e.g. `fix(board): ... (#$issue)`, ending with the `Co-Authored-By` line from the session's attribution instructions.
 2. `git fetch` and `git rebase origin/<default>`, then `git push -u origin HEAD` (mind the profile's worktree notes before rebasing).
-3. `gh pr create --body-file <file>` with the body the profile's "Pull requests" requires (a summary, ACs as a checklist with evidence, the Pattern-check lines for UI changes, anything left out; screenshots as that section says). The guard hook checks `Closes #$issue`, the PR attribution line and the project's own lines.
+3. `gh pr create --body-file <file>` with the body the profile's "Pull requests" requires (a summary, ACs as a checklist with evidence, the Pattern-check lines for UI changes, anything left out; screenshots as that section says). Write the body file, attribution line included, in its own call before `gh pr create` (the guard reads the file before a chained append runs). The guard hook checks `Closes #$issue`, the PR attribution line and the project's own lines.
 4. Log the PR link with `~/.claude/skills/orchestrate-gh-issues/decide.sh log $issue "PR: <url>"` (the PR already shows in the issue timeline through `Closes`).
 5. **`ux-impact` only: the Look comment.** One comment the user opens after Done to check the result. Body file (it must pass `decide.sh check`), then `gh issue comment $issue --body-file <file> --attach <png>#<alt>…`:
    ```markdown
