@@ -167,6 +167,11 @@ case "$cmd" in
     r=$(route_pr "$pr") && [ -n "$r" ] || die "route for PR #$pr failed"
     echo "route $r"
     msg=$(review_check "$bodyf" "${r%%:*}") || stop="$stop\n$msg"
+    # Orca's setup `npm install` rewrites package-lock.json; committed without a package.json change it breaks `npm ci` in CI (#676)
+    files=$(gh pr diff "$pr" --name-only 2>/dev/null || true)
+    if grep -qx package-lock.json <<<"$files" && ! grep -qx package.json <<<"$files"; then
+      stop="$stop\npackage-lock.json is in the diff without package.json: restore it (git checkout origin/$base -- package-lock.json), commit, push"
+    fi
     rm -f "$bodyf"
     if [ -n "$stop" ]; then printf 'NOT READY #%s:%b\n' "$pr" "$stop"; exit 1; fi
     wt=$(worktree_of "$head")
