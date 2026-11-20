@@ -273,6 +273,9 @@ def read(choices, answer):
             if valid(int(m.group(1)), m.group(2).upper()) and not any(s <= m.start() < e for s, e, *_ in hits):
                 hits.append((m.start(), m.end(), int(m.group(1)), m.group(2).upper(), False))
         hits.sort()
+        for n in {h[2] for h in hits}:  # `1B with parts from 1A`: two options of one question is a mix, not a pick
+            if len({h[3] for h in hits if h[2] == n}) > 1:
+                return ""
         for i, (_, end, n, key, block) in enumerate(hits):
             picked[n] = key
             notes.pop(n, None)

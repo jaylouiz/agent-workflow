@@ -246,6 +246,7 @@ eq "the block form, stale brackets ignored, text after the letter is a note" "$(
 1 Shell: C (footer bar) but calmer
 2 Heading: A (hidden)')" "  reads as: 1 Shell: C (top stepper), note: but calmer · 2 Heading: A (hidden)"
 eq "the short form" "$(answered "$M" '1A 2b')" "  reads as: 1 Shell: A (back on top, today) · 2 Heading: B (small, visible)"
+eq "a mixed answer (one question, two options) stays free text" "$(answered "$M" '1B with the header from 1A')" ""
 eq "a partial answer names what is missing" "$(answered "$M" 'D1: 1C')" "  reads as: 1 Shell: C (top stepper) · 2 Heading: no answer (★ is A)"
 eq "Tandem's tile answer with a note (D1: ok. 1A)" "$(answered "$M" 'D1: ok. 1A')" "  reads as: 1 Shell: A (back on top, today) · 2 Heading: A (hidden)"
 eq "Tandem's round reaction: picks count, rejects do not" "$(answered "$M" 'R1:
