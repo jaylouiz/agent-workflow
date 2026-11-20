@@ -9,7 +9,7 @@ Why waves: the main coordinator (the user's session) keeps its context small. It
 <What earlier waves merged, one line (PR numbers).>
 - <Inbox issues to triage first: "run `/gh-inbox-dispatcher` yourself for #a #b (you count as the user caller). What it routes joins this wave, unless it needs the user's input before any work can start: then park it with a decision request and report it.">
 - <#n: one line each: what it is, suggested lane, suggested batch, risk area, an answer the user already gave.>
-- <Default-branch CI: "check the latest completed full run; red is fixed forward in this wave", when the project runs one.>
+- <Default-branch CI: "check the latest completed full run; red is fixed forward in this wave", when the project runs one. Wait on a CI run only through a background `gh run watch`, never by ending your turn idle.>
 
 Lanes and batches above are the main coordinator's screening, given as hints: verify them in your own screening (section 1b) and relabel where needed.
 
