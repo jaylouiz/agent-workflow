@@ -3,11 +3,17 @@
 # blocking a worker; two-way decisions are recorded (label `agent-decided`) and never block. The user answers
 # by commenting on the issue, any time; the coordinator sweeps with `status` and batches pings with `digest`.
 #
-#   decide.sh request <n> <file>   post a decision request (first line of <file> = the one-line question; a line
-#                                  `Preview: <url>` is shown under it in the digest), park
+#   decide.sh request <n> <file>   post a decision request and park. <file>: line 1 the question in plain words, then
+#                                  optional `Preview: <url>` (the digest shows it) and `Overview: <link to the round
+#                                  or options comment>`, then one line per question:
+#                                  `1 Shell: A (back on top, today) · B ★ (footer bar) · C (top stepper)`
+#                                  (1 to 3 keywords in brackets, ★ = recommended). The legend, the answer template
+#                                  and the lines Tandem reads are written from these. No options to pick from: a
+#                                  line `Open question: <what kind of answer>` instead. Format: docs/decision-format.md
 #   decide.sh record  <n> <file>   post a decision the agent made (chosen, alternatives, why, cost to switch)
 #   decide.sh answer  <n> <text> [D<k>]   post an answer the user gave elsewhere (chat) as the issue's answer
-#   decide.sh resolve <n> <text> [D<k>]   unpark: drop `needs-decision`, post "resuming with: <text>"
+#   decide.sh resolve <n> <text> [D<k>]   unpark: drop `needs-decision`, post "Resumed"; prints `<text>` spelled out
+#                                  (`1 Shell: B (footer bar) · …`) when it reads as `ok`, the answer block or `1B 2A`
 #   decide.sh followup <n> <m> [D<k>]     note that change request on #n became issue #m
 #                                  (answer/resolve/followup act on the newest decision unless D<k> is given: pass the
 #                                  id `status` printed, an older decision can be the one that was answered or challenged)
@@ -17,8 +23,11 @@
 #   decide.sh log --path <n> | --rm <n> | --prune
 #                                  the log file's path; delete one issue's log; delete the logs of closed issues
 #   decide.sh check   <file>       comment cap: visible text (outside <details>, comments, images) at most
-#                                  $WF_COMMENT_CAP chars (1500), no visible line over 400; request/record and guard.sh run it
-#   decide.sh status               answered / waiting requests, change requests on agent-decided issues
+#                                  $WF_COMMENT_CAP chars (1500), no visible line over 400; and the overview shape of a
+#                                  round or options note (one `### <n>. <label>:` section per question with its option
+#                                  table, ★ and image; one <details> at the end). request/record and guard.sh run it
+#   decide.sh status               answered / waiting requests (an answer that reads as choices gets a second line
+#                                  `reads as: …`), change requests on agent-decided issues
 #   decide.sh digest [--due FILE] [--idle] [--cap SEC]
 #                                  bundled list of waiting requests. With --due: print and exit 0 only when the
 #                                  run is idle (--idle) or the oldest request not yet listed in FILE is older
@@ -95,7 +104,11 @@ for i, l in enumerate(lines[:-1], 1):
     if l.rstrip().endswith("</details>") and lines[i].strip():
         print(i); break' "$1")
   [ -z "$glued" ] || { echo "decide.sh check: line $glued ends with </details> and the next line is not blank, so GitHub renders the following Markdown (headings, lists) as raw text. Add a blank line after </details>." >&2; return 65; }
+  python3 -I "$DIR/decision_format.py" check "$1" || return 65
 }
+
+# The answer spelled out against a request's `<!-- choices … -->` lines; empty when it cannot be read as choices.
+reads_as() { python3 -I "$DIR/decision_format.py" read "$1" "$2" 2>/dev/null || true; } # <request body | choices> <answer>
 
 need_repo() { # sets REPO; loud, before any write, when there is none. WF_REPO also pins every gh call (GH_REPO)
   REPO=$(wf_repo_slug) || REPO=""
@@ -111,7 +124,7 @@ log_dir() { echo "${WF_ISSUE_LOG_DIR:-$HOME/.claude/issue-logs}/$REPO"; }
 # thread (Tandem writes that prefix on every reply, so a challenge to D2 stays D2's while a later request D3 is
 # open); any other unmarked comment owns to the nearest earlier marked comment, a note included: a note has no
 # decision, so a reply to it (`rec D1, note look, "y"`) belongs to none and is dropped, exactly as Tandem reads it.
-# Output (US-separated, \x1f: a tab IFS would collapse an empty answer field and shift the preview into it): number, url, last kind, id, question, age seconds, answer text (newlines flattened), preview link
+# Output (US-separated, \x1f: a tab IFS would collapse an empty answer field and shift the preview into it): number, url, last kind, id, question, age seconds, answer text (newlines flattened), preview link, the request's choices lines (\x1e-joined)
 # An empty <label> scans the 100 most recently updated issues of that state (an answer updates its issue).
 scan() { # <label|""> <state>
   local f=(--label "$1"); [ -n "$1" ] || f=(--search "sort:updated-desc")
@@ -139,8 +152,9 @@ scan() { # <label|""> <state>
        ($q.v.body | split("\n") | map(select(test("^(<!--|###|$)") | not)) | first // "-" | .[0:120]),
        (now - ($q.v.createdAt | fromdateiso8601) | floor),
        ((if $m.c.kind == "answer" then [$m.v.body | split("\n")[1:] | join(" ") | sub("^Answer from the user \\(via the coordinator\\): "; "")] else [] end) + $after
-        | join(" / ") | gsub("\\s+"; " ") | .[0:400]),
-       ($q.v.body | split("\n") | map(select(test("^Preview: "))) | first // "" | sub("^Preview: "; ""))]
+        | join(" / ") | gsub("\\s+"; " ") | .[0:1000]),
+       ($q.v.body | split("\n") | map(select(test("^Preview: "))) | first // "" | sub("^Preview: "; "")),
+       ([$q.v.body | scan("<!-- choices (.*?) -->") | .[0]] | join("\u001e"))]
     | map(tostring | gsub("\u001f"; " ")) | join("\u001f")'
 }
 
@@ -157,8 +171,7 @@ case "$cmd" in
     [ $# -eq 2 ] && [ -s "$2" ] || die "usage: $cmd <issue> <file>"
     labels; id=$(next_id "$1"); tmp=$(mktemp)
     if [ "$cmd" = request ]; then
-      { echo "<!-- decision-request D$id -->"; echo "### Decision needed (D$id): parked"; echo; cat "$2"; echo
-        echo "---"; echo "Answer in a comment here (\`B\`, or free text); with other decisions on this issue start it with \`D$id:\`. The run picks it up at its next checkpoint."; } >"$tmp"
+      python3 -I "$DIR/decision_format.py" request "$2" "D$id" >"$tmp" || { rm -f "$tmp"; exit 65; }
       check "$tmp" || { rm -f "$tmp"; exit 65; }
       post "$1" "$tmp"; gh issue edit "$1" --add-label needs-decision >/dev/null
     else
@@ -176,9 +189,12 @@ case "$cmd" in
       printf '<!-- decision-answer D%s -->\nAnswer from the user (via the coordinator): %s\n' "$id" "$2" >"$tmp"
       post "$1" "$tmp"
     else
-      printf '<!-- decision-resolved D%s -->\nResumed (D%s).\n' "$id" "$id" >"$tmp"
+      req=$(comments "$1" | jq -r --arg re "<!-- decision-request D$id -->" '[.[].body | select(test($re))] | last // ""')
+      spelled=$(reads_as "$req" "$2"); with=$2; [ -z "$spelled" ] || with="$spelled (answer: $2)"
+      printf '<!-- decision-resolved D%s -->\nResumed (D%s)%s\n' "$id" "$id" "${spelled:+ with: $spelled}." >"$tmp"
       post "$1" "$tmp"; gh issue edit "$1" --remove-label needs-decision >/dev/null
-      "$0" log "$1" "resumed D$id with: $2" || echo "decide.sh: coordination log not written" >&2
+      echo "resumed D$id with: $with"
+      "$0" log "$1" "resumed D$id with: $with" || echo "decide.sh: coordination log not written" >&2
     fi
     rm -f "$tmp"
     ;;
@@ -214,15 +230,16 @@ case "$cmd" in
     post "$1" "$tmp"; rm -f "$tmp"
     ;;
   status)
-    pending | while IFS=$'\x1f' read -r n url kind id q secs ans _prev; do
+    pending | while IFS=$'\x1f' read -r n url kind id q secs ans _prev choices; do
       if [ "$kind" = answered ] || { [ "$kind" = request ] && [ -n "$ans" ]; }; then
         echo "answered #$n $id: $ans"
+        [ -z "$choices" ] || { spelled=$(reads_as "$choices" "$ans"); [ -z "$spelled" ] || echo "  reads as: $spelled"; }
       elif [ "$kind" = request ]; then
         echo "waiting  #$n $id ($(age "$secs")): $q"
       fi
     done
     waiting=$(pending | awk -F'\037' '$3 == "request" && $7 == "" {print $1}')
-    scan agent-decided open | while IFS=$'\x1f' read -r n url kind id q secs ans _prev; do
+    scan agent-decided open | while IFS=$'\x1f' read -r n url kind id q secs ans _prev _choices; do
       if { [ "$kind" = record ] || [ "$kind" = followup ]; } && [ -n "$ans" ]; then
         hint=""; printf '%s\n' "$waiting" | grep -qx "$n" && hint=" (a request on #$n is still waiting: this may be its answer under the wrong D<k>)"
         echo "change   #$n $id: $ans$hint"
@@ -244,7 +261,7 @@ case "$cmd" in
     if [ -n "$due" ]; then
       touch "$due"
       fire=$idle
-      while IFS=$'\x1f' read -r n url kind id q secs ans _prev; do
+      while IFS=$'\x1f' read -r n url kind id q secs ans _prev _choices; do
         grep -qx "#$n $id" "$due" || { [ "$secs" -ge "$cap" ] && fire=1; }
       done <<<"$rows"
       [ "$fire" = 1 ] || exit 1
@@ -252,14 +269,14 @@ case "$cmd" in
     count=$(printf '%s\n' "$rows" | wc -l | tr -d ' ')
     repo=$(gh repo view --json url --jq .url)
     echo "$count decision(s) need you:"
-    while IFS=$'\x1f' read -r n url kind id q secs ans prev; do
+    while IFS=$'\x1f' read -r n url kind id q secs ans prev _choices; do
       echo "- #$n $id ($(age "$secs")): $q  $url"
       [ -n "$prev" ] && echo "  preview: $prev"
       [ -n "$due" ] && { grep -qx "#$n $id" "$due" || echo "#$n $id" >>"$due"; }
     done <<<"$rows"
     reviews=$(gh issue list --label agent-decided --state all --limit 100 --json number --jq length)
-    echo "Answer on the issue or here (\"385: B\"). All: $repo/issues?q=is:open+label:needs-decision"
+    echo "Answer on the issue or here (\"385: ok\" takes the recommendations, \"385: 1B 2A\" picks). All: $repo/issues?q=is:open+label:needs-decision"
     echo "FYI $reviews issue(s) with agent decisions to review: $repo/issues?q=label:agent-decided"
     ;;
-  *) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
+  *) sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
 esac

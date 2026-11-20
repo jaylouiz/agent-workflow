@@ -32,8 +32,8 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 
 **Several issues on one surface** (a design batch: the task names them, or the user asks for it). Everything below runs once for all of them, on one branch `proto/<lowest n>-<slug>` and in one prototype, so the user reviews the surface as a whole:
 - guard, phase label and brief per issue; current-state review, screenshots and tech check once for the shared surface
-- variants per issue's question. Questions that do not interact become axes: each gets its own switcher key and its own `Axis` line in the round comment (section 7), and the user combines them freely; questions that interact are shown as combined variants
-- each issue gets its own round comment and its own decision request (its variants, its question), all with the same `Preview:` and all posted in one go, so the digest shows them together and the user answers in bulk
+- variants per issue's question. Questions that do not interact are separate numbered questions (section 7), each with its own switcher key, and the user combines them freely; questions that interact are one question whose options are the combinations
+- each issue gets its own round comment and its own decision request (its questions), all with the same `Preview:` and all posted in one go, so the digest shows them together and the user answers in bulk
 - at the handover each issue gets its own `## UX decision` linking the shared prototype, and its labels move with the others
 - more open questions than one round can show clearly: finish the first issues' round, then the next on the same branch, and say so in the report; the PR still converges unless the coordinator or the user keeps an issue apart
 
@@ -45,7 +45,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 
 ## 3. Draft variants
 
-Draft 2-4 **structurally different** variants, one paragraph each: layout, information hierarchy, primary affordance, mobile behaviour. Use the profile's "variant lenses" to push them apart (e.g. one radically simpler, one built around the empty/first-run state). Three tweaks of one layout are one variant. Name each (`A: inline editor`, `B: side sheet`, …). Each variant also states which existing Pattern it reuses or aligns with, or why it diverges (the profile's "Pattern check", when it has one). Decide *what text goes where and why*, not the final wording: each variant keeps a **copy inventory**, every text element (title, label, hint, button, empty and error text) with its purpose, or `convention` when it is there only because the component has the slot or it is the usual thing (keep it if it does no harm; the copy pass and the user see the mark).
+Draft 2-4 **structurally different** variants, one paragraph each: layout, information hierarchy, primary affordance, mobile behaviour. Use the profile's "variant lenses" to push them apart (e.g. one radically simpler, one built around the empty/first-run state). Three tweaks of one layout are one variant. Letter each (`A` inline editor, `B` side sheet, …; today's state, when it is an option, is a letter like the others). Each variant also states which existing Pattern it reuses or aligns with, or why it diverges (the profile's "Pattern check", when it has one). Decide *what text goes where and why*, not the final wording: each variant keeps a **copy inventory**, every text element (title, label, hint, button, empty and error text) with its purpose, or `convention` when it is there only because the component has the slot or it is the usual thing (keep it if it does no harm; the copy pass and the user see the mark).
 
 ## 4. Tech check
 
@@ -76,36 +76,36 @@ Decide and write the reason in one line:
 
 1. Screenshots of every variant at the profile's widths (desktop and mobile), via the profile's screenshot tool. Helper scripts (screenshot, axe) and their output live in the scratchpad, never in the worktree: an untracked file makes the cleanup hook skip the worktree. Prototype: one per `?variant=` key and width; sketch: export the frames.
 2. Prototype: commit and push the proto branch (`git push -u origin HEAD`), then get the preview URL as the profile's "share" says; not built yet: wait for it (a few minutes), the `Preview:` line must outlive your session. Only a failed push or failed preview build gives the local URL, said so; a worker then also names it in its `PARKED` body, so the coordinator keeps it served.
-3. Post **one** round comment: `gh issue comment $issue --body-file <file> --attach <png>#<alt>…`, run from the worktree (`gh` needs the repo as cwd; files may stay in the scratchpad by absolute path). It is machine-read (Tandem builds a screenshot gallery from it), so keep this shape; the guard hook blocks unmarked agent comments and runs `decide.sh check` (visible length cap):
+3. Post **one** round comment: `gh issue comment $issue --body-file <file> --attach <png>…`, run from the worktree (`gh` needs the repo as cwd; files may stay in the scratchpad by absolute path). It is the overview the user decides from, and Tandem builds its gallery and picks from it. The guard hook runs `decide.sh check` on it, which enforces this shape and says what is off (format and a full example: `~/.claude/agent-workflow/docs/decision-format.md`):
    ```markdown
    <!-- decision-note round R<k> -->
    ## Design round <k>: <issue title>
-   Preview: <the route plus the seed that shows the change and the first variant, e.g. <preview>/tasks?seed=<seed>&variant=<first key>>
-   Variants: <key>, <key>, …
-   Axis <name>: <key>, <key>, … (<what this axis decides, a few words>)
+   Preview: <the route plus the seed that shows the change and the first option, e.g. <preview>/tasks?seed=<seed>&variant=<first key>>
+   Variants: 1A, 1B, 1C, 2A, 2B
    <brief summary, at most 2 lines>
-   <details><summary>Job, stories, checks</summary>
+
+   ### 1. <label, one word>: <what this question decides>
+
+   | | Option | In short |
+   |---|---|---|
+   | A | <name> (today) | <a few words> |
+   | **B ★** | <name> | <a few words> |
+
+   ★ Why B: <one short reason>
+
+   ![R<k> · 1. <label> · <desktop|mobile, or what it shows>](<png path>)
+
+   <!-- one section per question, numbered 1, 2, …; then the one collapsed block -->
+   <details><summary>Stories, checks, build cost, dropped</summary>
 
    Job: <id job> · Stories: <the draft stories, one line each, at most 3>
    Checks: brief <tool | asserted> · tech check <sub-agent | inline: why> · current-state review and motion per the profile <ran | skipped: why> · known flaws <list | none>
-   </details>
-
-   ### <key>: <variant name>
-   <one line> · tech check: <S|M|L, risk areas>
-   <details><summary>Details</summary> <the variant paragraph> </details>
-
-   <!-- one section per variant; keep the blank line after </details>, or GitHub shows the next heading as raw text -->
-   ### <axis name> <key>: <variant name>
-   <one line> · tech check: <S|M|L, risk areas>
-
-   <!-- one section per option of each axis, after the variants, in the order of the Axis lines -->
+   Per option: <1A: the variant paragraph · tech check S|M|L, risk areas; one line each>
    Dropped: <name: reason, one line each>
-   **Question:** <the choice the user makes; with axes, name each: "Which layout (a or b), which slide (o or a) and which way back (o or a)?">
+   </details>
    ```
-   Every screenshot is attached with alt `R<k> · <variant key> · <desktop|mobile>` (an axis's option: `R<k> · <axis name> <key> · <desktop|mobile>`; sketch frames too), in variant order, desktop first. The same `Preview:` line goes into the decision request, which the digest shows. Keep it scannable on a phone.
-
-   **Axes** (only when the round asks more than one independent question in one prototype, e.g. a layout plus how steps move): one `Axis` line per further question, a short lowercase name the user will say back (`slide`, `back`), its keys (`o` = today's behaviour) and in parentheses what it decides; leave the line out otherwise. Each axis has its own switcher key in the prototype, and the user picks one option per axis. Their answer reads `b, slide a, back a`; Tandem writes it as `- pick: b`, `- pick slide: a`, `- pick back: a`. The decision request names its recommendation the same way (`Recommendation: a, slide a, back a`).
-4. Ask for the choice. Interactive: `AskUserQuestion`, one option per variant (short description, no image). Unattended or worker: `~/.claude/skills/orchestrate-gh-issues/decide.sh request` with your recommendation, then park (`/orchestrate-gh-issues` section 5); never prompt locally. A resumed round starts from that request's answer.
+   A question is one thing the user decides (the layout; how steps move); the round has as many as it asks, usually one. Options are lettered `A`, `B`, … per question and carry the same letters in the prototype's switcher (one switcher key per question, labelled `1 <label>`) and in the image labels; the recommended one has `★`. One image per question, its options side by side with their letters on them, at each of the profile's widths (one montage, or one image per width), directly under the question.
+4. Ask for the choice. Interactive: `AskUserQuestion`, one option per variant (short description, no image). Unattended or worker: `~/.claude/skills/orchestrate-gh-issues/decide.sh request` (the question, the same `Preview:` line, `Overview: <the round comment's URL>` and one line per question with 1 to 3 keywords per option; run it without arguments for the shape), then park (`/orchestrate-gh-issues` section 5); never prompt locally. A resumed round starts from that request's answer.
 
 ## 8. Iterate
 

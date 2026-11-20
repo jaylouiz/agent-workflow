@@ -56,7 +56,7 @@ Read the profile's "Sources", then run its current-state review on the current i
 
 ## 5. Record options
 
-Write the approaches to a scratchpad file whose first line is `<!-- decision-note options -->` (one headline line, one line per approach with its trade-off, the recommendation; the paragraphs in `<details>`; it must pass `decide.sh check`) and post `gh issue comment $issue --body-file <file>` (images via `--attach`). Options go in a comment, never the body, so the thread keeps the history. Skip this when there was only one approach: `## Chosen approach` then says in one line why no alternative was sensible, and no `decide.sh record` is needed for it.
+Write the approaches to a scratchpad file whose first line is `<!-- decision-note options -->` (one headline line, then the overview shape of `~/.claude/agent-workflow/docs/decision-format.md`: a `### 1. <label>: <what it decides>` section with one table row per approach, lettered `A`, `B`, …, `★` and `★ Why` on the recommended one; the paragraphs in one `<details>` at the end; `decide.sh check` enforces it) and post `gh issue comment $issue --body-file <file>` (images via `--attach`). Options go in a comment, never the body, so the thread keeps the history. Skip this when there was only one approach: `## Chosen approach` then says in one line why no alternative was sensible, and no `decide.sh record` is needed for it.
 
 ## 6. Choose and write the spec
 
