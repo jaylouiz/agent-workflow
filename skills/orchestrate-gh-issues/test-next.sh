@@ -54,7 +54,7 @@ check "happy: order proof, release, slots, create, start (no ack)" '[ "$(printf 
 check "happy: release passes dispatch" 'printf "%s" "$calls" | grep -q "^orchestration worker-release --dispatch ctx_aaa111"'
 check "happy: port 39201 released, next task got a port" '! grep -q "^39201 #4" "$T/ledger/ports" && grep -q "#7 lead" "$T/ledger/ports"'
 check "happy: no check call (V3: no ack, no waiter)" '! printf "%s" "$calls" | grep -q "^orchestration check"'
-check "happy: worker-start gets task and args" 'printf "%s" "$calls" | grep -q "^orchestration worker-start --task task_0123456789ab --agent claude --model sonnet --effort high --worktree new-top-level --name fix-7-x --json --run run_x"'
+check "happy: worker-start gets task and args" 'printf "%s" "$calls" | grep -q "^orchestration worker-start --environment local --task task_0123456789ab --agent claude --model sonnet --effort high --worktree new-top-level --name fix-7-x --json --run run_x"'
 check "happy: spec file written with PORT line" 'grep -q "^PORT=" "$T/ledger/7-lead.spec"'
 check "happy: started line" 'printf "%s" "$out" | grep -q "^started: #7 lead task=task_0123456789ab dispatch=ctx_beef00112233 port=39201"'
 check "happy: end-turn line last" 'printf "%s\n" "$out" | tail -1 | grep -q "^next: end your turn"'
@@ -70,7 +70,7 @@ check "failed start: exit 1" '[ $rc = 1 ]'
 check "failed start: names the stage" 'grep -q "stage start failed" "$T/err" && grep -q "#8 lead" "$T/err"'
 check "failed start: end-turn line still printed" 'printf "%s" "$out" | grep -q "^next: end your turn"'
 check "failed start: recorded" 'grep -q "#8 lead" "$T/ledger/failed-starts"'
-check "failed start: started once, next task untouched" '[ "$(grep -c "^orchestration worker-start" "$T/state/calls")" = 1 ] && grep -q "^#9 lead" "$T/ledger/queue" && ! grep -q "^#8" "$T/ledger/queue"'
+check "failed start: parallel launch, every launched start attempted and parked, none left queued" '[ "$(grep -c "^orchestration worker-start" "$T/state/calls")" = 2 ] && grep -q "#8 lead" "$T/ledger/failed-starts" && grep -q "#9 lead" "$T/ledger/failed-starts" && [ ! -s "$T/ledger/queue" ]'
 
 # failed task-create: recorded in failed-starts, port released, next task untouched, end-turn line printed
 reset

@@ -1,0 +1,23 @@
+orca computer
+
+Usage: orca computer <command> [options]
+
+Commands:
+  capabilities       Show computer-use provider capabilities
+  list-apps          List running apps available to computer-use
+  permissions        Open computer-use permission setup
+  launch-app         Start a closed app without taking the foreground
+  list-windows       List windows for an app available to computer-use
+  get-app-state      Capture a compact accessibility snapshot of an app
+  wait               Wait until an app shows text, enables a control, or opens a window
+  click              Click an app element or window coordinate, optionally with modifiers
+  perform-secondary-action Perform an advertised secondary accessibility action
+  scroll             Scroll an app element or window coordinate
+  drag               Drag between app elements or window coordinates
+  type-text          Type literal text at the current app focus or into an element
+  press-key          Press a single key such as Return or Escape
+  hotkey             Press a platform-aware key combination
+  paste-text         Paste exact text at the current app focus
+  set-value          Set the value of a settable app element
+
+Run `orca computer <command> --help` for command-specific usage.

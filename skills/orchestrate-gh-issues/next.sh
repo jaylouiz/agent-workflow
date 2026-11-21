@@ -45,6 +45,7 @@ run=""
 endturn() { echo "next: end your turn; Orca wakes you when a worker reports, asks or stops (never run check --wait)"; }
 die() { echo "next.sh: $*" >&2; exit 64; }
 fail() { # fail <stage> <message> [exit code]
+  declare -F flush_starts >/dev/null && flush_starts # launched starts still run; collect them, never lose a receipt
   echo "next.sh: stage $1 failed: $2" >&2; endturn; exit "${3:-1}"
 }
 
@@ -154,7 +155,7 @@ settle() {
 
 count_active() { # sets ACTIVE: dispatched workers in the Run (no subshell: a failing stage must exit the script)
   # shellcheck disable=SC2046
-  orca_o slots worker-list --json --full --limit 100 $(run_flag)
+  orca_o slots worker-list --environment local --json --full --limit 100 $(run_flag)
   ACTIVE=$(jq -r '[.result.workers[]? | select(.dispatchStatus == "dispatched")] | length' "$TMP/out") || fail slots "unreadable worker-list"
 }
 
@@ -164,18 +165,41 @@ park_failed() { printf '%s\t%s\n' "$1" "$2" >>"$ledger/failed-starts"; }
 
 dup_task() { # dup_task <issue>: sets DUPINFO to id and status of a non-terminal Task of the Run that names #<issue> (title or spec head)
   # shellcheck disable=SC2046
-  orca_o duplicate task-list --json --full $(run_flag)
+  orca_o duplicate task-list --environment local --json --full $(run_flag)
   jq -e '.result.tasks | type == "array"' "$TMP/out" >/dev/null 2>&1 || fail duplicate "unreadable task-list"
   DUPINFO=$(jq -r --arg n "$1" '.result.tasks[]? | select((.status // "") as $s | ["completed", "failed", "cancelled"] | index($s) | not)
     | select(([.task_title // "" | scan("^#[0-9]+(?:\\+#[0-9]+)*") | split("+") | map(ltrimstr("#")) | index($n)] | any(. != null)) or ((.spec // "")[0:60] | test("^ *Issue #" + $n + "([^0-9]|$)"))) | "\(.id) (\(.status))"' "$TMP/out" | head -1)
 }
 
+# Worker starts wait for agent readiness (~10 s each), so every start launched in one call runs in the background
+# and flush_starts collects them (orchestration guide, references/parallel-start.md). Spec, port and task-create stay serial.
+SP=(); ST_TITLE=(); ST_TID=(); ST_PORT=(); ST_SF=(); ST_OUT=(); ST_ERR=(); STARTFAIL=""
+flush_starts() {
+  local i n=${#SP[@]} rc did
+  [ "$n" -gt 0 ] || return 0
+  local -a sp=("${SP[@]}") ti=("${ST_TITLE[@]}") td=("${ST_TID[@]}") po=("${ST_PORT[@]}") sf=("${ST_SF[@]}") ou=("${ST_OUT[@]}") er=("${ST_ERR[@]}")
+  SP=(); ST_TITLE=(); ST_TID=(); ST_PORT=(); ST_SF=(); ST_OUT=(); ST_ERR=() # cleared first: fail calls flush_starts again
+  for ((i = 0; i < n; i++)); do
+    rc=0; wait "${sp[i]}" || rc=$?
+    if [ $rc != 0 ]; then
+      park_failed "${ti[i]}" "start task=${td[i]}"
+      [ -n "$STARTFAIL" ] || STARTFAIL="'${ti[i]}' task ${td[i]} not started (task stays created, port ${po[i]:-none} stays reserved until you checked worker-list; do not rerun blindly): $(head -c 400 "${er[i]}" "${ou[i]}" | tr '\n' ' ')"
+      echo "next.sh: stage start failed: '${ti[i]}' task ${td[i]}" >&2
+      continue
+    fi
+    did=$(grep -oE 'ctx_[0-9a-f]+' "${ou[i]}" | head -1)
+    cp "${ou[i]}" "${sf[i]%.spec}.receipt.json" 2>/dev/null || true # launch.requested vs launch.effective for the final report
+    echo "started: ${ti[i]} task=${td[i]} dispatch=${did:-?} port=${po[i]:-none} spec=${sf[i]}"
+  done
+}
+finish_starts() { flush_starts; [ -z "$STARTFAIL" ] || fail start "$STARTFAIL"; }
+
 fill() {
-  local line title specs starts spec start stage n sf tid did p
+  local line title specs starts spec start stage n sf tid p base launched=0 out err
+  count_active; base=$ACTIVE
   while [ -s "$ledger/queue" ]; do
-    count_active
-    if [ "$ACTIVE" -ge "$max" ]; then
-      echo "slots: $ACTIVE/$max busy, $(wc -l <"$ledger/queue" | tr -d ' ') queued"; return 0
+    if [ $((base + launched)) -ge "$max" ]; then
+      finish_starts; echo "slots: $((base + launched))/$max busy, $(wc -l <"$ledger/queue" | tr -d ' ') queued"; return 0
     fi
     line=$(head -1 "$ledger/queue")
     IFS=$'\t' read -r title specs starts <<<"$line"
@@ -188,30 +212,28 @@ fill() {
       continue
     fi
     bash "$DIR/spec.sh" "${spec[@]}" --ledger "$ledger" >"$sf" 2>"$TMP/err"; local rc=$?
-    if [ $rc = 3 ]; then echo "port: none free, '$title' stays queued"; return 0; fi
+    if [ $rc = 3 ]; then finish_starts; echo "port: none free, '$title' stays queued"; return 0; fi
     if [ $rc != 0 ]; then
       drop_line; park_failed "$title" "spec"
       fail spec "'$title': spec.sh exit $rc: $(head -c 300 "$TMP/err" | tr '\n' ' ')"
     fi
     p=$(sed -n 's/^PORT=//p' "$sf")
     drop_line
-    # Nothing is running yet, so a failed task-create parks the task and gives its port back.
+    # Nothing is running yet for this task, so a failed task-create parks it and gives its port back.
     # shellcheck disable=SC2046
-    if ! orca orchestration task-create --spec-file "$sf" --task-title "$title" --json $(run_flag) >"$TMP/out" 2>"$TMP/err"; then
+    if ! orca orchestration task-create --environment local --spec-file "$sf" --task-title "$title" --json $(run_flag) >"$TMP/out" 2>"$TMP/err"; then
       park_failed "$title" "task-create"; free_port "$p"
       fail task-create "'$title': orca orchestration task-create exited non-zero (port ${p:-none} released): $(head -c 400 "$TMP/err" "$TMP/out" | tr '\n' ' ')"
     fi
     tid=$(grep -oE 'task_[0-9a-f]+' "$TMP/out" | head -1)
     [ -n "$tid" ] || { park_failed "$title" "task-create"; free_port "$p"; fail task-create "'$title': no task id in the reply (port ${p:-none} released)"; }
+    out="$TMP/start-$tid.out"; err="$TMP/start-$tid.err"
     # shellcheck disable=SC2046
-    if ! orca orchestration worker-start --task "$tid" "${start[@]}" --json $(run_flag) >"$TMP/out" 2>"$TMP/err"; then
-      park_failed "$title" "start task=$tid"
-      fail start "'$title' task $tid not started (task stays created, port ${p:-none} stays reserved until you checked worker-list; do not rerun blindly): $(head -c 400 "$TMP/err" "$TMP/out" | tr '\n' ' ')"
-    fi
-    did=$(grep -oE 'ctx_[0-9a-f]+' "$TMP/out" | head -1)
-    cp "$TMP/out" "${sf%.spec}.receipt.json" 2>/dev/null || true # launch.requested vs launch.effective for the final report
-    echo "started: $title task=$tid dispatch=${did:-?} port=${p:-none} spec=$sf"
+    orca orchestration worker-start --environment local --task "$tid" "${start[@]}" --json $(run_flag) >"$out" 2>"$err" &
+    SP+=($!); ST_TITLE+=("$title"); ST_TID+=("$tid"); ST_PORT+=("$p"); ST_SF+=("$sf"); ST_OUT+=("$out"); ST_ERR+=("$err")
+    launched=$((launched + 1))
   done
+  finish_starts
   echo "queue: empty, nothing more to start"
 }
 
