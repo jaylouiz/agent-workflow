@@ -210,6 +210,8 @@ case "$cmd" in
     else
       echo "up to date with origin/$base, nothing to push"
     fi
+    # optional profile check on every prep, also when nothing was pushed (a lead's or fixer's own run can be scoped, e.g. vitest --changed)
+    if wf_has wf_prep_check; then (cd "$wt" && wf_run wf_prep_check "origin/$base") || die "wf_prep_check failed in $wt (nothing merged): route to a fix worker"; fi
     # gh pr checks reads the PR's head: until GitHub reports this commit as the head it shows the old head's checks
     # (also on a rerun after a WAIT, hence not only after a push)
     mine=$(git -C "$wt" rev-parse HEAD); i=0
