@@ -37,3 +37,5 @@ Post the findings (class, file:line, evidence, proposed change, one line each) a
 - Out-of-scope findings go to the `inbox` rule (`~/.claude/CLAUDE.md`).
 
 Report one line per applied change and where it went.
+
+Workspace Cleanup (Orca 1.4.269, Settings; no docs, rules read from app.asar): never removes a running agent or terminal, the active workspace, activity in the last hour, dirty files, unpushed commits, pinned, or the main worktree. "Orchestration workers" = released by the coordinator and head merged. "Inactive N days" can remove a parked proto or idle open-PR worktree (branch kept). Ledgers (`<git common dir>/agent-ledgers`) and Claude transcripts (`~/.claude/projects`) live outside worktrees, so cleanup never touches them. Re-check this after an Orca update that changes cleanup.
