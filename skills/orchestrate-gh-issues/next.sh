@@ -74,6 +74,12 @@ if [ "$cmd" = queue ]; then
     [ "${spec[i]}" = --extra ] && [ ! -r "${spec[i+1]:-}" ] && die "queue: --extra file not readable: ${spec[i+1]:-}"
   done
   for a in "${start[@]}"; do [ "$a" = --force ] && die "queue: --force is a next.sh start/settle flag, not a worker-start arg (worker-start would fail); pass it to 'next.sh start --force'"; done
+  case "${spec[0]}" in lead | design) # the main checkout: a lead renames its branch there and breaks the next pull (retro 2026-11-23)
+    for ((i = 0; i < ${#start[@]}; i++)); do
+      { [ "${start[i]}" = --worktree ] && [ "${start[i+1]:-}" = current ]; } || [ "${start[i]}" = --worktree=current ] &&
+        die "queue: a ${spec[0]} never runs with --worktree current (that is the main checkout): use --worktree new-top-level --name <branch>"
+    done ;;
+  esac
   [ ${#start[@]} -gt 0 ] || start=(--agent claude)
   mkdir -p "$ledger"
   # One queue line: title TAB spec args TAB start args; the args of a field are joined by US (0x1f), so they keep spaces.
