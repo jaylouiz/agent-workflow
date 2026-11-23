@@ -5,8 +5,11 @@
 # skill. In a terminal it asks; without one (or with --yes) it keeps every recorded choice and uses defaults otherwise.
 #
 #   --yes                    no questions: recorded choices, else defaults
-#   --models <preset>        balanced (sonnet/opus/haiku, default) | quality (opus/opus/sonnet) | budget (sonnet/sonnet/haiku)
-#                            | custom (asks; terminal only). Order: default / strong / fast tier.
+#   --models <preset>        balanced (sonnet/opus/haiku/claude-fable-5-2, the shipped defaults) | quality
+#                            (opus/opus/sonnet/claude-fable-5-2) | budget (sonnet/sonnet/haiku/opus). Order: default / strong / fast / heavy.
+#   --model-default|--model-strong|--model-fast|--model-heavy <alias or model ID>
+#                            one tier, over the preset. In a terminal it asks every tier no flag set (Enter keeps the
+#                            value shown); a tier set before is never changed unless asked or flagged.
 #   --global-rules           use the author's global rules (global/CLAUDE.md): a link when there is no ~/.claude/CLAUDE.md,
 #                            else one import line appended to it. --no-global-rules removes either.
 #   --dev / --no-dev         maintainer only: link /orca-update-review (run by hand after an Orca update)
@@ -31,12 +34,17 @@ CHANGES=""
 changed() { CHANGES="$CHANGES
   - $*"; }
 
-YES=0 MODELS="" RULES="" DEV="" MODE=install CUSTOM=""
+MODEL_RE='^[][A-Za-z0-9._:@/-]+$' # a model alias or ID, e.g. opus, opus[1m], claude-fable-5-2
+YES=0 MODELS="" RULES="" DEV="" MODE=install M_DEFAULT="" M_STRONG="" M_FAST="" M_HEAVY=""
 while [ $# -gt 0 ]; do
   case $1 in
     --yes) YES=1 ;;
     --models) MODELS=${2:-}; shift
-      case $MODELS in balanced | quality | budget | custom) ;; *) warn "--models: balanced, quality, budget or custom (got '$MODELS')"; exit 2 ;; esac ;;
+      case $MODELS in balanced | quality | budget) ;; *) warn "--models: balanced, quality or budget (got '$MODELS')"; exit 2 ;; esac ;;
+    --model-default | --model-strong | --model-fast | --model-heavy)
+      t=$(echo "${1#--model-}" | tr a-z A-Z); v=${2:-}; shift
+      [[ $v =~ $MODEL_RE ]] || { warn "$1 needs a model alias or ID (got '$v')"; exit 2; }
+      eval "M_$t=\$v" ;;
     --global-rules) RULES=on ;;
     --no-global-rules) RULES=off ;;
     --dev) DEV=1 ;;
@@ -49,7 +57,6 @@ while [ $# -gt 0 ]; do
 done
 INTERACTIVE=0
 if [ "$YES" = 0 ] && { [ "${AW_INSTALL_INTERACTIVE:-0}" = 1 ] || { [ -t 0 ] && [ -t 1 ]; }; }; then INTERACTIVE=1; fi
-[ "$MODELS" != custom ] || [ "$INTERACTIVE" = 1 ] || { warn "--models custom asks for the three models: run it in a terminal without --yes"; exit 2; }
 
 ask() { # ask <question> <default>: the answer (empty = default); the prompt goes to stderr
   local a
@@ -187,16 +194,38 @@ if [ -z "$RULES" ]; then
   [ "$r" = off ] && RULES=off || RULES=on
 fi
 
+# Model tiers in the order of the presets and the questions; shipped defaults come from lib.sh.
+TIERS="DEFAULT STRONG FAST HEAVY"
+tier_default() { (wf_defaults; eval "echo \$WF_MODEL_$1"); }
+tier_use() {
+  case $1 in
+    DEFAULT) echo "normal lead, design and fix workers" ;;
+    STRONG) echo "coordinators, reviewers" ;;
+    FAST) echo "mechanical subagents" ;;
+    HEAVY) echo "new features, bigger UI changes, complex technical work; no Fable access: opus" ;;
+  esac
+}
+tier_get() { eval "echo \$M_$1"; }
+case $MODELS in
+  balanced) p="sonnet opus haiku claude-fable-5-2" ;;
+  quality) p="opus opus sonnet claude-fable-5-2" ;;
+  budget) p="sonnet sonnet haiku opus" ;;
+  *) p="" ;;
+esac
+if [ -n "$p" ]; then
+  # shellcheck disable=SC2086
+  set -- $p
+  for t in $TIERS; do [ -n "$(tier_get "$t")" ] || eval "M_$t=\$1"; shift; done
+fi
+
 if [ "$INTERACTIVE" = 1 ]; then
-  cur=""; [ -n "$(recorded WF_MODEL_DEFAULT)" ] && cur=", now $(recorded WF_MODEL_DEFAULT)/$(recorded WF_MODEL_STRONG)/$(recorded WF_MODEL_FAST)"
-  say "Models per tier (default / strong / fast$cur):"
-  say "  balanced = sonnet/opus/haiku, quality = opus/opus/sonnet, budget = sonnet/sonnet/haiku, custom = you name them"
-  if [ -z "$MODELS" ]; then
-    if [ -n "$(recorded WF_MODEL_DEFAULT)" ]; then def=keep; else def=balanced; fi
-    MODELS=$(ask "Models ($([ "$def" = keep ] && printf 'keep, ')balanced, quality, budget, custom)" "$def")
-    [ "$MODELS" = keep ] && MODELS=""
-  fi
-  [ "$MODELS" != custom ] || CUSTOM="$(ask "  Default tier" "$(rec_or WF_MODEL_DEFAULT sonnet)") $(ask "  Strong tier" "$(rec_or WF_MODEL_STRONG opus)") $(ask "  Fast tier" "$(rec_or WF_MODEL_FAST haiku)")"
+  say "Models per tier (a Claude Code alias or a full model ID; Enter keeps the value in brackets):"
+  for t in $TIERS; do
+    [ -z "$(tier_get "$t")" ] || continue
+    a=$(ask "  $(echo "$t" | tr A-Z a-z) ($(tier_use "$t"))" "$(rec_or "WF_MODEL_$t" "$(tier_default "$t")")")
+    [[ $a =~ $MODEL_RE ]] || { warn "not a model alias or ID: '$a' (nothing changed; run install.sh again)"; exit 2; }
+    eval "M_$t=\$a"
+  done
   say ""
   say "Global rules (global/CLAUDE.md, the author's habits for every project):"
   grep '^## ' "$ROOT/global/CLAUDE.md" | sed 's/^## /  - /'
@@ -205,20 +234,10 @@ if [ "$INTERACTIVE" = 1 ]; then
   say ""
 fi
 
-case $MODELS in
-  balanced) m="sonnet opus haiku" ;;
-  quality) m="opus opus sonnet" ;;
-  budget) m="sonnet sonnet haiku" ;;
-  custom) m=$CUSTOM ;;
-  *) m="" ;;
-esac
-[ -n "$m" ] || [ -n "$(recorded WF_MODEL_DEFAULT)" ] || m="sonnet opus haiku"
-if [ -n "$m" ]; then
-  # shellcheck disable=SC2086
-  set -- $m
-  [ $# = 3 ] || { warn "three models expected (default strong fast), got '$m'"; exit 2; }
-  set_setting WF_MODEL_DEFAULT "$1"; set_setting WF_MODEL_STRONG "$2"; set_setting WF_MODEL_FAST "$3"
-fi
+for t in $TIERS; do # a flag, preset or answer; else the recorded value stays; else the shipped default
+  v=$(tier_get "$t"); [ -n "$v" ] || [ -n "$(recorded "WF_MODEL_$t")" ] || v=$(tier_default "$t")
+  [ -z "$v" ] || set_setting "WF_MODEL_$t" "$v"
+done
 
 mkdir -p "$CLAUDE_DIR/skills"
 for skill in "$ROOT"/skills/*/; do

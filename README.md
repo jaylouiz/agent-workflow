@@ -24,10 +24,10 @@ cd <your repo> && claude             # then: /init-issue-workflow
 
 `install.sh` links every `skills/*` into `~/.claude/skills/` (or `$CLAUDE_CONFIG_DIR/skills/`) and this checkout to `~/.claude/agent-workflow` (the skills read `reference/` through it). In a terminal it asks two things and records the answers in `~/.claude/agent-workflow-settings.sh`:
 
-- **Models**: `balanced` (sonnet / opus / haiku for the default / strong / fast tier, the default), `quality` (opus / opus / sonnet), `budget` (sonnet / sonnet / haiku) or `custom`.
+- **Models**: one per tier, default / strong / fast / heavy (what each runs: [Settings](#settings)), each a Claude Code alias or a full model ID; Enter keeps the value shown (the one you set before, else the shipped `sonnet` / `opus` / `haiku` / `claude-fable-5-2`). No Fable access: answer `opus` for heavy. Without prompts: `--models balanced` (the shipped values), `quality` (opus / opus / sonnet / claude-fable-5-2) or `budget` (sonnet / sonnet / haiku / opus), and `--model-default|strong|fast|heavy <id>` per tier over the preset.
 - **Global rules**: the author's [global/CLAUDE.md](global/CLAUDE.md) (inbox issues for side findings, `/wayfinder` for vague goals, the friction ledger and retro, screening several issues first, committing without asking). Off by default. On: linked as `~/.claude/CLAUDE.md`, or, when you have your own, one import line `@~/.claude/agent-workflow/global/CLAUDE.md` appended to it (a timestamped backup is kept).
 
-Rerun it after `git pull` or after adding, renaming or removing a skill: without a terminal (or with `--yes`) it keeps every recorded choice. It never overwrites a real file where a link belongs. Flags: `--yes`, `--models <preset>`, `--global-rules` / `--no-global-rules`, `--check`, `--uninstall` (removes the links and the global rules, keeps the settings file). Edit skills in this repo only.
+Rerun it after `git pull` or after adding, renaming or removing a skill: without a terminal (or with `--yes`) it keeps every recorded choice. It never overwrites a real file where a link belongs. A rerun never changes a tier you set unless you answer or flag a new value. Flags: `--yes`, `--models <preset>`, `--model-<tier> <id>`, `--global-rules` / `--no-global-rules`, `--check`, `--uninstall` (removes the links and the global rules, keeps the settings file). Edit skills in this repo only.
 
 Maintainer only: `--dev` also links `/orca-update-review`, which the maintainer runs by hand after an Orca update: it reviews the new version against this workflow (`skills/orca-update-review/snapshot/version`) and asks before it changes anything. Users get the result through `git pull`. No SessionStart hook: every install run removes the retired Orca update check from `settings.json` (backup `settings.json.bak`); an install from before `--dev` existed that still has it counts as `--dev`.
 
@@ -41,9 +41,10 @@ Choices that differ per person or project live in two sourced bash files, read i
 
 | Setting | Default | Usually set | What it does |
 |---|---|---|---|
-| `WF_MODEL_DEFAULT` | `sonnet` | global | lead, design, fix and delta-review workers; Design's tech check; the retro agent |
-| `WF_MODEL_STRONG` | `opus` | global | reviewer workers, the one root-cause subagent of a stuck lead |
+| `WF_MODEL_DEFAULT` | `sonnet` | global | normal lead, design and fix workers; Design's tech check; the retro agent |
+| `WF_MODEL_STRONG` | `opus` | global | coordinators, reviewer and delta-review workers, the one root-cause subagent of a stuck lead |
 | `WF_MODEL_FAST` | `haiku` | global | mechanical subagents (`rg` audits, copy sweeps) |
+| `WF_MODEL_HEAVY` | `claude-fable-5-2` | global | lead and design workers for a new feature, a bigger UI change or complex technical work |
 | `WF_MAX_WORKERS` | `3` | global or repo | concurrent Orca workers in a Run |
 | `WF_DIGEST_CAP` | `2h` | global or repo | how long the oldest unannounced decision request waits for the digest |
 | `WF_COMMENT_CAP` | `1500` | global | visible characters per agent issue comment |
@@ -51,7 +52,7 @@ Choices that differ per person or project live in two sourced bash files, read i
 | `WF_NO_WAIT_CI` | `0` | global or repo | `1`: merge prep does not wait for pending checks |
 | `WF_PORTS`, `WF_RISK_GLOBS`, `WF_IGNORE_GLOBS`, `WF_REVIEW_LINES`, `WF_HOLD_LABELS`, `WF_REQUIRED_CHECKS`, `WF_CHECKS_TSV`, `wf_*` functions | see the template | repo | ports, review routing, holds, CI gate, verify / build / after-merge steps |
 
-`WF_COMMENT_CAP` and `WF_ISSUE_LOG_DIR` may also come from the environment, which wins. Fixed on purpose: label names and colours (clients such as Tandem read them), the retro thresholds and the CI wait windows.
+The model tiers are written by `install.sh`; a repo may override one in its `.claude/issue-workflow.sh` (e.g. `WF_MODEL_HEAVY=opus`). `WF_COMMENT_CAP` and `WF_ISSUE_LOG_DIR` may also come from the environment, which wins. Fixed on purpose: label names and colours (clients such as Tandem read them), the retro thresholds and the CI wait windows.
 
 ## Vocabulary
 

@@ -33,6 +33,8 @@ check "fresh: no orca-update-review link" '[ ! -e "$C/skills/orca-update-review"
 check "fresh: checkout linked" '[ "$(readlink "$C/agent-workflow")" = "$ROOT" ]'
 eq "fresh: default model" "$(setting WF_MODEL_DEFAULT)" sonnet
 eq "fresh: strong model" "$(setting WF_MODEL_STRONG)" opus
+eq "fresh: fast model" "$(setting WF_MODEL_FAST)" haiku
+eq "fresh: heavy model" "$(setting WF_MODEL_HEAVY)" claude-fable-5-2
 eq "fresh: dev off" "$(setting WF_INSTALL_DEV)" 0
 eq "fresh: rules off" "$(setting WF_INSTALL_GLOBAL_RULES)" off
 check "fresh: no CLAUDE.md" '[ ! -e "$C/CLAUDE.md" ]'
@@ -72,6 +74,22 @@ eq "quality: default" "$(setting WF_MODEL_DEFAULT)" opus
 eq "quality: fast" "$(setting WF_MODEL_FAST)" sonnet
 run --yes; eq "quality kept on rerun" "$(setting WF_MODEL_DEFAULT)" opus
 run --yes --models nope; eq "unknown preset: exit 2" "$?" 2
+run --yes --models custom; eq "custom is no preset (the terminal asks every tier): exit 2" "$?" 2
+new; run --yes --models budget; eq "budget: heavy maps to opus" "$(setting WF_MODEL_HEAVY)" opus
+
+# per-tier flags win over the preset; a rerun never overwrites a set tier; an install from before the heavy tier gets it
+new; run --yes --models quality --model-heavy opus --model-fast haiku
+eq "flag over preset: heavy" "$(setting WF_MODEL_HEAVY)" opus
+eq "flag over preset: fast" "$(setting WF_MODEL_FAST)" haiku
+eq "preset where no flag: default" "$(setting WF_MODEL_DEFAULT)" opus
+run --yes; eq "rerun keeps the flagged heavy tier" "$(setting WF_MODEL_HEAVY)" opus
+run --yes --model-strong claude-opus-5-5; eq "one flag changes one tier" "$(setting WF_MODEL_STRONG)" claude-opus-5-5
+eq "one flag leaves the others" "$(setting WF_MODEL_HEAVY)" opus
+run --yes --model-heavy 'op us'; eq "bad model id: exit 2" "$?" 2
+eq "bad model id: nothing changed" "$(setting WF_MODEL_HEAVY)" opus
+new; printf 'WF_MODEL_DEFAULT=haiku\nWF_MODEL_STRONG=sonnet\nWF_MODEL_FAST=haiku\n' >"$C/agent-workflow-settings.sh"; run --yes
+eq "old install: tiers kept" "$(setting WF_MODEL_STRONG)" sonnet
+eq "old install: heavy added" "$(setting WF_MODEL_HEAVY)" claude-fable-5-2
 
 # global rules: link when there is no CLAUDE.md, import line into a real one
 new; run --yes --global-rules
@@ -94,25 +112,36 @@ check "real dir: left alone and named" '[ -d "$C/skills/build-gh-issue" ] && [ !
 new; mkdir -p "$C/skills"; ln -s "$ROOT/skills/gone-skill" "$C/skills/gone-skill"; run --yes
 check "stale link removed" '[ ! -L "$C/skills/gone-skill" ]'
 
-# interactive answers: budget models, no global rules
-new; printf 'budget\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1
-eq "interactive: budget strong" "$(setting WF_MODEL_STRONG)" sonnet
+# interactive answers: one per tier (default, strong, fast, heavy), then the global rules
+new; printf 'sonnet\nsonnet\n\nopus\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1
+eq "interactive: strong answered" "$(setting WF_MODEL_STRONG)" sonnet
+eq "interactive: Enter takes the default (fast)" "$(setting WF_MODEL_FAST)" haiku
+eq "interactive: heavy answered" "$(setting WF_MODEL_HEAVY)" opus
+check "interactive: heavy prompt names the opus fallback" 'grep -q "heavy (.*no Fable access: opus) \[claude-fable-5-2\]" "$T/out"'
+printf '\n\n\n\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1
+check "interactive rerun shows the set value" 'grep -q "heavy (.*) \[opus\]" "$T/out"'
+eq "interactive rerun: Enter keeps it" "$(setting WF_MODEL_HEAVY)" opus
+printf '\n\n\n\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" --model-heavy claude-fable-5-2 >"$T/out" 2>&1
+check "interactive: a flagged tier is not asked" '! grep -q "heavy (" "$T/out"'
+eq "interactive: the flag sets it" "$(setting WF_MODEL_HEAVY)" claude-fable-5-2
 eq "interactive: rules off" "$(setting WF_INSTALL_GLOBAL_RULES)" off
 check "interactive: shows the rule headings" 'grep -q "Out-of-scope opportunities" "$T/out"'
 
-# custom models with the template copied as the settings file (no active model lines): Enter takes the defaults
+# the template copied as the settings file (no active model lines): Enter takes the defaults, uncommented
 new; cp "$ROOT/reference/global-settings.sh" "$C/agent-workflow-settings.sh"
-printf 'custom\n\n\n\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1; rc=$?
+printf '\n\n\n\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1; rc=$?
 eq "custom from the template: exit 0" "$rc" 0
 eq "custom from the template: default tier" "$(setting WF_MODEL_DEFAULT)" sonnet
 eq "custom from the template: fast tier" "$(setting WF_MODEL_FAST)" haiku
+eq "custom from the template: heavy tier" "$(setting WF_MODEL_HEAVY)" claude-fable-5-2
+eq "custom from the template: heavy written once" "$(grep -c 'WF_MODEL_HEAVY=' "$C/agent-workflow-settings.sh")" 1
 check "custom from the template: skills linked" '[ -L "$C/skills/build-gh-issue" ]'
 
 # a template line uncommented as the template says (value plus trailing comment) reads as the bare value
 new; printf 'WF_MODEL_DEFAULT=opus     # lead workers\nWF_MODEL_STRONG=opus\nWF_MODEL_FAST=haiku\n' >"$C/agent-workflow-settings.sh"
-printf 'custom\n\n\n\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1
+printf '\n\n\n\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1
 eq "uncommented line: kept as the bare value" "$(sed -n 's/^WF_MODEL_DEFAULT=\([a-z]*\).*/\1/p' "$C/agent-workflow-settings.sh")" opus
-check "uncommented line: header shows the bare value" 'grep -qF "now opus/opus/haiku" "$T/out"'
+check "uncommented line: prompt shows the bare value" 'grep -qF "default (normal lead, design and fix workers) [opus]" "$T/out"'
 
 # --check: missing jq fails and changes nothing
 new; CLAUDE_CONFIG_DIR=$C PATH="$T/bin" bash "$ROOT/install.sh" --check >"$T/out" 2>&1; rc=$?

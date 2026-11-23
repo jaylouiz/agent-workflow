@@ -9,6 +9,7 @@
 
 WF_PORTS=3101-3105                    # dev-server/E2E ports, one per concurrent worker (spec.sh)
 # WF_MAX_WORKERS=3                    # concurrent workers in the Run; usually set globally, here only to differ
+# WF_MODEL_HEAVY=opus                 # any WF_MODEL_* tier (install.sh sets them globally), here only to differ
 WF_RISK_GLOBS=()                      # quoted globs, e.g. ('store/**' 'server/**'): PRs touching them get a separate reviewer; ** = any depth
 WF_IGNORE_GLOBS=(package-lock.json)   # not counted for the diff-size route
 WF_REVIEW_LINES=400                   # changed lines above which the route is reviewer

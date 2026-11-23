@@ -44,9 +44,13 @@ check "review has by line" 'printf "%s" "$out3" | grep -qF "by: opus"'
 check "review names PR and worktree" 'printf "%s" "$out3" | grep -qF "PR #42" && printf "%s" "$out3" | grep -qF "/x/wt"'
 check "no-port gives no PORT line" '! printf "%s" "$out3" | grep -q "^PORT="'
 
-# Model tiers come from the settings (defaults sonnet / opus / haiku; review defaults to the strong tier).
+# Model tiers come from the settings (defaults sonnet / opus / haiku; review and delta-review default to the strong tier).
 out7=$(bash "$DIR/spec.sh" review 9 --pr 42 --wt /x --no-port --ledger "$T/ledger" 2>&1)
 check "review defaults to strong" 'printf "%s" "$out7" | grep -qF "by: opus"'
+out7d=$(bash "$DIR/spec.sh" delta-review 9 --pr 42 --wt /x --no-port --ledger "$T/ledger" 2>&1)
+check "delta-review defaults to strong" 'printf "%s" "$out7d" | grep -qF "by: opus"'
+out7f=$(bash "$DIR/spec.sh" delta-review 9 --pr 42 --wt /x --no-port --model claude-fable-5-2 --ledger "$T/ledger" 2>&1)
+check "--model takes a full model ID (heavy tier)" 'printf "%s" "$out7f" | grep -qF "by: claude-fable-5-2"'
 printf 'WF_MODEL_STRONG=fable\nWF_MODEL_FAST=sonnet\n' >"$WF_GLOBAL_SETTINGS"
 out8=$(bash "$DIR/spec.sh" lead 15 --no-port --ledger "$T/ledger" 2>&1)
 check "lead names the strong tier" 'printf "%s" "$out8" | grep -qF "model: fable" && ! printf "%s" "$out8" | grep -qF "model: opus"'

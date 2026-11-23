@@ -53,7 +53,7 @@ Before creating the Run or any Task, read every in-scope issue yourself (`gh iss
 A hand-off of about 7 or more issues (more leads than one round of `WF_MAX_WORKERS`), or one the user asks to split, runs as **waves**, so the stages of early issues do not pile up in your context. You are then the **main coordinator**: you screen (1b), cut the plan into waves, and per wave start one **wave coordinator**, an Orca worker that runs this whole skill for its issues with its own Run. You start no stage workers, read no worker mail but the wave reports, and merge nothing.
 
 - **Cut**: a wave is what one coordinator can hold, about 4-6 leads or design rounds. Wave 1 takes Design rounds (they need the user soonest), quick wins and the inbox triage; issues that overlap a wave's batches, or share a risk area with them, go into a later wave. Post the wave plan to the user, then start wave 1 without waiting.
-- **Start**: fill `wave-template.md` into a file and run `orca orchestration worker-start --environment local --spec-file <file> --task-title "Wave <k> coordinator: #a #b …" --worktree current --agent claude` (pass `--model <your own model alias>`: without it Orca starts sonnet at medium effort, not your model). One wave at a time: they share the main checkout, the ports and the merge order. Then end your turn.
+- **Start**: fill `wave-template.md` into a file and run `orca orchestration worker-start --environment local --spec-file <file> --task-title "Wave <k> coordinator: #a #b …" --worktree current --agent claude` (pass `--model` the strong tier, `settings.sh get WF_MODEL_STRONG`: without it Orca starts sonnet at medium effort). One wave at a time: they share the main checkout, the ports and the merge order. Then end your turn.
 - **While it runs**: an `escalation` "stopped without reporting" from a wave coordinator is its own end of turn between wakes: leave it, unless its last output shows it is stuck (read it with `orca agent read <id> --limit 5`, the `orca_session_id:` from `orca agent list --worktree path:<its worktree>`). An answer the user gives you goes onto the issue (`decide.sh note` or `answer`) and to the coordinator with `send`; a `question` from it is answered as section 5 says.
 - **Between waves**: read the `worker_done` report, relay it to the user in short, and build the next wave from what is left: the planned issues, issues whose parked decision is now answered, and the new `inbox` issues the report lists (the next coordinator triages them; one that needs the user first stays parked). Ask the user the parked questions (`AskUserQuestion`) after starting the next wave, never instead of it. Repeat until nothing runnable is left: follow-up waves for new inbox issues need no new go from the user.
 - **End**: check the default branch's last CI run and deploy yourself (a background `gh run watch`, never a poll loop), then the final report of section 7 from the wave reports: per wave the merged PRs, then what waits on the user. Retros ran per wave; you run none unless your own ledger is due.
@@ -72,18 +72,18 @@ One Run for the whole hand-off (`run-create --environment local --objective "Iss
 
 ## 3. Models per role
 
-All workers use `--agent claude` with a model alias; every spec names its tier and a one-line reason (`--tier`). User decision 2026-11-02 (agent-workflow#3):
+All workers use `--agent claude` with a model alias; every spec names its tier and a one-line reason (`--tier`). User decisions 2026-11-02 (agent-workflow#3) and 2026-11-23 (model policy):
 
 | Role | Tier (`settings.sh`; defaults) |
 | --- | --- |
-| Coordinator | the user's session |
-| Lead | default (`WF_MODEL_DEFAULT`, sonnet); risk area (`WF_RISK_GLOBS`) or cross-cutting: default `--effort high` |
-| Reviewer worker (route `reviewer`) | strong (`WF_MODEL_STRONG`, opus) |
+| Coordinator (the user's session; wave coordinators get `--model` this) | strong (`WF_MODEL_STRONG`, opus) |
+| Lead or Design worker for a new feature, a bigger UI change (a new screen or flow; its Design variants count) or complex technical work (cross-cutting, risk area `WF_RISK_GLOBS`, size L) | heavy (`WF_MODEL_HEAVY`, claude-fable-5-2) |
+| Lead or Design worker otherwise; fix workers | default (`WF_MODEL_DEFAULT`, sonnet) |
+| Reviewer (route `reviewer`) and delta-review workers | strong |
 | Root-cause subagent inside a lead stuck > 15 min | strong, at most one per issue (the lead's own `Agent` call) |
 | Mechanical subagents (`rg` audits, copy sweeps) | fast (`WF_MODEL_FAST`, haiku) |
-| Design, fix and delta-review workers | default |
 
-No other worker runs the strong tier unless the user says so for the run. A worker may request an upgrade via `ask`; you decide.
+Pass the row's alias to both `spec.sh --model` and worker-start `--model`; a batch takes its biggest issue's row. Another tier only when the user says so or a worker's `ask` makes the case; you decide.
 
 ## 4. Task specs
 
