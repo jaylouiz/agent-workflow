@@ -2,7 +2,7 @@
 # Print a complete Orca task spec for one issue and stage, from task-template.md (orchestrate-gh-issues section 4).
 #
 #   spec.sh <lead|design|review|delta-review|fix> <issue> --ledger <run ledger dir>
-#           [--tier <text>] [--model <alias>: default the settings' WF_MODEL_STRONG for review and delta-review, else WF_MODEL_DEFAULT] [--branch <b>] [--pr <n>] [--wt <path>] [--extra <file>] [--no-port] [--interactive]
+#           [--tier <text>] [--model <alias>: default the settings' WF_MODEL_STRONG for review and delta-review, else WF_MODEL_DEFAULT] [--branch <b>] [--pr <n>] [--wt <path>] [--extra <file>] [--batch <n,m,...>: lead only, the other issues of a batch] [--no-port] [--interactive]
 #   spec.sh release-port <port> --ledger <dir>     drop a reservation when its worker settled
 #
 # Assigns the first port in the project's WF_PORTS (.claude/issue-workflow.sh) that is neither listening nor
@@ -18,7 +18,7 @@ die() { echo "spec.sh: $*" >&2; exit 64; }
 stage=${1:-}; n=${2:-}
 [ -n "$stage" ] && [ -n "$n" ] || { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 64; }
 shift 2
-tier="Standard - default"; model=""; branch=""; pr=""; wt=""; ledger=""; extra=""; want_port=1; interactive=0
+tier="Standard - default"; model=""; branch=""; pr=""; wt=""; ledger=""; extra=""; want_port=1; interactive=0; batch=""
 while [ $# -gt 0 ]; do
   case "$1" in --no-port|--interactive) ;; --*) case "${2-}" in ""|--*) die "$1 needs a value, got '${2-}' (an empty unquoted variable is dropped by zsh)" ;; esac ;; esac
   case "$1" in
@@ -29,6 +29,7 @@ while [ $# -gt 0 ]; do
     --wt) wt=${2:?}; shift 2 ;;
     --ledger) ledger=${2:?}; shift 2 ;;
     --extra) [ -r "$2" ] || die "--extra file not readable: $2 (a spec without its notes would go out silently)"; extra="$extra $2"; shift 2 ;;
+    --batch) batch=${2:?}; shift 2 ;;
     --no-port) want_port=0; shift ;;
     --interactive) interactive=1; shift ;;
     *) die "unknown flag $1" ;;
@@ -89,6 +90,11 @@ out = block("common") + block("stage:" + os.environ["STAGEKEY"])
 out = re.sub(r"\{\{([A-Z_]+)\}\}", lambda m: os.environ.get(m.group(1), m.group(0)), out)
 sys.stdout.write(out)
 ' "$DIR/task-template.md"
+if [ -n "$batch" ]; then
+  [ "$stage" = lead ] || die "--batch is for the lead stage only"
+  b=$(printf "%s" "$batch" | tr ',' ' ' | sed 's/[^0-9 ]//g; s/ \{1,\}/, #/g; s/^/#/')
+  echo "BATCH: this lead owns #$n and also $b, one branch, one PR with a \`Closes\` line for each. Run every step above for each issue in turn (Specify if needed, Build); done only when the PR closes all of them. Skipping one is a failed task."
+fi
 [ -n "$extra" ] && { echo "Notes:"; for x in $extra; do cat "$x"; echo; done; }
 [ -n "$port" ] && echo "PORT=$port"
 exit 0
