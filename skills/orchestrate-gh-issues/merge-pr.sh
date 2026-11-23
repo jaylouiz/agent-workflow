@@ -195,7 +195,7 @@ case "$cmd" in
       fi
     fi
     # a worktree with its own node_modules misses dependencies the merge brought in (verify: command not found)
-    if [ $behind = 1 ] && wf_has wf_install && git -C "$wt" diff --name-only "$premerge" HEAD | grep -qx package.json; then
+    if [ $behind = 1 ] && wf_has wf_install && git -C "$wt" diff --name-only "$premerge" HEAD | grep -qxE 'package(-lock)?\.json'; then
       (cd "$wt" && wf_run wf_install) || die "dependency install failed in $wt (nothing pushed)"
     fi
     if [ $behind = 1 ] || [ $unpushed = 1 ]; then # the head GitHub merges must be the verified one
