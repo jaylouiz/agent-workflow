@@ -9,9 +9,9 @@
 #                            | custom (asks; terminal only). Order: default / strong / fast tier.
 #   --global-rules           use the author's global rules (global/CLAUDE.md): a link when there is no ~/.claude/CLAUDE.md,
 #                            else one import line appended to it. --no-global-rules removes either.
-#   --dev / --no-dev         maintainer only: link /orca-update-review and register its SessionStart hook (Orca update check)
+#   --dev / --no-dev         maintainer only: link /orca-update-review (run by hand after an Orca update)
 #   --check                  only check the requirements; exit 1 when a required tool is missing
-#   --uninstall              remove the links, the dev hook and the global rules; keeps the settings file
+#   --uninstall              remove the links and the global rules; keeps the settings file
 #
 # A real file or directory where a link belongs is left alone and reported: the script never overwrites.
 set -uo pipefail
@@ -22,7 +22,6 @@ CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 . "$ROOT/skills/orchestrate-gh-issues/lib.sh"
 SETTINGS_FILE=$(wf_global_settings)
 JSON="$CLAUDE_DIR/settings.json"
-CHECK="$CLAUDE_DIR/skills/orca-update-review/check.sh"
 CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
 case "$CLAUDE_DIR/" in "$HOME"/*) IMPORT="@~${CLAUDE_DIR#"$HOME"}/agent-workflow/global/CLAUDE.md" ;; *) IMPORT="@$CLAUDE_DIR/agent-workflow/global/CLAUDE.md" ;; esac
 
@@ -124,7 +123,7 @@ open(path, "w", encoding="utf-8").write("\n".join(lines))
 PY
 }
 
-# --- the dev hook (Orca update check) ---
+# --- the retired Orca update check hook: older installs registered it in settings.json; every run takes it out ---
 has_hook() { [ -f "$JSON" ] && grep -q 'orca-update-review/check.sh' "$JSON"; }
 json_edit() { # json_edit <jq filter> [args]: rewrite settings.json, backup first
   local tmp; tmp=$(mktemp)
@@ -133,14 +132,6 @@ json_edit() { # json_edit <jq filter> [args]: rewrite settings.json, backup firs
   else
     rm -f "$tmp"; warn "could not update $JSON"; return 1
   fi
-}
-add_hook() {
-  [ -f "$JSON" ] || echo '{}' >"$JSON"
-  has_hook && return 0
-  command -v jq >/dev/null 2>&1 || { warn "jq missing: Orca update check not registered"; return 0; }
-  json_edit --arg c "bash \"$CHECK\"" \
-    '.hooks.SessionStart = ((.hooks.SessionStart // []) + [{"matcher": "startup|clear", "hooks": [{"type": "command", "command": $c, "timeout": 30}]}])' \
-    && changed "registered the Orca update check (SessionStart)"
 }
 remove_hook() {
   has_hook || return 0
@@ -190,7 +181,7 @@ requirements; say ""
 
 # Choices: flag, else the recorded one, else what is on disk (machines installed before choices were recorded), else default.
 [ -n "$DEV" ] || DEV=$(recorded WF_INSTALL_DEV)
-[ -n "$DEV" ] || { has_hook && DEV=1 || DEV=0; }
+[ -n "$DEV" ] || { has_hook && DEV=1 || DEV=0; } # a leftover hook marks the maintainer
 if [ -z "$RULES" ]; then
   r=$(recorded WF_INSTALL_GLOBAL_RULES); [ -n "$r" ] || r=$(rules_state)
   [ "$r" = off ] && RULES=off || RULES=on
@@ -242,7 +233,7 @@ for path in "$CLAUDE_DIR"/skills/*; do
 done
 link "$ROOT" "$CLAUDE_DIR/agent-workflow"
 
-if [ "$DEV" = 1 ]; then add_hook; else remove_hook; fi
+remove_hook
 if [ "$RULES" = on ]; then rules_on; else rules_off; fi
 set_setting WF_INSTALL_DEV "$DEV"
 set_setting WF_INSTALL_GLOBAL_RULES "$(rules_state)"

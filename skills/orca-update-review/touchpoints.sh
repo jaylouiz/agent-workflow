@@ -5,7 +5,7 @@
 # Scanned: this repo's skills/ and reference/, plus the .claude dir of every checkout next to this one (hooks, rules, skills,
 # issue-workflow.*). Extra dirs: ORCA_TOUCHPOINT_DIRS (colon-separated).
 set -uo pipefail
-# -P: called through the ~/.claude/skills/<skill> symlink (the SessionStart hook does), a logical path makes ROOT ~/.claude,
+# -P: called through the ~/.claude/skills/<skill> symlink (as a session runs the skill), a logical path makes ROOT ~/.claude,
 # whose skills/ holds only symlinks grep -r does not follow: an empty scan that reads as "all unchanged".
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 ROOT=$(cd "$DIR/../.." && pwd -P)

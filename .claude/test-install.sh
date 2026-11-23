@@ -41,25 +41,26 @@ check "fresh: says what is next" 'grep -q "/init-issue-workflow" "$T/out"'
 run --yes
 eq "fresh: rerun keeps one WF_MODEL_DEFAULT line" "$(grep -c '^WF_MODEL_DEFAULT=' "$C/agent-workflow-settings.sh")" 1
 
-# dev mode: link and hook, once; --no-dev takes both away
+# dev mode: the skill link only, never a SessionStart hook; --no-dev takes the link away
 new; echo '{}' >"$C/settings.json"; run --yes --dev
 check "dev: orca-update-review linked" '[ -L "$C/skills/orca-update-review" ]'
-eq "dev: one hook" "$(hooks)" 1
+eq "dev: no hook" "$(hooks)" 0
 eq "dev: recorded" "$(setting WF_INSTALL_DEV)" 1
-run --yes --dev; eq "dev: rerun keeps one hook" "$(hooks)" 1
-run; eq "dev: unattended rerun keeps the hook" "$(hooks)" 1
+run; check "dev: unattended rerun keeps the link" '[ -L "$C/skills/orca-update-review" ]'
+eq "dev: rerun adds no hook" "$(hooks)" 0
 run --no-dev
-eq "no-dev: hook removed" "$(hooks)" 0
 check "no-dev: link removed" '[ ! -e "$C/skills/orca-update-review" ] && [ ! -L "$C/skills/orca-update-review" ]'
-check "no-dev: settings.json backup" '[ -f "$C/settings.json.bak" ]'
 eq "no-dev: recorded" "$(setting WF_INSTALL_DEV)" 0
 
-# migration: the maintainer's machine before this change (hook, CLAUDE.md link, no settings file), unattended
+# migration: the maintainer's machine with the retired hook (next to another SessionStart hook), CLAUDE.md link, no
+# settings file, unattended: the hook goes, the other hook and dev mode stay
 new
-jq -n --arg c "bash \"$C/skills/orca-update-review/check.sh\"" '{hooks: {SessionStart: [{matcher: "startup|clear", hooks: [{type: "command", command: $c, timeout: 30}]}]}}' >"$C/settings.json"
+jq -n --arg c "bash \"$C/skills/orca-update-review/check.sh\"" '{hooks: {SessionStart: [{matcher: "startup|clear", hooks: [{type: "command", command: $c, timeout: 30}]}, {hooks: [{type: "command", command: "echo other"}]}]}}' >"$C/settings.json"
 ln -s "$ROOT/global/CLAUDE.md" "$C/CLAUDE.md"
 run
-eq "migration keeps dev: hook" "$(hooks)" 1
+eq "migration removes the retired hook" "$(hooks)" 0
+eq "migration keeps the other hook" "$(jq '.hooks.SessionStart | length' "$C/settings.json")" 1
+check "migration: settings.json backup" '[ -f "$C/settings.json.bak" ]'
 check "migration keeps dev: link" '[ -L "$C/skills/orca-update-review" ]'
 check "migration keeps the CLAUDE.md link" '[ "$(readlink "$C/CLAUDE.md")" = "$ROOT/global/CLAUDE.md" ]'
 eq "migration records dev" "$(setting WF_INSTALL_DEV)" 1
@@ -120,7 +121,7 @@ check "check names jq" 'grep -q "jq" "$T/out"'
 check "check changes nothing" '[ -z "$(ls -A "$C")" ]'
 new; CLAUDE_CONFIG_DIR=$C PATH=$P bash "$ROOT/install.sh" --check >/dev/null 2>&1; eq "check with all tools: exit 0" "$?" 0
 
-# uninstall: links, hook and import line go, the settings file stays
+# uninstall: links and import line go, the settings file stays
 new; echo '{}' >"$C/settings.json"; echo '# mine' >"$C/CLAUDE.md"; run --yes --dev --global-rules; run --uninstall
 check "uninstall: no skill links into the checkout" '! ls -l "$C/skills" 2>/dev/null | grep -qF "$ROOT"'
 check "uninstall: no checkout link" '[ ! -L "$C/agent-workflow" ]'

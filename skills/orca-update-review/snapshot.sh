@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Records the reviewed Orca state: the installed version, the orchestration guide and the --help of every command
 # the workflow uses, into snapshot/ (committed). Run at the end of /orca-update-review, also when a version is
-# skipped: the next report then diffs against what was reviewed. Silences the SessionStart check for this version.
+# skipped: the next report then diffs against what was reviewed.
 set -uo pipefail
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$DIR/lib.sh"

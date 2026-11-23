@@ -6,7 +6,6 @@
 WF_RISK_GLOBS=(
   'skills/orchestrate-gh-issues/guard.sh'
   'skills/orchestrate-gh-issues/worker-done-stop.sh'
-  'skills/orca-update-review/check.sh'
   'global/CLAUDE.md'
   'install.sh'
 )
@@ -23,7 +22,7 @@ wf_verify() {
   done
 }
 
-# Reruns install.sh (relinks ~/.claude/skills, the global CLAUDE.md and the SessionStart hook). Tests override it.
+# Reruns install.sh (relinks ~/.claude/skills and the global CLAUDE.md). Tests override it.
 wf_install_skills() { bash "$PWD/install.sh"; }
 
 # cwd: the main checkout, which ~/.claude/skills/* point into: bring it to origin/main so merged skills go live.

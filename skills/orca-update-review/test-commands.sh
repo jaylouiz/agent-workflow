@@ -43,8 +43,8 @@ check "healthy: exit 0" '[ $rc = 0 ]'
 check "healthy: exactly the real commands" '[ "$out" = "$(printf "orca orchestration\norca orchestration check\norca orchestration send\norca skills get\norca worktree show")" ]'
 check "healthy: nothing on stderr" '[ ! -s "$T/err" ]'
 
-# --- called through a symlinked skill dir (~/.claude/skills/<skill> -> the checkout, as install.sh links it and the
-# SessionStart hook calls it): the same list, never an empty scan reported as "all unchanged"
+# --- called through a symlinked skill dir (~/.claude/skills/<skill> -> the checkout, as install.sh links it and a
+# session runs it): the same list, never an empty scan reported as "all unchanged"
 mkdir -p "$T/link/skills"; ln -s "$S" "$T/link/skills/orca-update-review"
 lout=$(bash "$T/link/skills/orca-update-review/touchpoints.sh" commands 2>"$T/err"); rc=$?
 check "symlinked: exit 0" '[ $rc = 0 ]'

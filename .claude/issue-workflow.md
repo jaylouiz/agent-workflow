@@ -17,7 +17,7 @@
 ## Risk areas
 
 - `~/.claude/skills/*` and `~/.claude/CLAUDE.md` are symlinks into the main checkout (`install.sh`): a merge changes every session of the user as soon as the main checkout is pulled (`wf_after_merge` does that). Never edit the main checkout by hand.
-- Hooks and always-loaded files (a bug breaks every session; globs in `WF_RISK_GLOBS`): `guard.sh`, `worker-done-stop.sh`, `orca-update-review/check.sh`, `global/CLAUDE.md`, `install.sh`. PRs touching them get a separate Opus reviewer.
+- Hooks and always-loaded files (a bug breaks every session; globs in `WF_RISK_GLOBS`): `guard.sh`, `worker-done-stop.sh`, `global/CLAUDE.md`, `install.sh`. PRs touching them get a separate Opus reviewer.
 - `lib.sh` is sourced by every orchestrate script; a bash-3.2-incompatible construct breaks macOS runs: run its suite with `/bin/bash` (the gate uses the `bash` on PATH).
 
 ## Branches

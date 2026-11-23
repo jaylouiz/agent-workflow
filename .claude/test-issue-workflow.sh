@@ -19,7 +19,7 @@ load() { # load <repo>
 
 # Risk globs route the live hooks to a reviewer and a plain skill doc to the lead.
 R="$T/risk"; mkdir -p "$R"; git -C "$R" init -q; load "$R" || exit 1
-for f in skills/orchestrate-gh-issues/guard.sh skills/orchestrate-gh-issues/worker-done-stop.sh skills/orca-update-review/check.sh global/CLAUDE.md install.sh; do
+for f in skills/orchestrate-gh-issues/guard.sh skills/orchestrate-gh-issues/worker-done-stop.sh global/CLAUDE.md install.sh; do
   printf '%s\n' "$f" >"$T/files"
   eq "risk $f" "$(cd "$R" && bash "$DIR/../skills/orchestrate-gh-issues/merge-pr.sh" route --files "$T/files" | awk '{print $1}')" "reviewer:"
 done
