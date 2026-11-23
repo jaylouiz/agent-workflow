@@ -2,7 +2,7 @@
 # Print a complete Orca task spec for one issue and stage, from task-template.md (orchestrate-gh-issues section 4).
 #
 #   spec.sh <lead|design|review|delta-review|fix> <issue> --ledger <run ledger dir>
-#           [--tier <text>] [--model <alias>: default the settings' WF_MODEL_STRONG for review, else WF_MODEL_DEFAULT] [--branch <b>] [--pr <n>] [--wt <path>] [--extra <file>] [--no-port] [--interactive]
+#           [--tier <text>] [--model <alias>: default the settings' WF_MODEL_STRONG for review and delta-review, else WF_MODEL_DEFAULT] [--branch <b>] [--pr <n>] [--wt <path>] [--extra <file>] [--no-port] [--interactive]
 #   spec.sh release-port <port> --ledger <dir>     drop a reservation when its worker settled
 #
 # Assigns the first port in the project's WF_PORTS (.claude/issue-workflow.sh) that is neither listening nor
@@ -46,7 +46,7 @@ case "$stage" in lead|design|review|delta-review|fix) ;; *) die "unknown stage '
 grep -q "<!-- stage:$stage -->" "$DIR/task-template.md" || die "no template block for $stage"
 
 wf_load
-if [ -z "$model" ]; then [ "$stage" = review ] && model=$WF_MODEL_STRONG || model=$WF_MODEL_DEFAULT; fi
+if [ -z "$model" ]; then case $stage in review|delta-review) model=$WF_MODEL_STRONG ;; *) model=$WF_MODEL_DEFAULT ;; esac; fi
 port=""
 if [ "$want_port" = 1 ]; then
   lo=${WF_PORTS%-*}; hi=${WF_PORTS#*-}

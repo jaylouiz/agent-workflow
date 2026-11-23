@@ -18,10 +18,13 @@ eq "path before the global file exists" "$(bash "$S" path | head -1)" "global: $
 
 reset
 eq "default strong tier" "$(bash "$S" get WF_MODEL_STRONG)" opus
+eq "default heavy tier" "$(bash "$S" get WF_MODEL_HEAVY)" claude-fable-5-2
+check "show lists the heavy tier" 'bash "$S" show | grep -q "^WF_MODEL_HEAVY=claude-fable-5-2 *(default)$"'
 eq "default digest cap" "$(bash "$S" get WF_DIGEST_CAP)" 2h
 check "show marks defaults" 'bash "$S" show | grep -q "^WF_MAX_WORKERS=3 *(default)$"'
 
-echo 'WF_MODEL_DEFAULT=opus' >"$WF_GLOBAL_SETTINGS"
+printf 'WF_MODEL_DEFAULT=opus\nWF_MODEL_HEAVY=fable\n' >"$WF_GLOBAL_SETTINGS"
+eq "global heavy tier" "$(bash "$S" get WF_MODEL_HEAVY)" fable
 eq "global over default" "$(bash "$S" get WF_MODEL_DEFAULT)" opus
 check "show marks global" 'bash "$S" show | grep -q "^WF_MODEL_DEFAULT=opus *(global)$"'
 

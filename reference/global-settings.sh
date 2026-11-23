@@ -7,9 +7,10 @@
 # Uncomment a line to change it; the value shown is the default.
 
 # --- Models (Claude Code aliases or full model IDs) ---
-# WF_MODEL_DEFAULT=sonnet     # lead, design, fix and delta-review workers; Design's tech check; the retro agent
-# WF_MODEL_STRONG=opus        # reviewer workers (route reviewer) and the one root-cause subagent of a stuck lead
+# WF_MODEL_DEFAULT=sonnet     # normal lead, design and fix workers; Design's tech check; the retro agent
+# WF_MODEL_STRONG=opus        # coordinators, reviewer and delta-review workers, the one root-cause subagent of a stuck lead
 # WF_MODEL_FAST=haiku         # mechanical subagents: rg audits, copy sweeps, PR-body checks
+# WF_MODEL_HEAVY=claude-fable-5-2  # lead and design workers for a new feature, a bigger UI change or complex technical work
 
 # --- Orchestration ---
 # WF_MAX_WORKERS=3            # concurrent workers in a Run
