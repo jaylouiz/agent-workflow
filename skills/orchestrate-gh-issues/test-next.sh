@@ -4,6 +4,7 @@ set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
+export WF_PROTO_DIR="$T/proto-serve" # never the real prototype-server registry
 mkdir -p "$T/bin" "$T/repo/.claude" "$T/ledger"; git -C "$T/repo" init -q
 cat >"$T/bin/gh" <<'EOF2'
 #!/usr/bin/env bash

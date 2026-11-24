@@ -4,6 +4,7 @@ set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
+export WF_PROTO_DIR="$T/proto-serve" # never the real prototype-server registry
 mkdir -p "$T/bin" "$T/repo/.claude" "$T/ledger"; git -C "$T/repo" init -q
 cat >"$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
@@ -33,6 +34,7 @@ p1=$(printf '%s' "$out" | sed -n 's/^PORT=//p')
 check "port assigned" '[ -n "$p1" ]'
 out2=$(bash "$DIR/spec.sh" design 8 --ledger "$T/ledger" 2>&1)
 p2=$(printf '%s' "$out2" | sed -n 's/^PORT=//p')
+check "design spec names the preview port" 'printf "%s" "$out2" | grep -Eq "preview port 31(1[1-9])"'
 check "second port differs" '[ -n "$p2" ] && [ "$p1" != "$p2" ]'
 check "reservation recorded" 'grep -q "^$p1 #7 lead" "$T/ledger/ports"'
 bash "$DIR/spec.sh" release-port "$p1" --ledger "$T/ledger"

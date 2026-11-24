@@ -12,7 +12,8 @@
 #                                  line `Open question: <what kind of answer>` instead. Format: docs/decision-format.md
 #   decide.sh record  <n> <file>   post a decision the agent made (chosen, alternatives, why, cost to switch)
 #   decide.sh answer  <n> <text> [D<k>]   post an answer the user gave elsewhere (chat) as the issue's answer
-#   decide.sh resolve <n> <text> [D<k>]   unpark: drop `needs-decision`, post "Resumed"; prints `<text>` spelled out
+#   decide.sh resolve <n> <text> [D<k>]   unpark: drop `needs-decision`, post "Resumed", stop the issue's prototype server
+#                                  (proto-serve.sh stop; its message goes to stderr); prints `<text>` spelled out
 #                                  (`1 Shell: B (footer bar) · …`) when it reads as `ok`, the answer block or `1B 2A`
 #   decide.sh followup <n> <m> [D<k>]     note that change request on #n became issue #m
 #                                  (answer/resolve/followup act on the newest decision unless D<k> is given: pass the
@@ -195,6 +196,7 @@ case "$cmd" in
       post "$1" "$tmp"; gh issue edit "$1" --remove-label needs-decision >/dev/null
       echo "resumed D$id with: $with"
       "$0" log "$1" "resumed D$id with: $with" || echo "decide.sh: coordination log not written" >&2
+      "$DIR/proto-serve.sh" stop "$1" >&2 || echo "decide.sh: prototype server not stopped (proto-serve.sh list)" >&2 # the preview need not outlive the wait
     fi
     rm -f "$tmp"
     ;;

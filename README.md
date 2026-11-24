@@ -51,7 +51,7 @@ Choices that differ per person or project live in two sourced bash files, read i
 | `WF_ISSUE_LOG_DIR` | `~/.claude/issue-logs` | global | per-issue coordination logs |
 | `WF_NO_WAIT_CI` | `0` | global or repo | `1`: merge prep does not wait for pending checks |
 | `WF_PHASE_LABELS` | `on` | global or repo | `off`: the skills stop writing `phase:design` / `phase:build`; GitHub's issue status carries the phase alone |
-| `WF_PORTS`, `WF_RISK_GLOBS`, `WF_IGNORE_GLOBS`, `WF_REVIEW_LINES`, `WF_HOLD_LABELS`, `WF_REQUIRED_CHECKS`, `WF_CHECKS_TSV`, `wf_*` functions | see the template | repo | ports, review routing, holds, CI gate, verify / build / after-merge steps |
+| `WF_PORTS`, `WF_PROTO_PORTS`, `WF_RISK_GLOBS`, `WF_IGNORE_GLOBS`, `WF_REVIEW_LINES`, `WF_HOLD_LABELS`, `WF_REQUIRED_CHECKS`, `WF_CHECKS_TSV`, `wf_*` functions | see the template | repo | ports, review routing, holds, CI gate, verify / build / after-merge steps |
 
 The model tiers are written by `install.sh`; a repo may override one in its `.claude/issue-workflow.sh` (e.g. `WF_MODEL_HEAVY=opus`). `WF_COMMENT_CAP` and `WF_ISSUE_LOG_DIR` may also come from the environment, which wins. Fixed on purpose: label names and colours (clients such as Tandem read them), the retro thresholds and the CI wait windows.
 

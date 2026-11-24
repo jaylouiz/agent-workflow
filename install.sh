@@ -12,6 +12,8 @@
 #                            value shown); a tier set before is never changed unless asked or flagged.
 #   --global-rules           use the author's global rules (global/CLAUDE.md): a link when there is no ~/.claude/CLAUDE.md,
 #                            else one import line appended to it. --no-global-rules removes either.
+#   --proto-agent            macOS: a login LaunchAgent runs `proto-serve.sh ensure`, so the prototype previews that wait on a
+#                            decision come back after a reboot. --no-proto-agent removes it. Off unless asked for or recorded.
 #   --dev / --no-dev         maintainer only: link /orca-update-review (run by hand after an Orca update)
 #   --check                  only check the requirements; exit 1 when a required tool is missing
 #   --uninstall              remove the links and the global rules; keeps the settings file
@@ -35,7 +37,7 @@ changed() { CHANGES="$CHANGES
   - $*"; }
 
 MODEL_RE='^[][A-Za-z0-9._:@/-]+$' # a model alias or ID, e.g. opus, opus[1m], claude-fable-5-2
-YES=0 MODELS="" RULES="" DEV="" MODE=install M_DEFAULT="" M_STRONG="" M_FAST="" M_HEAVY=""
+YES=0 MODELS="" RULES="" DEV="" PROTO_AGENT="" MODE=install M_DEFAULT="" M_STRONG="" M_FAST="" M_HEAVY=""
 while [ $# -gt 0 ]; do
   case $1 in
     --yes) YES=1 ;;
@@ -47,6 +49,8 @@ while [ $# -gt 0 ]; do
       eval "M_$t=\$v" ;;
     --global-rules) RULES=on ;;
     --no-global-rules) RULES=off ;;
+    --proto-agent) PROTO_AGENT=1 ;;
+    --no-proto-agent) PROTO_AGENT=0 ;;
     --dev) DEV=1 ;;
     --no-dev) DEV=0 ;;
     --check) MODE=check ;;
@@ -171,11 +175,38 @@ rules_off() {
   esac
 }
 
+# Login LaunchAgent for `proto-serve.sh ensure` (macOS). launchctl is skipped when AW_LAUNCHAGENTS_DIR redirects the plist.
+AGENT_LABEL=com.agent-workflow.proto-serve
+AGENT_DIR=${AW_LAUNCHAGENTS_DIR:-$HOME/Library/LaunchAgents}
+AGENT_PLIST=$AGENT_DIR/$AGENT_LABEL.plist
+agent_launchctl() { [ -n "${AW_LAUNCHAGENTS_DIR:-}" ] || launchctl "$@" 2>/dev/null || :; }
+agent_on() {
+  local want
+  want="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+<plist version=\"1.0\"><dict>
+<key>Label</key><string>$AGENT_LABEL</string>
+<key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>bash \"$CLAUDE_DIR/skills/orchestrate-gh-issues/proto-serve.sh\" ensure</string></array>
+<key>RunAtLoad</key><true/>
+<key>AbandonProcessGroup</key><true/>
+<key>StandardOutPath</key><string>$CLAUDE_DIR/proto-serve-agent.log</string>
+<key>StandardErrorPath</key><string>$CLAUDE_DIR/proto-serve-agent.log</string>
+</dict></plist>"
+  [ "$(cat "$AGENT_PLIST" 2>/dev/null)" = "$want" ] && return 0
+  mkdir -p "$AGENT_DIR"; printf '%s\n' "$want" >"$AGENT_PLIST"
+  agent_launchctl bootout "gui/$(id -u)/$AGENT_LABEL"; agent_launchctl bootstrap "gui/$(id -u)" "$AGENT_PLIST"
+  changed "login LaunchAgent $AGENT_PLIST (proto-serve.sh ensure)"
+}
+agent_off() {
+  [ -e "$AGENT_PLIST" ] || return 0
+  agent_launchctl bootout "gui/$(id -u)/$AGENT_LABEL"; rm -f "$AGENT_PLIST"; changed "removed the login LaunchAgent $AGENT_PLIST"
+}
+
 # --- run ---
 if [ "$MODE" = check ]; then requirements; [ "$REQ_OK" = 1 ]; exit; fi
 
 if [ "$MODE" = uninstall ]; then
-  rules_off; remove_hook
+  rules_off; remove_hook; agent_off
   for path in "$CLAUDE_DIR"/skills/*; do [ -L "$path" ] && unlink_ours "$path"; done
   unlink_ours "$CLAUDE_DIR/agent-workflow"
   say "agent-workflow uninstalled:${CHANGES:- nothing to remove}"
@@ -193,6 +224,9 @@ if [ -z "$RULES" ]; then
   r=$(recorded WF_INSTALL_GLOBAL_RULES); [ -n "$r" ] || r=$(rules_state)
   [ "$r" = off ] && RULES=off || RULES=on
 fi
+
+[ -n "$PROTO_AGENT" ] || PROTO_AGENT=$(recorded WF_INSTALL_PROTO_AGENT)
+[ -n "$PROTO_AGENT" ] || { [ -e "$AGENT_PLIST" ] && PROTO_AGENT=1 || PROTO_AGENT=0; }
 
 # Model tiers in the order of the presets and the questions; shipped defaults come from lib.sh.
 TIERS="DEFAULT STRONG FAST HEAVY"
@@ -232,6 +266,12 @@ if [ "$INTERACTIVE" = 1 ]; then
   d=n; [ "$RULES" = on ] && d=y
   case "$(ask "Use them? (y/n)" "$d")" in y* | Y*) RULES=on ;; *) RULES=off ;; esac
   say ""
+  if [ "$(uname)" = Darwin ]; then
+    say "Prototype previews: design rounds keep their preview server running while a decision waits (proto-serve.sh)."
+    d=n; [ "$PROTO_AGENT" = 1 ] && d=y
+    case "$(ask "Restart them at login with a LaunchAgent? (y/n)" "$d")" in y* | Y*) PROTO_AGENT=1 ;; *) PROTO_AGENT=0 ;; esac
+    say ""
+  fi
 fi
 
 for t in $TIERS; do # a flag, preset or answer; else the recorded value stays; else the shipped default
@@ -254,6 +294,9 @@ link "$ROOT" "$CLAUDE_DIR/agent-workflow"
 
 remove_hook
 if [ "$RULES" = on ]; then rules_on; else rules_off; fi
+if [ "$PROTO_AGENT" = 1 ] && [ "$(uname)" != Darwin ]; then warn "--proto-agent is macOS only"; PROTO_AGENT=0; fi
+if [ "$PROTO_AGENT" = 1 ]; then agent_on; else agent_off; fi
+set_setting WF_INSTALL_PROTO_AGENT "$PROTO_AGENT"
 set_setting WF_INSTALL_DEV "$DEV"
 set_setting WF_INSTALL_GLOBAL_RULES "$(rules_state)"
 

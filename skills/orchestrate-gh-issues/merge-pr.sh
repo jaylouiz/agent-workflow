@@ -28,7 +28,8 @@
 #   merge-pr.sh sweep [--dry-run]
 #        remove the worktrees and branches of finished work (sweep.sh has the rules): a <type>/<n>-* (or Orca's
 #        <gitUsername>/<type>-<n>-*) branch whose PR is merged or closed, a
-#        proto/<n>-* branch whose issue is closed (after: also the merged PR's own branch, whatever its name). Keeps, with
+#        proto/<n>-* branch whose issue is closed (after: also the merged PR's own branch, whatever its name); it also
+#        runs `proto-serve.sh prune` (prototype servers of issues that are closed or no longer wait). Keeps, with
 #        the reason printed, the main checkout, the current directory, uncommitted or unpushed work and worktrees an
 #        Orca worker still uses.
 # Project facts: <repo>/.claude/issue-workflow.sh (template: agent-workflow reference/project-config.sh).

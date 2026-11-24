@@ -17,6 +17,7 @@
 #   --dry-run  print what would be removed, change nothing
 #   --pr <n>   also clean up merged PR <n>: the worktree on its head branch whatever the branch is called (same keep
 #              rules; not for a fork's PR), its local branch without a worktree, and its remote head branch
+# Also `proto-serve.sh prune`: stops the prototype servers of issues that are closed or no longer carry `needs-decision`.
 # Exit: 0 clean run, 1 something could not be checked or removed (the output says what), 64 usage.
 set -uo pipefail
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -218,6 +219,9 @@ if [ -n "$prn" ]; then
     esac
   fi
 fi
+
+# Prototype servers (proto-serve.sh) of issues that are closed or no longer wait on a decision. Never changes the exit code.
+"$DIR/proto-serve.sh" prune $([ $dry = 1 ] && echo --dry-run) || echo "sweep: proto-serve.sh prune failed"
 
 echo "sweep: removed $removed, kept $kept$([ $dry = 1 ] && echo ' (dry run)')"
 exit $rc
