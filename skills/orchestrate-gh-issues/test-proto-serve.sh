@@ -164,4 +164,17 @@ echo "CLOSED" >"$STUB/issue-603"; bash "$P" prune >"$T/out" 2>&1
 eq "prune: closed issue stops the last server" "$(up "$B")" ""
 eq "prune: registry cleaned" "$(count)" 0
 
+# hosted / unhost: the project's wf_proto_preview_url / wf_proto_preview_delete, run at the checkout's root
+H=$T/hosted-repo; mkdir -p "$H/.claude/sub"; git init -q "$H"
+(cd "$H/.claude/sub" && bash "$P" hosted proto/7-x >"$T/out" 2>&1); eq "hosted: a project without previews exits 2" $? 2
+grep -q "no hosted previews" "$T/out"; eq "hosted: says why" $? 0
+(cd "$H" && bash "$P" unhost proto/7-x >"$T/out" 2>&1); eq "unhost: nothing to remove without the hook" $? 0
+cat >"$H/.claude/issue-workflow.sh" <<'CFG'
+wf_proto_preview_url() { [ "$1" != proto/8-failed ] || return 1; echo "https://${1//\//-}.preview.test (from $(basename "$PWD"))"; }
+wf_proto_preview_delete() { echo "deleted $1"; }
+CFG
+eq "hosted: the project's URL, run at its root" "$(cd "$H/.claude/sub" && bash "$P" hosted proto/7-x 2>&1)" "https://proto-7-x.preview.test (from hosted-repo)"
+(cd "$H" && bash "$P" hosted proto/8-failed >/dev/null 2>&1); eq "hosted: no built preview exits 2" $? 2
+eq "unhost: runs the project's delete" "$(cd "$H" && bash "$P" unhost proto/7-x 2>&1)" "deleted proto/7-x"
+
 [ "$fail" = 0 ] && echo "test-proto-serve: all $n checks passed" || { echo "test-proto-serve: $fail of $n failed"; exit 1; }

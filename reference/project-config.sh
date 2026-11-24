@@ -33,5 +33,9 @@ WF_CHECKS_TSV=""                      # gate log with the PR head SHA per row, p
 # WF_KEEP_CWD (exported by merge-pr.sh after): the coordinator's working directory. A cleanup in wf_after_merge must not remove it
 # (a removed cwd refuses every later shell call of the session): [ "$PWD" = "$WF_KEEP_CWD" ] or skip that worktree.
 
+# Hosted previews of design prototypes (proto-serve.sh hosted / unhost; cwd: the project root). $1 = the pushed proto branch.
+# wf_proto_preview_url() { echo "https://${1//\//-}.preview.example"; }   # print the URL once built; return 1 = none (local link instead)
+# wf_proto_preview_delete() { :; }      # remove it; sweep.sh runs it when it removes the proto branch of a closed issue
+
 # $1 = the PR body file; print the reason and return 1 to block gh pr create (guard.sh).
 # wf_pr_body_check() { grep -q '^Test plan:' "$1" || { echo "missing 'Test plan:' line"; return 1; }; }
