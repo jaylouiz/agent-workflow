@@ -16,7 +16,7 @@
 #   proto-serve.sh prune [--dry-run]            stop the servers of issues that are closed or no longer carry
 #                                               `needs-decision` (merge-pr.sh sweep runs it); a gh failure keeps them
 #
-# A port from `port` is only reserved (worktree `-`): `start` fills it in, `ensure` skips it, `prune` frees it with a closed issue.
+# A port from `port` is only reserved (worktree `-`): `start` fills it in, `ensure` skips it, `prune` frees it once the issue is closed or leaves design.
 # State: $WF_PROTO_DIR (default ~/.claude/proto-serve): servers.tsv (issues, repo, port, worktree, pid) and a log per
 # server (<first issue>.log). $WF_PROTO_CMD replaces `npm run dev` (tests use a dummy server). After a reboot run
 # `proto-serve.sh ensure` (install.sh can add a login LaunchAgent for it).
@@ -70,18 +70,27 @@ await_up() { # await_up <pid> <port>: 0 listening, 1 the process died, 2 still s
   return 2
 }
 
-kill_server() { # kill_server <port> <pid>: the server and its children (own session: the group), by listener or pid
+in_wt() { # in_wt <pid> <worktree>: the process runs inside the worktree (its cwd), or its cwd cannot be read
+  local c; c=$(lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+  [ -z "$c" ] || [ "$c" = "$2" ] || [ "${c#"$2"/}" != "$c" ]
+}
+ours() { # ours <port> <worktree>: the listener pids on the port that run in the worktree (never someone else's server)
+  local p; for p in $(lsof -nP -tiTCP:"$1" -sTCP:LISTEN 2>/dev/null); do in_wt "$p" "$2" && echo "$p"; done
+}
+
+kill_server() { # kill_server <port> <pid> <worktree>: our server and its children (own session: the group), by listener or pid
   local pids p g i=0
-  pids=$(lsof -nP -tiTCP:"$1" -sTCP:LISTEN 2>/dev/null)
+  pids=$(ours "$1" "$3")
   for p in $pids; do
     g=$(pgid_of "$p")
     if [ "$g" = "$2" ]; then kill -TERM -- "-$g" 2>/dev/null; else kill -TERM "$p" 2>/dev/null; fi
   done
-  if [ -z "$pids" ] && alive "$2" && [ "$(pgid_of "$2")" = "$2" ]; then kill -TERM -- "-$2" 2>/dev/null; fi
-  while [ "$i" -lt 25 ] && { [ -n "$(listener "$1")" ] || alive "$2"; }; do sleep 0.2; i=$((i + 1)); done
-  for p in $(lsof -nP -tiTCP:"$1" -sTCP:LISTEN 2>/dev/null); do kill -KILL "$p" 2>/dev/null; done
-  if alive "$2" && [ "$(pgid_of "$2")" = "$2" ]; then kill -KILL -- "-$2" 2>/dev/null; fi
-  [ -z "$(listener "$1")" ]
+  # still starting (nothing listens yet): the registered pid, only while it still runs in the worktree (pids get reused)
+  if [ -z "$(listener "$1")" ] && alive "$2" && [ "$(pgid_of "$2")" = "$2" ] && in_wt "$2" "$3"; then kill -TERM -- "-$2" 2>/dev/null; fi
+  while [ "$i" -lt 25 ] && { [ -n "$(ours "$1" "$3")" ] || { alive "$2" && in_wt "$2" "$3"; }; }; do sleep 0.2; i=$((i + 1)); done
+  for p in $(ours "$1" "$3"); do kill -KILL "$p" 2>/dev/null; done
+  if alive "$2" && [ "$(pgid_of "$2")" = "$2" ] && in_wt "$2" "$3"; then kill -KILL -- "-$2" 2>/dev/null; fi
+  [ -z "$(ours "$1" "$3")" ]
 }
 
 cmd_start() {
@@ -99,6 +108,7 @@ cmd_start() {
   fi
   if [ -n "$(listener "$port")" ]; then # a server already runs there: register it as is (a fresh start would fight for the port)
     pid=$(listener "$port")
+    in_wt "$pid" "$wt" || { echo "proto-serve: port $port is used by another program (pid $pid, not running in $wt): pick another port" >&2; return 1; }
     if [ -n "$cur" ] && [ "$(echo "$cur" | cut -f4)" = "$wt" ]; then pid=$(echo "$cur" | cut -f5); alive "$pid" || pid=$(listener "$port"); fi
     reg_put "$issues" "$repo" "$port" "$wt" "$pid"
     echo "serving #$issues on port $port (already running, pid $pid, registered)"; return 0
@@ -144,7 +154,7 @@ cmd_stop() {
     rest=$(echo ",$issues," | sed "s/,$1,/,/; s/^,//; s/,$//")
     if [ -n "$rest" ]; then reg_put "$rest" "$repo" "$port" "$wt" "$pid"; echo "#$1 dropped from the server on port $port (still serves #$rest)"
     elif [ "$wt" = - ]; then reg_drop "$port"; echo "released port $port of #$1"
-    elif kill_server "$port" "$pid"; then reg_drop "$port"; echo "stopped the server for #$1 (port $port)"
+    elif kill_server "$port" "$pid" "$wt"; then reg_drop "$port"; echo "stopped the server for #$1 (port $port)"
     else echo "proto-serve: could not stop the server on port $port (pid $pid)" >&2; rc=1; fi
   done <"$REG"
   return $rc
@@ -188,16 +198,21 @@ cmd_prune() {
     [ -n "$port" ] || continue
     live=""
     for n in ${issues//,/ }; do
-      # waiting = open with `needs-decision`; an issue gh cannot read counts as waiting (keep the server)
-      if st=$(gh issue view "$n" $([ "$repo" = - ] || echo "-R $repo") --json state,labels --jq '.state + " " + ([.labels[].name] | join(" "))' 2>/dev/null); then
-        case "$st" in OPEN*needs-decision*) live="${live:+$live,}$n" ;; OPEN*) [ "$wt" = - ] && live="${live:+$live,}$n" ;; esac
+      # waiting = open with `needs-decision` (a reserved port also while `needs-design`); an issue gh cannot read counts as waiting
+      if st=$(gh issue view "$n" $([ "$repo" = - ] || echo "-R $repo") --json state,labels --jq '.state + (if any(.labels[]; .name == "needs-decision") then " waiting" else "" end) + (if any(.labels[]; .name == "needs-design") then " design" else "" end)' 2>/dev/null); then
+        case " $st " in
+          *" OPEN "*) case " $st " in
+            *" waiting "*) live="${live:+$live,}$n" ;;
+            *" design "*) [ "$wt" != - ] || live="${live:+$live,}$n" ;;
+          esac ;;
+        esac
       else live="${live:+$live,}$n"; fi
     done
     [ "$live" != "$issues" ] || continue
     if [ -z "$live" ]; then
       if [ $dry = 1 ]; then echo "would stop the server for #$issues (port $port): no longer waiting"; continue; fi
       if [ "$wt" = - ]; then reg_drop "$port"; echo "released port $port of #$issues: no longer waiting"
-      elif kill_server "$port" "$pid"; then reg_drop "$port"; echo "stopped the server for #$issues (port $port): no longer waiting"
+      elif kill_server "$port" "$pid" "$wt"; then reg_drop "$port"; echo "stopped the server for #$issues (port $port): no longer waiting"
       else echo "proto-serve: could not stop the server on port $port" >&2; fi
     elif [ $dry = 0 ]; then
       reg_put "$live" "$repo" "$port" "$wt" "$pid"; echo "server on port $port keeps #$live"

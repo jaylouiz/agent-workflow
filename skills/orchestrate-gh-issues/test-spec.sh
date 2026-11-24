@@ -34,7 +34,7 @@ p1=$(printf '%s' "$out" | sed -n 's/^PORT=//p')
 check "port assigned" '[ -n "$p1" ]'
 out2=$(bash "$DIR/spec.sh" design 8 --ledger "$T/ledger" 2>&1)
 p2=$(printf '%s' "$out2" | sed -n 's/^PORT=//p')
-check "design spec names the preview port" 'printf "%s" "$out2" | grep -Eq "localhost:31(1[1-9])"'
+check "design spec names the preview port" 'printf "%s" "$out2" | grep -Eq "preview port 31(1[1-9])"'
 check "second port differs" '[ -n "$p2" ] && [ "$p1" != "$p2" ]'
 check "reservation recorded" 'grep -q "^$p1 #7 lead" "$T/ledger/ports"'
 bash "$DIR/spec.sh" release-port "$p1" --ledger "$T/ledger"

@@ -105,6 +105,23 @@ eq "ensure: says so" "$(grep -c '^gone' "$T/out")" 1
 WF_PROTO_CMD=false bash "$P" start 501 "$T/wt-a" "$A" >"$T/out" 2>&1; eq "dead on start exits 1" $? 1
 eq "dead on start: nothing registered" "$(count)" 0
 
+# a stranger on the port is neither adopted nor killed; a stale pid that is not ours is left alone
+F=$(free_port); PORTS="$PORTS $F"; mkdir -p "$T/elsewhere"
+(cd "$T/elsewhere" && exec python3 -m http.server "$F" --bind 127.0.0.1 >/dev/null 2>&1) &
+disown $!; for _ in $(seq 1 50); do [ -n "$(up "$F")" ] && break; sleep 0.1; done
+bash "$P" start 801 "$T/wt-a" "$F" >"$T/out" 2>&1; eq "start refuses a port used by another program" $? 1
+eq "refused start registers nothing" "$(count)" 0
+printf '801\t-\t%s\t%s\t%s\n' "$F" "$T/wt-a" "$(up "$F")" >"$REG"
+bash "$P" stop 801 >/dev/null 2>&1
+[ -n "$(up "$F")" ]; eq "stop leaves a server that does not run in the worktree" $? 0
+kill "$(up "$F")"; : >"$REG"
+(cd / && exec python3 -I -c 'import os; os.setsid(); os.execvp("sleep", ["sleep", "30"])') &
+SL=$!; disown "$SL"; sleep 0.5
+printf '802\t-\t%s\t%s\t%s\n' "$F" "$T/wt-a" "$SL" >"$REG"
+bash "$P" stop 802 >/dev/null 2>&1
+kill -0 "$SL" 2>/dev/null; eq "stop leaves a stale pid that now belongs to another process" $? 0
+kill "$SL" 2>/dev/null; : >"$REG"
+
 # port: reserves a preview port per issue (stable, distinct, skipped when taken), start fills it in, prune frees stale ones
 X=$(free_port); export WF_PROTO_PORTS="$X-$((X + 2))"
 eq "port: first free port of the range" "$(bash "$P" port 901)" "$X"
@@ -121,23 +138,25 @@ bash "$P" stop 902 >/dev/null 2>&1; eq "stop releases a reservation" "$(grep -c 
 disown $!; for _ in $(seq 1 50); do [ -n "$(up "$((X + 1))")" ] && break; sleep 0.1; done
 eq "port: a port someone listens on is skipped" "$(bash "$P" port 903)" "$((X + 2))"
 kill "$(up "$((X + 1))")"; PORTS="$PORTS $X"
-echo "OPEN needs-decision" >"$STUB/issue-901"; echo "OPEN phase:design" >"$STUB/issue-903"
+echo "OPEN waiting" >"$STUB/issue-901"; echo "OPEN design" >"$STUB/issue-903"
 bash "$P" prune >"$T/out" 2>&1
 eq "prune keeps a reservation of an open issue" "$(grep -c "	$((X + 2))	" "$REG")" 1
-echo CLOSED >"$STUB/issue-903"; bash "$P" prune >"$T/out" 2>&1
+echo OPEN >"$STUB/issue-903"; bash "$P" prune >"$T/out" 2>&1
+eq "prune frees a reservation once the issue left design" "$(grep -c "	$((X + 2))	" "$REG")" 0
+bash "$P" port 903 >/dev/null; echo CLOSED >"$STUB/issue-903"; bash "$P" prune >"$T/out" 2>&1
 eq "prune frees the reservation of a closed issue" "$(grep -c "	$((X + 2))	" "$REG")" 0
 bash "$P" stop 901 >/dev/null 2>&1; eq "port test cleaned up" "$(count)$(up "$X")" 0
 unset WF_PROTO_PORTS
 
 # prune: stops what no longer waits; a gh failure keeps the server
 bash "$P" start 601 "$T/wt-a" "$A" >/dev/null 2>&1; bash "$P" start 602,603 "$T/wt-b" "$B" >/dev/null 2>&1
-echo "OPEN needs-decision phase:design" >"$STUB/issue-601"; echo "CLOSED needs-decision" >"$STUB/issue-602"; echo "OPEN needs-decision" >"$STUB/issue-603"
+echo "OPEN waiting design" >"$STUB/issue-601"; echo "CLOSED waiting" >"$STUB/issue-602"; echo "OPEN waiting" >"$STUB/issue-603"
 bash "$P" prune --dry-run >"$T/out" 2>&1; eq "prune --dry-run changes nothing" "$(count)" 2
 bash "$P" prune >"$T/out" 2>&1
 [ -n "$(up "$A")" ]; eq "prune: a waiting issue keeps its server" $? 0
 [ -n "$(up "$B")" ]; eq "prune: a shared server keeps running while one issue waits" $? 0
 eq "prune: the closed issue is dropped from the shared server" "$(awk -F'\t' -v p="$B" '$3 == p {print $1}' "$REG")" 603
-echo "OPEN phase:design" >"$STUB/issue-601"; echo fail >"$STUB/issue-603"
+echo "OPEN design" >"$STUB/issue-601"; echo fail >"$STUB/issue-603"
 bash "$P" prune >"$T/out" 2>&1
 [ -n "$(up "$B")" ]; eq "prune: gh failing keeps the server" $? 0
 eq "prune: an answered issue (no needs-decision) is stopped" "$(up "$A")" ""

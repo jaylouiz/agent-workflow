@@ -188,6 +188,7 @@ agent_on() {
 <key>Label</key><string>$AGENT_LABEL</string>
 <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>bash \"$CLAUDE_DIR/skills/orchestrate-gh-issues/proto-serve.sh\" ensure</string></array>
 <key>RunAtLoad</key><true/>
+<key>AbandonProcessGroup</key><true/>
 <key>StandardOutPath</key><string>$CLAUDE_DIR/proto-serve-agent.log</string>
 <key>StandardErrorPath</key><string>$CLAUDE_DIR/proto-serve-agent.log</string>
 </dict></plist>"
@@ -293,7 +294,8 @@ link "$ROOT" "$CLAUDE_DIR/agent-workflow"
 
 remove_hook
 if [ "$RULES" = on ]; then rules_on; else rules_off; fi
-if [ "$PROTO_AGENT" = 1 ] && [ "$(uname)" = Darwin ]; then agent_on; else [ "$PROTO_AGENT" = 1 ] && warn "--proto-agent is macOS only"; agent_off; fi
+if [ "$PROTO_AGENT" = 1 ] && [ "$(uname)" != Darwin ]; then warn "--proto-agent is macOS only"; PROTO_AGENT=0; fi
+if [ "$PROTO_AGENT" = 1 ]; then agent_on; else agent_off; fi
 set_setting WF_INSTALL_PROTO_AGENT "$PROTO_AGENT"
 set_setting WF_INSTALL_DEV "$DEV"
 set_setting WF_INSTALL_GLOBAL_RULES "$(rules_state)"
