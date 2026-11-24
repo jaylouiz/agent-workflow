@@ -37,7 +37,7 @@
 # but `check` exits 64 before writing anything (a worker in /tmp must not post to a guessed repo, or to none).
 # Agents comment with the user's GitHub account, so authorship cannot tell an answer from an agent comment.
 # Every comment this script writes carries a `<!-- decision-<kind> D<k> -->` marker; any later comment without
-# one counts as the user's, and belongs to the decision it names (`D<k>: …`, see `scan`) else to the nearest earlier
+# one counts as the user's, and belongs to the decision it names (`Decision D<k>: …` or `D<k>: …`, see `scan`) else to the nearest earlier
 # marker (a note's replies are dropped). Hence: agents comment on an issue with decisions only through this script (`note`).
 # GitHub's label filter lags a few seconds behind `gh issue edit --add-label`; sweeps run minutes apart.
 # The issue thread is for the human: what was decided and what waits on them. Coordination between agents goes to
@@ -120,8 +120,8 @@ need_repo() { # sets REPO; loud, before any write, when there is none. WF_REPO a
 log_dir() { echo "${WF_ISSUE_LOG_DIR:-$HOME/.claude/issue-logs}/$REPO"; }
 
 # Per decision (D<k> with a request or record marker): its last marker and the unmarked comments it owns after it.
-# An unmarked comment owns to D<k> when its first text starts `D<k>:` and a request/record D<k> is earlier in the
-# thread (Tandem writes that prefix on every reply, so a challenge to D2 stays D2's while a later request D3 is
+# An unmarked comment owns to D<k> when its first text starts `Decision D<k>:` or `D<k>:` and a request/record D<k> is
+# earlier in the thread (Tandem writes `Decision D<k>:` on every reply, so a challenge to D2 stays D2's while a later request D3 is
 # open); any other unmarked comment owns to the nearest earlier marked comment, a note included: a note has no
 # decision, so a reply to it (`rec D1, note look, "y"`) belongs to none and is dropped, exactly as Tandem reads it.
 # Output (US-separated, \x1f: a tab IFS would collapse an empty answer field and shift the preview into it): number, url, last kind, id, question, age seconds, answer text (newlines flattened), preview link, the request's choices lines (\x1e-joined)
@@ -139,7 +139,7 @@ scan() { # <label|""> <state>
         | {key: $e.key, v: $e.value,
            any: ($e.value.body | test("<!-- decision-")),
            c: (if ($e.value.body | test("<!-- decision-(?!note)")) then ($e.value.body | capture("<!-- decision-(?<kind>[a-z]+) D(?<id>[0-9]+) -->")? // null) else null end),
-           pre: (($e.value.body | capture("\\A\\s*D(?<n>[0-9]+):")? | .n) // null)}]) as $cs
+           pre: (($e.value.body | capture("\\A\\s*(?:Decision\\s+)?D(?<n>[0-9]+):")? | .n) // null)}]) as $cs
     | ([$cs[] | select(.any | not) | . + {own: owner($cs; .)}]) as $un
     | ([$cs[] | select(.c != null and (.c.kind == "request" or .c.kind == "record")) | .c.id] | reduce .[] as $x ([]; if index($x) then . else . + [$x] end)) as $ids
     | $ids[] | . as $id
@@ -176,7 +176,7 @@ case "$cmd" in
       post "$1" "$tmp"; gh issue edit "$1" --add-label needs-decision >/dev/null
     else
       { echo "<!-- decision-record D$id -->"; echo "### Agent decision (D$id): not blocking"; echo; cat "$2"; echo
-        echo "---"; echo "To change it, comment here, starting with \`D$id:\` so it reaches this decision and not a later one. To accept, remove the \`agent-decided\` label."; } >"$tmp"
+        echo "---"; echo "To change it, comment here, starting with \`Decision D$id:\` so it reaches this decision and not a later one. To accept, remove the \`agent-decided\` label."; } >"$tmp"
       check "$tmp" || { rm -f "$tmp"; exit 65; }
       post "$1" "$tmp"; gh issue edit "$1" --add-label agent-decided >/dev/null
     fi

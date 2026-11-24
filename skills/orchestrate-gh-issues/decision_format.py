@@ -214,13 +214,13 @@ def request(text, did):
     if body:
         out += [""] + body + [""]
     if open_q:
-        out += ["", open_q, "", "---", f"Answer in a comment here, in your own words; with other decisions on this issue start it with `{did}:`. The run picks it up at its next checkpoint."]
+        out += ["", open_q, "", "---", f"Answer in a comment here, in your own words; with other decisions on this issue start it with `Decision {did}:`. The run picks it up at its next checkpoint."]
         return "\n".join(out) + "\n"
     if link or secs:
         out += [f"Options with screenshots: {link or 'above in this comment'}"]
     out += [""]
     one = len(qs) == 1
-    if one:  # Tandem shows each `- KEY: text` line as a tile; a click answers `D<k>: KEY`
+    if one:  # Tandem shows each `- KEY: text` line as a tile; a click answers `Decision D<k>: KEY`
         out += [f"- {o['key']}: {o['name']}{' (today)' if o['today'] else ''}{' ★' if o['rec'] else ''}" for o in qs[0]["opts"]]
         out += ["", f"Recommendation: {rec(qs[0])['key']} ({rec(qs[0])['text']})"]
     else:  # `+` bullets: a list on GitHub, not an option tile in Tandem; its one tile is `ok`
@@ -228,10 +228,10 @@ def request(text, did):
             out.append(f"+ **{q['n']} {q['label']}:** " + " · ".join(
                 f"**{o['key']} ★ ({o['text']})**" if o["rec"] else f"{o['key']} ({o['text']})" for o in q["opts"]))
         out += ["", "- ok: take every ★ option", "", "Recommendation: ok (" + " ".join(f"{q['n']}{rec(q)['key']}" for q in qs) + ")"]
-    out += ["", "---", "Copy, change only the letters you disagree with, post as a comment:" if not one else "Copy, change the letter if you disagree, post as a comment:", "```", did]
+    out += ["", "---", "Copy, change only the letters you disagree with, post as a comment:" if not one else "Copy, change the letter if you disagree, post as a comment:", "```", f"Decision {did}:"]
     out += [spell(q, rec(q)["key"]) for q in qs]
     short = " ".join(f"{q['n']}{rec(q)['key']}" for q in qs)
-    out += ["```", f"Or reply `ok` to take {'the recommendation' if one else 'every recommendation'}. Text after a letter is read as a note. Short form: `{did}: {short}`. The run picks it up at its next checkpoint."]
+    out += ["```", f"Or reply `ok` to take {'the recommendation' if one else 'every recommendation'}. Text after a letter is read as a note. Short form: `Decision {did}: {short}`. The run picks it up at its next checkpoint."]
     return "\n".join(out) + "\n"
 
 
@@ -257,7 +257,7 @@ def read(choices, answer):
 
     for seg in re.split(r"\s+/\s+", " ".join(answer.split())):
         seg = re.sub(r"-\s*reject:\s*\w+(?:\s*,\s*\w+)*", " ", seg)  # Tandem's round reaction: rejects are not picks
-        seg = re.sub(r"^\s*(?:[DR]\d+\b:?\s*)+", "", seg)
+        seg = re.sub(r"^\s*(?:(?:Decision\s+)?[DR]\d+\b:?\s*)+", "", seg)  # `Decision D1:` (Tandem), `D1:`, `R1:`
         seg = re.sub(r"^-\s*pick:\s*", "", seg)
         if re.match(r"(?i)(ok(ay)?|all recommended|recommended|take (all|every) recommend\w*)(?![\w-])", seg):
             took_all = True
