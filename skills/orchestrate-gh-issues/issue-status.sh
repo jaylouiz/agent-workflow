@@ -3,7 +3,7 @@
 # say which phase an issue enters, this script writes the status and, while WF_PHASE_LABELS is on, the label.
 #
 #   issue-status.sh phase <n> design|build|review|backlog
-#        design   Design starts:            status In progress, label phase:design
+#        design   Design starts:            status In progress, labels phase:design and needs-design
 #        build    Specify or Build starts:  status In progress, label phase:build
 #        review   Build opened the PR:      status In review (the PR itself is the rule clients read; no label)
 #        backlog  the Design handover:      status Backlog, label phase:design removed
@@ -68,6 +68,8 @@ case "${1:-}" in
       design)
         repo
         phase_label "$2" phase:design 5319E7 "Phase UX Design: a design round is running or waits on feedback"
+        # the lane too: status In progress reads as UX Design only in the lane needs-design (a redesign of a ready issue, a design batch member)
+        gh issue edit "$2" --add-label needs-design >/dev/null 2>&1 || note "#$2: label needs-design not added"
         set_status "$2" "In progress"
         ;;
       build)

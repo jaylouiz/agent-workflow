@@ -77,7 +77,7 @@ The model tiers are written by `install.sh`; a repo may override one in its `.cl
 |---|---|---|
 | Done | issue closed | the merge (`Closes #n`) |
 | Inbox | `inbox`, or open with no lane label (fog included) | filing, `/gh-inbox-dispatcher` |
-| UX Design | status In progress with the lane `needs-design`, else `phase:design` | `/design-gh-issue` at its start; at the handover the status goes back to Backlog and the label is removed |
+| UX Design | status In progress with the lane `needs-design`, else `phase:design` | `/design-gh-issue` at its start (it also sets the lane `needs-design`); at the handover the status goes back to Backlog and the label is removed |
 | Build | status In progress (any other lane) or In review, else `phase:build`, or an open PR with `Closes #n` | `/specify-gh-issue` or `/build-gh-issue` at its start (In progress), Build after `gh pr create` (In review); kept until close |
 | Backlog | a lane label, no started status and no `phase:*` | triage, the Design handover |
 

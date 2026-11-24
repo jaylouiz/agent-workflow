@@ -28,7 +28,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 3. Already `needs-spec` or `ready`, or a `## UX decision` exists: ask whether to redesign before continuing.
 4. Not actually an open direction (one obvious layout, or pure look polish): say so, relabel per the triage rule (`needs-spec` or `ready`) with a one-line comment, stop. Look-only questions belong to the profile's "element look" tool in Build.
 5. **Issue standard**: no `## Problem`, `Job:` or `## Solution` in the body yet: infer them per the issue rules ("Infer, then record") and write them in before the brief; the request's own idea goes to Solution, never into Problem.
-6. `gh label create needs-design --force --description "UX direction open: prototype or sketch before spec"`, then Phase UX Design: `~/.claude/skills/orchestrate-gh-issues/issue-status.sh phase $issue design` (sets GitHub's issue status In progress and the label `phase:design`; both stay while rounds run and park, and go at the handover).
+6. `gh label create needs-design --force --description "UX direction open: prototype or sketch before spec"`, then Phase UX Design: `~/.claude/skills/orchestrate-gh-issues/issue-status.sh phase $issue design` (sets GitHub's issue status In progress, the label `phase:design` and the lane `needs-design`, also on a redesign of a `needs-spec` / `ready` issue or a batch member outside the lane, so clients read UX Design; all stay while rounds run and park, and go at the handover).
 
 **Several issues on one surface** (a design batch: the task names them, or the user asks for it). Everything below runs once for all of them, on one branch `proto/<lowest n>-<slug>` and in one prototype, so the user reviews the surface as a whole:
 - guard, phase label and brief per issue; current-state review, screenshots and tech check once for the shared surface
@@ -133,7 +133,7 @@ Feedback like "header from B, list from C", "B but calmer" is the normal case. A
    ### UI copy
    <the copy pass's table, Structure changes and Convention-only lines, verbatim; Specify and Build keep it as is>
    ```
-4. Relabel: `--remove-label needs-design --add-label needs-spec --add-label ux-impact` (`gh label create ux-impact --force --color C5DEF5 --description "Changes what the user sees: Look after Done"`), then `~/.claude/skills/orchestrate-gh-issues/issue-status.sh phase $issue backlog` (status Backlog, `phase:design` removed). The issue is back in the Backlog until Specify or Build starts. Straight to `ready` only when the tech check rated the chosen variant S with no risk area **and** the UACs need no technical ACs to be buildable.
+4. Relabel: `--remove-label needs-design --add-label needs-spec --add-label ux-impact` (`gh label create ux-impact --force --color C5DEF5 --description "Changes what the user sees: Look after Done"`), then `~/.claude/skills/orchestrate-gh-issues/issue-status.sh phase $issue backlog` (status Backlog, `phase:design` removed; a redesign also drops the old lane label the chosen lane replaces). The issue is back in the Backlog until Specify or Build starts. Straight to `ready` only when the tech check rated the chosen variant S with no risk area **and** the UACs need no technical ACs to be buildable.
 5. Post a short "Decision" comment (chosen variant, label change, the copy pass's structure changes, link to the body section).
 6. Leave the proto branch pushed (it is the record) and remove its local worktree only if you created it and it is clean.
 

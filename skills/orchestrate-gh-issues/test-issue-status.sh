@@ -58,6 +58,7 @@ eq "phase design exits 0" "$(run phase 7 design)" 0
 check "design adds phase:design" 'grep -qx "issue edit 7 --add-label phase:design" "$T/calls"'
 check "design label colour" 'grep -q "^label create phase:design --force --color 5319E7" "$T/calls"'
 check "design sets In progress" 'grep -q "In progress" "$T/calls" && [ "$(calls setIssueStatus)" = 1 ]'
+check "design puts the issue in the lane needs-design (a redesign of a ready issue reads as UX Design, not Build)" 'grep -qx "issue edit 7 --add-label needs-design" "$T/calls"'
 
 reset
 eq "phase review exits 0" "$(run phase 7 review)" 0
@@ -85,7 +86,8 @@ eq "off: no label call" "$(calls "label create\|issue edit")" 0
 eq "off: the status is still set" "$(calls setIssueStatus)" 1
 reset; echo 'WF_PHASE_LABELS=off' >"$WF_GLOBAL_SETTINGS"
 run phase 7 design >/dev/null
-eq "off (global file): no label call" "$(calls "label create\|issue edit")" 0
+eq "off (global file): no label create, no phase label" "$(calls "label create\|phase:design")" 0
+check "off: the lane label needs-design is no phase label and is still added" 'grep -qx "issue edit 7 --add-label needs-design" "$T/calls"'
 reset; echo 'WF_PHASE_LABELS=off' >"$T/repo/.claude/issue-workflow.sh"; printf 'phase:design\n' >"$T/labels"
 run phase 7 backlog >/dev/null
 check "off: the handover still removes a phase:design from before the cut-over" 'grep -qx "issue edit 7 --remove-label phase:design" "$T/calls"'
