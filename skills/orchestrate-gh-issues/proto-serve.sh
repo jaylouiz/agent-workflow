@@ -15,6 +15,10 @@
 #   proto-serve.sh list                         issue(s), port, state, pid, worktree
 #   proto-serve.sh prune [--dry-run]            stop the servers of issues that are closed or no longer carry
 #                                               `needs-decision` (merge-pr.sh sweep runs it); a gh failure keeps them
+#   proto-serve.sh hosted <branch>              the hosted preview URL of a pushed proto branch, from the project's
+#                                               `wf_proto_preview_url` (waits while it builds); exit 2: none, use the local link
+#   proto-serve.sh unhost <branch>              remove that hosted preview (`wf_proto_preview_delete`; sweep.sh runs it
+#                                               with the branch); a project without one has nothing to remove
 #
 # A port from `port` is only reserved (worktree `-`): `start` fills it in, `ensure` skips it, `prune` frees it once the issue is closed or leaves design.
 # State: $WF_PROTO_DIR (default ~/.claude/proto-serve): servers.tsv (issues, repo, port, worktree, pid) and a log per
@@ -221,6 +225,20 @@ cmd_prune() {
   return 0
 }
 
+cmd_hosted() { # the project's functions run at its root (cwd = the checkout, wf_load sets ROOT)
+  [ $# -eq 1 ] || die "usage: hosted <branch>"
+  wf_load
+  wf_has wf_proto_preview_url || { echo "proto-serve: no hosted previews in this project (no wf_proto_preview_url)" >&2; return 2; }
+  (cd "$ROOT" && wf_proto_preview_url "$1") || return 2
+}
+
+cmd_unhost() {
+  [ $# -eq 1 ] || die "usage: unhost <branch>"
+  wf_load
+  wf_has wf_proto_preview_delete || return 0
+  (cd "$ROOT" && wf_proto_preview_delete "$1")
+}
+
 c=${1:-}; [ $# -eq 0 ] || shift
 case "$c" in
   start) cmd_start "$@" ;;
@@ -229,5 +247,7 @@ case "$c" in
   list) cmd_list ;;
   prune) cmd_prune "$@" ;;
   port) cmd_port "$@" ;;
-  *) die "usage: proto-serve.sh start <n[,m…]> <worktree> <port> | port <n> | stop <n> | ensure | list | prune [--dry-run]" ;;
+  hosted) cmd_hosted "$@" ;;
+  unhost) cmd_unhost "$@" ;;
+  *) die "usage: proto-serve.sh start <n[,m…]> <worktree> <port> | port <n> | stop <n> | ensure | list | prune [--dry-run] | hosted <branch> | unhost <branch>" ;;
 esac

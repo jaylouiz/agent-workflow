@@ -79,6 +79,8 @@ remote() { git -C "$MAIN" ls-remote --exit-code --heads origin "$1" >/dev/null 2
 sweep() { OUT=$(cd "$MAIN" && bash "$DIR/sweep.sh" "$@" 2>&1); RC=$?; }
 
 fixture
+# the project's hosted-preview hook (proto-serve.sh unhost): logs the branch it would remove
+mkdir -p "$MAIN/.claude"; echo 'wf_proto_preview_delete() { echo "$1" >>"$STUB/unhosted"; }' >"$MAIN/.claude/issue-workflow.sh"
 # --- finished work: removed
 wt feat/1-merged-orca; prs feat/1-merged-orca MERGED 101; managed feat/1-merged-orca
 wt fix/2-merged-git;   prs fix/2-merged-git MERGED 102
@@ -121,6 +123,8 @@ eq "dry run changes no branch" "$(git -C "$MAIN" branch --list | wc -l | tr -d '
 eq "dry run keeps remote" "$(remote fix/2-merged-git)" yes
 eq "dry run never called orca rm" "$(grep -c 'worktree rm' "$STUB/orca/calls" 2>/dev/null || true)" 0
 has "dry run summary" 'sweep: removed 0, kept .*\(dry run\)'
+has "dry run names the hosted preview" "would remove the hosted preview of proto/4-design"
+eq "dry run removes no hosted preview" "$(cat "$STUB/unhosted" 2>/dev/null)" ""
 
 # real run (orca fails to remove one managed worktree)
 dirof fix/23-orca-rmfail >"$STUB/orca/rmfail"
@@ -147,6 +151,7 @@ eq "closed PR: remote branch stays" "$(remote chore/3-closed)" yes
 has "proto with closed issue" "removed worktree .*proto_4-design \(issue #4 closed\)"
 eq "proto: branch gone" "$(branch proto/4-design)" no
 eq "proto: remote stays" "$(remote proto/4-design)" yes
+eq "proto: its hosted preview goes, no other branch's" "$(cat "$STUB/unhosted" 2>/dev/null)" proto/4-design
 has "remote moved after merge" "kept remote branch origin/fix/16-remote-moved: moved after PR #116"
 eq "remote moved: still there" "$(remote fix/16-remote-moved)" yes
 eq "remote moved: worktree removed" "$(exists fix/16-remote-moved)" no

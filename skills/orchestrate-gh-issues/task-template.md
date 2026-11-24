@@ -30,7 +30,7 @@ Observable acceptance: PR URL with `Closes #{{N}}`, checks green per the profile
 <!-- stage:design -->
 Target: issue #{{N}} (`needs-design`), one Design round.
 Change: in this worktree, first `git branch -m {{BRANCH}}` before any commit or push; run `/design-gh-issue {{N}}` autonomously, one round, then park on the round's decision request.
-Preview: your dev server dies with you, so the coordinator serves this worktree on preview port {{PROTO_PORT}} while the decision waits. Unless the profile's share gives a hosted preview that built, the round comment's and the request's `Preview:` link use `http://localhost:` plus that port (route and variant as before); your own dev server keeps PORT. `none` = no preview port was free: link your own port and say so in your `PARKED` body.
+Preview: your dev server dies with you, so the coordinator serves this worktree on preview port {{PROTO_PORT}} while the decision waits. After the push, `proto-serve.sh hosted <branch>` gives the hosted preview: its URL is the `Preview:` link and `Local: http://localhost:{{PROTO_PORT}}/…` (same route and variant) the fallback line under it; exit 2 = none, then `Preview:` is the local link. Your own dev server keeps PORT. `none` = no preview port was free: link your own port and say so in your `PARKED` body.
 Ownership: issue body, comments and labels; proto branch {{BRANCH}} only.
 Observable acceptance: round screenshots on the issue and a decision request (`needs-decision`), or the `## UX decision` in the body and the label moved.
 <!-- /stage -->

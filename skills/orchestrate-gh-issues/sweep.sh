@@ -17,7 +17,8 @@
 #   --dry-run  print what would be removed, change nothing
 #   --pr <n>   also clean up merged PR <n>: the worktree on its head branch whatever the branch is called (same keep
 #              rules; not for a fork's PR), its local branch without a worktree, and its remote head branch
-# Also `proto-serve.sh prune`: stops the prototype servers of issues that are closed or no longer carry `needs-decision`.
+# Also `proto-serve.sh prune`: stops the prototype servers of issues that are closed or no longer carry `needs-decision`;
+# a removed proto branch also loses its hosted preview (`proto-serve.sh unhost`).
 # Exit: 0 clean run, 1 something could not be checked or removed (the output says what), 64 usage.
 set -uo pipefail
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -174,6 +175,7 @@ sweep_one() { # sweep_one <path> <branch ref or empty> <flags>
   if [ $dry = 1 ]; then
     echo "would remove worktree $wt ($why)"
     [ "$st" = MERGED ] && delete_remote "$b" "$pn" "$oid"
+    [ $kind = proto ] && echo "would remove the hosted preview of $b, if any"
     return
   fi
   if [ $have_orca = 1 ] && in_list "$wt" "$orca_wts"; then
@@ -191,6 +193,8 @@ sweep_one() { # sweep_one <path> <branch ref or empty> <flags>
     say_kept "$wt" "$b" "git worktree remove failed: $(echo "$err" | head -1)"; rc=1; return
   fi
   [ "$st" = MERGED ] && delete_remote "$b" "$pn" "$oid"
+  # the prototype's hosted preview (proto-serve.sh unhost: the project's wf_proto_preview_delete); never blocks
+  if [ $kind = proto ]; then "$DIR/proto-serve.sh" unhost "$b" || echo "sweep: hosted preview of $b not removed"; fi
 }
 
 list=$(mktemp); trap 'rm -f "$list"' EXIT

@@ -64,7 +64,7 @@ Decide and write the reason in one line:
 ## 6. Build the round
 
 **Prototype.** Invoke the `prototype` skill and follow its UI branch (prefer sub-shape A: variants on the existing route, `?variant=`, switcher bar), with these overrides from the profile's "Prototype":
-- Work on branch `proto/$issue-<slug>` in its own worktree (`git worktree add`; an Orca worker uses the worktree it was given and renames its branch). Never open a PR, never merge.
+- Work on branch `proto/$issue-<slug>` (slug 2 to 4 words: a hosted preview's host name derives from it) in its own worktree (`git worktree add`; an Orca worker uses the worktree it was given and renames its branch). Never open a PR, never merge.
 - The proto branch never reaches main, so the switcher renders whenever `?variant` is present, also in production builds of that branch (preview deploys). Do not gate it on dev mode.
 - Prototype rules: hardcoded copy (real draft wording under the profile's "Copy" draft rules, not i18n keys, not polished: final copy comes from the copy pass in section 9), no tests, no error handling beyond running, read-only or local data. Keep the app building. Feedback on wording alone is noted for the copy pass, not answered with a new round.
 - Loop locally on the dev server with HMR on your assigned port. Push once per round, not per edit (each push builds a preview). A dev server in an Orca worktree misses edits (5 hits): no `hmr update` line after an edit means restart it before the screenshot. A new component under a subfolder auto-imports with the folder prefix (`setup/Foo.vue` = `SetupFoo`): import it explicitly or it renders empty (#481, 8 min).
@@ -75,12 +75,13 @@ Decide and write the reason in one line:
 ## 7. Show it
 
 1. Screenshots of every variant at the profile's widths (desktop and mobile), via the profile's screenshot tool. Helper scripts (screenshot, axe) and their output live in the scratchpad, never in the worktree: an untracked file makes the cleanup hook skip the worktree. Prototype: one per `?variant=` key and width; sketch: export the frames.
-2. Prototype: commit and push the proto branch (`git push -u origin HEAD`), then get the preview URL as the profile's "share" says; not built yet: wait for it (a few minutes), the `Preview:` line must outlive your session. No hosted preview, or it failed to build: the `Preview:` line is the local link on the spec's `PROTO_PORT` (`http://localhost:<PROTO_PORT>`), not your own dev server's port; name it in your `PARKED` body, the coordinator serves the worktree there (`proto-serve.sh start`) until the decision resolves.
+2. Prototype: commit and push the proto branch (`git push -u origin HEAD`), then `~/.claude/skills/orchestrate-gh-issues/proto-serve.sh hosted <branch>` (the profile's hosted preview; it waits while the push builds). It prints a URL: `Preview:` is that URL plus route, seed and variant, and the line under it `Local: http://localhost:<PROTO_PORT>/<same route>` is the fallback. Exit 2 (no hosted preview, or it failed to build): `Preview:` is that local link, no `Local:` line. Either way name the local link in your `PARKED` body: the coordinator serves the worktree on the spec's `PROTO_PORT` (`proto-serve.sh start`) until the decision resolves; never your own dev server's port.
 3. Post **one** round comment: `gh issue comment $issue --body-file <file> --attach <png>…`, run from the worktree (`gh` needs the repo as cwd; files may stay in the scratchpad by absolute path). It is the overview the user decides from, and Tandem builds its gallery and picks from it. The guard hook runs `decide.sh check` on it, which enforces this shape (visible text over 1500 chars is refused: a walk-through round's step table and many-question rounds go inside `<details>`) and says what is off (format and a full example: `~/.claude/agent-workflow/docs/decision-format.md`):
    ```markdown
    <!-- decision-note round R<k> -->
    ## Design round <k>: <issue title>
    Preview: <the route plus the seed that shows the change and the first option, e.g. <preview>/tasks?seed=<seed>&variant=<first key>>
+   Local: <the same on http://localhost:<PROTO_PORT>, only under a hosted Preview>
    Variants: 1A, 1B, 1C, 2A, 2B
    <brief summary, at most 2 lines>
 
@@ -105,7 +106,7 @@ Decide and write the reason in one line:
    </details>
    ```
    A question is one thing the user decides (the layout; how steps move); the round has as many as it asks, usually one. Options are lettered `A`, `B`, … per question and carry the same letters in the prototype's switcher (one switcher key per question, labelled `1 <label>`) and in the image labels; the recommended one has `★`. One image per question, its options side by side with their letters on them, at each of the profile's widths (one montage, or one image per width), directly under the question.
-4. Ask for the choice. Interactive: `AskUserQuestion`, one option per variant (short description, no image). Unattended or worker: `~/.claude/skills/orchestrate-gh-issues/decide.sh request` (the question, the same `Preview:` line, `Overview: <the round comment's URL>` and one line per question with 1 to 3 keywords per option; run it without arguments for the shape), then park (`/orchestrate-gh-issues` section 5); never prompt locally. A resumed round starts from that request's answer.
+4. Ask for the choice. Interactive: `AskUserQuestion`, one option per variant (short description, no image). Unattended or worker: `~/.claude/skills/orchestrate-gh-issues/decide.sh request` (the question, the same `Preview:` and `Local:` lines, `Overview: <the round comment's URL>` and one line per question with 1 to 3 keywords per option; run it without arguments for the shape), then park (`/orchestrate-gh-issues` section 5); never prompt locally. A resumed round starts from that request's answer.
 
 ## 8. Iterate
 
