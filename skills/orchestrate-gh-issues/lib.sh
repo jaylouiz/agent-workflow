@@ -5,8 +5,8 @@
 wf_root() { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || ROOT=$PWD; }
 
 # Every setting settings.sh reports, in its order. Any of them may go in the global file or the repo config.
-WF_SETTINGS="WF_MODEL_DEFAULT WF_MODEL_STRONG WF_MODEL_FAST WF_MODEL_HEAVY WF_MAX_WORKERS WF_DIGEST_CAP WF_COMMENT_CAP WF_ISSUE_LOG_DIR WF_NO_WAIT_CI WF_PORTS WF_RISK_GLOBS WF_IGNORE_GLOBS WF_REVIEW_LINES WF_HOLD_LABELS WF_REQUIRED_CHECKS WF_CHECKS_TSV WF_INSTALL_GLOBAL_RULES WF_INSTALL_DEV"
-WF_ENV_SETTINGS="WF_COMMENT_CAP WF_ISSUE_LOG_DIR WF_PORTS" # an exported value wins over both files (WF_REPO is read where used)
+WF_SETTINGS="WF_MODEL_DEFAULT WF_MODEL_STRONG WF_MODEL_FAST WF_MODEL_HEAVY WF_MAX_WORKERS WF_DIGEST_CAP WF_COMMENT_CAP WF_ISSUE_LOG_DIR WF_NO_WAIT_CI WF_PORTS WF_PROTO_PORTS WF_RISK_GLOBS WF_IGNORE_GLOBS WF_REVIEW_LINES WF_HOLD_LABELS WF_REQUIRED_CHECKS WF_CHECKS_TSV WF_INSTALL_GLOBAL_RULES WF_INSTALL_DEV WF_INSTALL_PROTO_AGENT"
+WF_ENV_SETTINGS="WF_COMMENT_CAP WF_ISSUE_LOG_DIR WF_PORTS WF_PROTO_PORTS" # an exported value wins over both files (WF_REPO is read where used)
 
 wf_global_settings() { # the global settings file (template: reference/global-settings.sh)
   echo "${WF_GLOBAL_SETTINGS:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-workflow-settings.sh}"
@@ -23,6 +23,7 @@ wf_defaults() {
   WF_ISSUE_LOG_DIR="$HOME/.claude/issue-logs"
   WF_NO_WAIT_CI=0
   WF_PORTS=3101-3105
+  WF_PROTO_PORTS=3111-3119
   WF_RISK_GLOBS=()
   WF_IGNORE_GLOBS=(package-lock.json)
   WF_REVIEW_LINES=400
@@ -31,6 +32,7 @@ wf_defaults() {
   WF_CHECKS_TSV=""
   WF_INSTALL_GLOBAL_RULES=off
   WF_INSTALL_DEV=0
+  WF_INSTALL_PROTO_AGENT=0
 }
 
 wf_source() { # wf_source <file>: source a settings file with globbing off; a missing file is fine, a broken one warns once

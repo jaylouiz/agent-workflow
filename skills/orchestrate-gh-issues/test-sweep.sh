@@ -6,6 +6,7 @@ set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$T"' EXIT
 export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
+export WF_PROTO_DIR="$T/proto-serve" # never the real prototype-server registry
 fail=0; n=0
 eq() { n=$((n + 1)); [ "$2" = "$3" ] || { fail=$((fail + 1)); echo "FAIL [$1] want '$3' got '$2'"; }; }
 q() { git -c user.email=t@t -c user.name=t "$@"; }
@@ -344,6 +345,20 @@ fixture; wt chore/other-pr; prs chore/other-pr MERGED 52; wt chore/named-pr; prs
 sweep --pr 53
 has "--pr removes only PR <n>'s branch" "removed worktree .*chore_named-pr"
 eq "--pr other unnumbered worktree intact" "$(exists chore/other-pr):$(branch chore/other-pr)" "yes:yes"
+
+# --- prototype servers: a sweep stops the server of an issue that no longer waits (proto-serve.sh prune), a dry run does not
+PS=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+mkdir -p "$T/ps-wt"
+WF_PROTO_CMD='python3 -m http.server "$PORT" --bind 127.0.0.1' bash "$DIR/proto-serve.sh" start 77 "$T/ps-wt" "$PS" >"$T/ps-start.out" 2>&1
+up() { PATH=$PATH:/usr/sbin lsof -nP -tiTCP:"$PS" -sTCP:LISTEN 2>/dev/null | head -1; }
+echo CLOSED >"$STUB/gh/issue-77"
+sweep --dry-run
+eq "dry run keeps the prototype server" "$([ -n "$(up)" ] && echo up)" up
+has "dry run says it would stop it" 'would stop the server for #77'
+sweep
+eq "sweep stops the prototype server of a closed issue" "$(up)" ""
+has "sweep reports the stop" 'stopped the server for #77'
+eq "sweep unregisters it" "$(grep -c . "$WF_PROTO_DIR/servers.tsv")" 0
 
 # --- usage
 OUT=$(bash "$DIR/sweep.sh" --bogus 2>&1); eq "usage rc" "$?" 64

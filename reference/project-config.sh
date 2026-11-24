@@ -8,6 +8,7 @@
 # Functions run with the cwd noted; keep them quiet on success and print one line on failure.
 
 WF_PORTS=3101-3105                    # dev-server/E2E ports, one per concurrent worker (spec.sh)
+WF_PROTO_PORTS=3111-3119              # prototype previews that stay up while a design decision waits (proto-serve.sh); outside WF_PORTS
 # WF_MAX_WORKERS=3                    # concurrent workers in the Run; usually set globally, here only to differ
 # WF_MODEL_HEAVY=opus                 # any WF_MODEL_* tier (install.sh sets them globally), here only to differ
 WF_RISK_GLOBS=()                      # quoted globs, e.g. ('store/**' 'server/**'): PRs touching them get a separate reviewer; ** = any depth

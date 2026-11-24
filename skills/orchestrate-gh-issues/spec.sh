@@ -60,6 +60,10 @@ if [ "$want_port" = 1 ]; then
   echo "$port #$n $stage" >>"$ledger/ports"
 fi
 
+proto=""
+if [ "$stage" = design ]; then # the preview port the coordinator serves the proto worktree on while the decision waits
+  proto=$(bash "$DIR/proto-serve.sh" port "$n" 2>/dev/null) || proto=""
+fi
 title=$(gh issue view "$n" --json title -q .title 2>/dev/null) || title="(title unavailable)"
 if [ -z "$branch" ]; then
   case "$stage" in
@@ -79,7 +83,7 @@ else
 fi
 
 TITLE=$title N=$n STAGE=$stage TIER=$tier MODEL=$model BRANCH=$branch PR=${pr:-"(see issue)"} WT=${wt:-"(this worktree)"} \
-MODEL_STRONG=$WF_MODEL_STRONG MODEL_FAST=$WF_MODEL_FAST PORT=${port:-"(none: no dev server for this stage)"} LEDGER=$ledger SKILLDIR="~/.claude/skills/orchestrate-gh-issues" DECIDE="$decide" \
+PROTO_PORT=${proto:-"(none free: use your PORT)"} MODEL_STRONG=$WF_MODEL_STRONG MODEL_FAST=$WF_MODEL_FAST PORT=${port:-"(none: no dev server for this stage)"} LEDGER=$ledger SKILLDIR="~/.claude/skills/orchestrate-gh-issues" DECIDE="$decide" \
 QUESTIONS=$questions STAGEKEY=$stage python3 -I -c '
 import os, re, sys
 t = open(sys.argv[1], encoding="utf-8").read()

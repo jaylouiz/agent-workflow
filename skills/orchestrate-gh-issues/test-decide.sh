@@ -4,6 +4,7 @@ set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
+export WF_PROTO_DIR="$T/proto-serve" # never the real prototype-server registry
 mkdir -p "$T/repo" "$T/bin"; git -C "$T/repo" init -q; git -C "$T/repo" remote add origin https://github.com/acme/widgets.git
 cd "$T/repo" || exit 1
 export WF_ISSUE_LOG_DIR="$T/logs" PATH="$T/bin:$PATH"
@@ -130,6 +131,14 @@ thread "$T/needs.json" 'rec D2' 'req D3' 'D2: change it'
 eq "followup D2 targets the challenged record" "$(head -1 "$T/posted")" "<!-- decision-followup D2 -->"
 : >"$T/posted"; bash "$D" answer 7 "B" D3
 eq "answer D3 targets the named request" "$(head -1 "$T/posted")" "<!-- decision-answer D3 -->"
+# resolve stops the issue's prototype server (nothing registered: no-op)
+PS=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'); mkdir -p "$T/ps-wt"
+WF_PROTO_CMD='python3 -m http.server "$PORT" --bind 127.0.0.1' bash "$DIR/proto-serve.sh" start 7 "$T/ps-wt" "$PS" >/dev/null 2>&1
+eq "prototype server is up before resolve" "$([ -n "$(lsof -nP -tiTCP:"$PS" -sTCP:LISTEN 2>/dev/null)" ] && echo up)" up
+: >"$T/posted"; bash "$D" resolve 7 "go" D3 >/dev/null 2>&1
+eq "resolve stops the issue's prototype server" "$(lsof -nP -tiTCP:"$PS" -sTCP:LISTEN 2>/dev/null)" ""
+eq "resolve unregisters it" "$(grep -c . "$WF_PROTO_DIR/servers.tsv")" 0
+
 eq "a bad decision id is refused" "$(rc bash "$D" resolve 7 go x2)" 64
 eq "an unknown decision id is refused" "$(rc bash "$D" resolve 7 go D99)" 64
 eq "an id with trailing junk is refused" "$(rc bash "$D" resolve 7 go D3x)" 64
