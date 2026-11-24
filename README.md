@@ -50,6 +50,7 @@ Choices that differ per person or project live in two sourced bash files, read i
 | `WF_COMMENT_CAP` | `1500` | global | visible characters per agent issue comment |
 | `WF_ISSUE_LOG_DIR` | `~/.claude/issue-logs` | global | per-issue coordination logs |
 | `WF_NO_WAIT_CI` | `0` | global or repo | `1`: merge prep does not wait for pending checks |
+| `WF_PHASE_LABELS` | `on` | global or repo | `off`: the skills stop writing `phase:design` / `phase:build`; GitHub's issue status carries the phase alone |
 | `WF_PORTS`, `WF_RISK_GLOBS`, `WF_IGNORE_GLOBS`, `WF_REVIEW_LINES`, `WF_HOLD_LABELS`, `WF_REQUIRED_CHECKS`, `WF_CHECKS_TSV`, `wf_*` functions | see the template | repo | ports, review routing, holds, CI gate, verify / build / after-merge steps |
 
 The model tiers are written by `install.sh`; a repo may override one in its `.claude/issue-workflow.sh` (e.g. `WF_MODEL_HEAVY=opus`). `WF_COMMENT_CAP` and `WF_ISSUE_LOG_DIR` may also come from the environment, which wins. Fixed on purpose: label names and colours (clients such as Tandem read them), the retro thresholds and the CI wait windows.
@@ -76,9 +77,11 @@ The model tiers are written by `install.sh`; a repo may override one in its `.cl
 |---|---|---|
 | Done | issue closed | the merge (`Closes #n`) |
 | Inbox | `inbox`, or open with no lane label (fog included) | filing, `/gh-inbox-dispatcher` |
-| UX Design | `phase:design` | `/design-gh-issue` at its start; removed at the handover |
-| Build | `phase:build`, or an open PR with `Closes #n` | `/specify-gh-issue` or `/build-gh-issue` at its start; kept until close |
-| Backlog | a lane label, no `phase:*` | triage, the Design handover |
+| UX Design | status In progress with the lane `needs-design`, else `phase:design` | `/design-gh-issue` at its start; at the handover the status goes back to Backlog and the label is removed |
+| Build | status In progress (any other lane) or In review, else `phase:build`, or an open PR with `Closes #n` | `/specify-gh-issue` or `/build-gh-issue` at its start (In progress), Build after `gh pr create` (In review); kept until close |
+| Backlog | a lane label, no started status and no `phase:*` | triage, the Design handover |
+
+The **status** is GitHub's native issue status (Backlog, Todo, In progress, In review, Done, …), written by `skills/orchestrate-gh-issues/issue-status.sh` next to the phase label, best effort: a repo without statuses, or a call that fails, leaves the label as the only signal, and a status of Backlog, Todo or none says nothing about the phase. Todo means "handed to an agent, not started yet" and is written by the client that hands over (Tandem), never here. `WF_PHASE_LABELS=off` stops the `phase:*` label writes once every client reads the status (the cut-over); the labels already on issues stay until then.
 
 `ux-impact` marks an issue whose result the user should look at after Done (set in Design's handover and by Build for UI changes); its **Look comment** says where.
 

@@ -3,7 +3,7 @@ name: specify-gh-issue
 description: "Specify stage for a GitHub issue (label `needs-spec`): turn a UX decision or a clear request into a ready-to-build spec (acceptance criteria, implementation notes, verification), choosing between technical approaches where the build is open. Rewrites the issue body and marks it `ready`. Never edits code and does not redesign the UX."
 argument-hint: <issue-number>
 arguments: [issue]
-allowed-tools: Bash(gh issue view *) Bash(gh issue comment *) Bash(gh issue edit *) Bash(gh label create *) Bash(gh label list *)
+allowed-tools: Bash(gh issue view *) Bash(gh issue comment *) Bash(gh issue edit *) Bash(gh label create *) Bash(gh label list *) Bash(~/.claude/skills/orchestrate-gh-issues/issue-status.sh *)
 hooks:
   PreToolUse:
     - matcher: Bash
@@ -31,7 +31,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 5. **Route by the triage rule** (rarely triggers):
    - **Fog**: comment why, keep `needs-spec`, point the user to `/wayfinder $issue`; stop.
    - **Open direction** (UI without a `## UX decision`): relabel `needs-design` with a one-line comment and suggest `/design-gh-issue $issue`. Stop.
-   - Otherwise continue, in Phase Build: `gh label create phase:build --force --color 1D76DB --description "Phase Build: specify, build or review running, or PR open"`, then `gh issue edit $issue --add-label phase:build`. A `## UX decision` in the body is **input**: do not reopen its choices; a real conflict with code or invariants goes to the user as a question. The same holds for Design's stories and UACs.
+   - Otherwise continue, in Phase Build: `~/.claude/skills/orchestrate-gh-issues/issue-status.sh phase $issue build` (sets GitHub's issue status In progress and the label `phase:build`). A `## UX decision` in the body is **input**: do not reopen its choices; a real conflict with code or invariants goes to the user as a question. The same holds for Design's stories and UACs.
    - **Issue standard**: no `## Problem`, `Job:` or `## Solution` in the body yet: infer them per the issue rules ("Infer, then record") before anything else; the request's own idea goes to Solution, never into Problem. If not even the problem can be named from context, it is fog (above).
 6. **Epic check.** A clear destination that spans several independently shippable slices is specified as an epic: options and Decision cover the cross-cutting choices only, the body becomes a tracker (goal, decisions, sequenced sub-issue table), each slice becomes a sub-issue in the lane the triage rule gives it (scope paragraph, AC slice, dependencies), linked with `gh api repos/{owner}/{repo}/issues/$issue/sub_issues -F sub_issue_id=<sub-issue numeric .id, not its number>`, and the parent gets `ready` as tracker only. Skip the current-state review; the sub-issues' own runs do it.
 
