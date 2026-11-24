@@ -41,6 +41,8 @@ run() { rm -f "$T/calls" "$T/err"; : >"$T/calls"; bash "$S" "$@" >"$T/out" 2>"$T
 calls() { grep -c "$1" "$T/calls"; }
 reset() { rm -f "$T"/fail-* "$T/labels" "$WF_GLOBAL_SETTINGS" "$T/repo/.claude/issue-workflow.sh"; answer I_7 Backlog IS_x; }
 
+check "the script is executable (the skills call it by path)" '[ -x "$S" ]'
+
 # --- phase build: label, then status, ids looked up by name ---
 reset
 eq "phase build exits 0" "$(run phase 7 build)" 0
