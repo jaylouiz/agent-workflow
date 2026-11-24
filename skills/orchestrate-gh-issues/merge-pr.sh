@@ -69,7 +69,8 @@ review_check() { # review_check <body file> [route]
   printf '%s\n' "$sec" | grep -Eq '^route: .*by: ' || problems="$problems\nreview: not reviewed yet (no 'by:' on the route line)"
   local open; open=$(printf '%s\n' "$sec" | grep -E '^- \[(medium|high|critical)\].*-> *open[[:space:]]*$' || true)
   [ -z "$open" ] || problems="$problems\nreview: open finding(s):\n$open"
-  if [ "$want" = reviewer ] && printf '%s\n' "$sec" | grep -Eq '^route: *lead'; then
+  # the last route line counts: a late reviewer's line wins over the lead's
+  if [ "$want" = reviewer ] && [ "$(printf '%s\n' "$sec" | grep -E '^route:' | tail -1 | grep -Ec '^route: *lead')" = 1 ]; then
     problems="$problems\nreview: route says reviewer but the lead reviewed: start a reviewer worker (spec.sh review)"
   fi
   [ -z "$problems" ] && return 0

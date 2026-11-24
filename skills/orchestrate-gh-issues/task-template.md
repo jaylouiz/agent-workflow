@@ -48,13 +48,13 @@ Observable acceptance: the `## Review` section; worker_done body starting `REVIE
 <!-- /stage -->
 <!-- stage:delta-review -->
 Target: PR #{{PR}} for issue #{{N}}, in worktree {{WT}}: the fix commits since the last review only (`git diff <last reviewed sha>..HEAD`; `git range-diff` after a rebase), against the previous `## Review`.
-Change: findings only, no edits. Confirm each `-> fixed <sha>` line, set any finding the fix did not resolve back to `-> open`, add new findings the fix introduced. Update only the `## Review` section, same format, `by: {{MODEL}}`.
+Change: findings only, no edits. Confirm each `-> fixed <sha>` line, set any finding the fix did not resolve back to `-> open`, add new findings the fix introduced. Update only the `## Review` section, same format, `by: {{MODEL}}`; replace the earlier `route:` line with yours. Check that each fix also covers the finding's sibling cases (other breakpoints, tiles, variants).
 Ownership: the PR body's `## Review` section only.
 Observable acceptance: worker_done body starting `REVIEWED #{{N}} PR #{{PR}} open=<count>`.
 <!-- /stage -->
 <!-- stage:fix -->
 Target: PR #{{PR}} for issue #{{N}}, in worktree {{WT}}: every `## Review` line ending in `-> open`, plus every task in the `Notes:` block at the end (a gate failure, a merge conflict, a decided follow-up). Notes tasks are work even when no `-> open` line exists: do them, never answer "no open lines, nothing changed".
-Change: fix each open finding (test first where it is logic), run verify and the E2E specs the fix touches, push (no force-push), and set the line to `-> fixed <sha>` (or `-> dismissed: <reason>` when it turns out not to hold, with evidence). A risk you would only document (a known trap that can lose or strand user data) is a new `-> open` line, never a note in the report. Keep the PR body's other rules: screenshots per the profile's "Pull requests"; edit the `E2E-specs:` line in place, never add a second. A user review in a PR comment: map each remark to its change in a `decide.sh note`.
+Change: fix each open finding (test first where it is logic); for each, find its sibling cases (other breakpoints, tiles, sources, variants of the same code path) and fix or test them in the same round; run verify and the E2E specs the fix touches, push (no force-push), and set the line to `-> fixed <sha>` (or `-> dismissed: <reason>` when it turns out not to hold, with evidence). A risk you would only document (a known trap that can lose or strand user data) is a new `-> open` line, never a note in the report. Keep the PR body's other rules: screenshots per the profile's "Pull requests"; edit the `E2E-specs:` line in place, never add a second. A user review in a PR comment: map each remark to its change in a `decide.sh note`.
 Ownership: worktree of PR #{{PR}} only.
 Observable acceptance: no `-> open` line left and every Notes task done; worker_done body starting `FIXED #{{N}} PR #{{PR}}`.
 <!-- /stage -->
