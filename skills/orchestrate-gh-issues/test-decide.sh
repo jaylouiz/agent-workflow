@@ -89,6 +89,12 @@ status() { thread "$T/needs.json" "$@"; cp "$T/needs.json" "$T/agent.json"; bash
 eq "challenge to D2 while D3 is open: D3 stays waiting, D2 is a change" \
   "$(status 'rec D2' 'req D3' 'D2: change it')" "waiting  #7 D3 (0m): Pick D3?
 change   #7 D2: D2: change it (a request on #7 is still waiting: this may be its answer under the wrong D<k>)"
+eq "the same with the prefix Tandem writes (Decision D2:)" \
+  "$(status 'rec D2' 'req D3' 'Decision D2: change it')" "waiting  #7 D3 (0m): Pick D3?
+change   #7 D2: Decision D2: change it (a request on #7 is still waiting: this may be its answer under the wrong D<k>)"
+eq "'Decision D3:' after a later record answers D3" "$(status 'req D3' 'rec D2' 'Decision D3: B')" "answered #7 D3: Decision D3: B"
+eq "'Decision' without an id, or with an unknown one, attaches to the nearest marker" "$(status 'rec D1' 'rec D2' 'Decision: wait'; status 'rec D1' 'rec D2' 'Decision D9: x')" "change   #7 D2: Decision: wait
+change   #7 D2: Decision D9: x"
 eq "answer to D3 written after rec D2: D3 answered, D2 untouched" \
   "$(status 'req D3' 'rec D2' 'D3: B')" "answered #7 D3: D3: B"
 eq "unprefixed reply keeps the nearest earlier marker (D2)" "$(status 'req D3' 'rec D2' 'B')" "waiting  #7 D3 (0m): Pick D3?
@@ -151,10 +157,10 @@ eq "no decision on the issue: default id is refused" "$(rc bash "$D" resolve 7 g
 thread "$T/needs.json" 'rec D1'
 printf 'Pick?\n1 Layout: A (list, today) · B ★ (grid)\n' >"$T/q.md"
 : >"$T/posted"; bash "$D" request 7 "$T/q.md" >/dev/null 2>&1
-eq "request footer names the prefix of its own id" "$(grep -c 'Short form: `D2: 1B`' "$T/posted")" 1
+eq "request footer names the prefix of its own id" "$(grep -c 'Short form: `Decision D2: 1B`' "$T/posted")" 1
 printf 'Pick?\n- A: x\n- B: y\n' >"$T/q.md"
 : >"$T/posted"; bash "$D" record 7 "$T/q.md" >/dev/null 2>&1
-eq "record footer names the prefix of its own id" "$(grep -c 'starting with `D2:`' "$T/posted")" 1
+eq "record footer names the prefix of its own id" "$(grep -c 'starting with `Decision D2:`' "$T/posted")" 1
 
 # ---- decision format (docs/decision-format.md) ----
 # request: built from the question lines. tandem() mirrors what Tandem reads from a request (tandem src/core/contract.ts
@@ -190,7 +196,7 @@ cp "$T/posted" "$T/req-multi.md"
 eq "request keeps the marker on line 1" "$(head -1 "$T/posted")" "<!-- decision-request D1 -->"
 eq "request links the overview instead of describing the options" "$(grep -c '^Options with screenshots: https://github.com/acme/widgets/issues/7#issuecomment-1$' "$T/posted")" 1
 eq "legend: one line per question, keywords in brackets, ★ bold" "$(grep -F '**1 Shell:**' "$T/posted")" "+ **1 Shell:** A (back on top, today) · **B ★ (footer bar)** · C (top stepper)"
-eq "answer block is prefilled with the recommendations" "$(sed -n '/^```$/,/^```$/p' "$T/posted" | tr '\n' '|')" '```|D1|1 Shell: B (footer bar)|2 Heading: A (hidden)|```|'
+eq "answer block is prefilled with the recommendations" "$(sed -n '/^```$/,/^```$/p' "$T/posted" | tr '\n' '|')" '```|Decision D1:|1 Shell: B (footer bar)|2 Heading: A (hidden)|```|'
 eq "each option is named once outside the block (legend only)" "$(grep -c 'top stepper' "$T/posted")" 2 # its choices comment + the legend
 eq "Tandem reads a multi-question request: question, preview, one tile 'ok', recommended" "$(tandem "$T/posted" | tr '\n' ';')" \
   "question=Setup shell: 2 choices;preview=https://p/x?variant=1A;keys=ok;options=ok: take every ★ option;recommended=ok;"
@@ -258,6 +264,15 @@ eq "the short form" "$(answered "$M" '1A 2b')" "  reads as: 1 Shell: A (back on 
 eq "a mixed answer (one question, two options) stays free text" "$(answered "$M" '1B with the header from 1A')" ""
 eq "a partial answer names what is missing" "$(answered "$M" 'D1: 1C')" "  reads as: 1 Shell: C (top stepper) · 2 Heading: no answer (★ is A)"
 eq "Tandem's tile answer with a note (D1: ok. 1A)" "$(answered "$M" 'D1: ok. 1A')" "  reads as: 1 Shell: A (back on top, today) · 2 Heading: A (hidden)"
+eq "Tandem's answers start with 'Decision D1:': ok with changes" "$(answered "$M" 'Decision D1: ok. 1A')" "  reads as: 1 Shell: A (back on top, today) · 2 Heading: A (hidden)"
+eq "Decision D1: ok" "$(answered "$M" 'Decision D1: ok')" "  reads as: 1 Shell: B (footer bar) · 2 Heading: A (hidden)"
+eq "Decision D1: the short form" "$(answered "$M" 'Decision D1: 1C 2B')" "  reads as: 1 Shell: C (top stepper) · 2 Heading: B (small, visible)"
+eq "Decision D1: one line per question, the first on the prefix line, a note after its letter" "$(answered "$M" 'Decision D1: 1 Shell: C (Top stepper) but calmer
+2 Heading: A (Hidden)')" "  reads as: 1 Shell: C (top stepper), note: but calmer · 2 Heading: A (hidden)"
+eq "the copied template (Decision D1: on its own line)" "$(answered "$M" 'Decision D1:
+1 Shell: B (footer bar)
+2 Heading: B (small, visible)')" "  reads as: 1 Shell: B (footer bar) · 2 Heading: B (small, visible)"
+eq "Decision D1: a single question with a note" "$(answered "$S" 'Decision D1: B. wait for the review')" "  reads as: 1 Merge: B (hold, today)"
 eq "Tandem's round reaction: picks count, rejects do not" "$(answered "$M" 'R1:
 - pick: 1C, 2B
 - reject: 1A

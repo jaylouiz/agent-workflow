@@ -3,7 +3,7 @@ name: build-gh-issue
 description: "Build stage for a GitHub issue with a confirmed spec (label `ready`): implement it on its own branch and worktree, verify it with tests and the project's design-quality gate, and open a PR that closes the issue. Never merges."
 argument-hint: <issue-number>
 arguments: [issue]
-allowed-tools: Bash(gh issue view *) Bash(gh issue comment *) Bash(gh issue edit *) Bash(gh label create *) Bash(gh pr list *) Bash(gh pr create *) Bash(git worktree *) Bash(git branch *) Bash(git status *) Bash(git diff *) Bash(git log *) Bash(git add *) Bash(git commit *) Bash(git push *)
+allowed-tools: Bash(gh issue view *) Bash(gh issue comment *) Bash(gh issue edit *) Bash(gh label create *) Bash(gh pr list *) Bash(gh pr create *) Bash(~/.claude/skills/orchestrate-gh-issues/issue-status.sh *) Bash(git worktree *) Bash(git branch *) Bash(git status *) Bash(git diff *) Bash(git log *) Bash(git add *) Bash(git commit *) Bash(git push *)
 hooks:
   PreToolUse:
     - matcher: Bash
@@ -26,7 +26,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 
 1. `gh issue view $issue --json number,title,body,labels,state`
 2. Stop and tell the user if: the issue is closed; the label `ready` is missing (point to `/specify-gh-issue $issue`, or `/design-gh-issue $issue` for `needs-design`); or `gh pr list --state all --search "\"Closes #$issue\" in:body"` / `git branch --list "*$issue-*"` shows work in progress other than the current branch (an Orca worker sits on its own `*<n>-*` branch) (report it, do not start a duplicate).
-3. Phase: `gh label create phase:build --force --color 1D76DB --description "Phase Build: specify, build or review running, or PR open"`, then `gh issue edit $issue --add-label phase:build` (kept until the issue closes).
+3. Phase: `~/.claude/skills/orchestrate-gh-issues/issue-status.sh phase $issue build` (sets GitHub's issue status In progress and the label `phase:build`, kept until the issue closes).
 4. Read the acceptance criteria and classify the issue as **UI** or **non-UI**. **UI** also gets `ux-impact` (`gh label create ux-impact --force --color C5DEF5 --description "Changes what the user sees: Look after Done"`, then `--add-label ux-impact`); so does an issue with a `## UX decision`. A non-UI issue whose diff turns out to change the UI gets it too. The body must meet the issue standard (Problem & job, Solution and UACs, or their tech-only form); if it does not, relabel `needs-spec` (`--remove-label ready`) with a one-line comment, point to `/specify-gh-issue $issue` and stop (an orchestrated lead runs Specify's Complete track itself). Short ACs are fine as long as they are observable. If the criteria are vague or contradictory, or something important is unclear, do not guess: interactive, ask; unattended, `decide.sh record` a two-way choice and go on, `request` a one-way one and park (`/orchestrate-gh-issues` section 5), also for choices that come up while implementing.
 5. A `## UX decision` linking a proto branch: read the prototype (`git show proto/<n>-<slug>:<path>`, its screenshots) as a reference. Rebuild properly; never merge or cherry-pick prototype code.
 
@@ -71,7 +71,7 @@ Apply the profile's "design records" rules (pattern extraction, design-doc updat
 1. Conventional commit(s), e.g. `fix(board): ... (#$issue)`, ending with the `Co-Authored-By` line from the session's attribution instructions.
 2. `git fetch` and `git rebase origin/<default>`, then `git push -u origin HEAD` (mind the profile's worktree notes before rebasing).
 3. `gh pr create --body-file <file>` with the body the profile's "Pull requests" requires (a summary, ACs as a checklist with evidence, the Pattern-check lines for UI changes, anything left out; screenshots as that section says). Write the body file, attribution line included, in its own call before `gh pr create` (the guard reads the file before a chained append runs). The guard hook checks `Closes #$issue`, the PR attribution line and the project's own lines.
-4. Log the PR link with `~/.claude/skills/orchestrate-gh-issues/decide.sh log $issue "PR: <url>"` (the PR already shows in the issue timeline through `Closes`).
+4. Log the PR link with `~/.claude/skills/orchestrate-gh-issues/decide.sh log $issue "PR: <url>"` (the PR already shows in the issue timeline through `Closes`), and set the status In review: `~/.claude/skills/orchestrate-gh-issues/issue-status.sh phase $issue review`.
 5. **`ux-impact` only: the Look comment.** One comment the user opens after Done to check the result. Body file (it must pass `decide.sh check`), then `gh issue comment $issue --body-file <file> --attach <png>#<alt>…`:
    ```markdown
    <!-- decision-note look -->

@@ -50,6 +50,7 @@ Choices that differ per person or project live in two sourced bash files, read i
 | `WF_COMMENT_CAP` | `1500` | global | visible characters per agent issue comment |
 | `WF_ISSUE_LOG_DIR` | `~/.claude/issue-logs` | global | per-issue coordination logs |
 | `WF_NO_WAIT_CI` | `0` | global or repo | `1`: merge prep does not wait for pending checks |
+| `WF_PHASE_LABELS` | `on` | global or repo | `off`: the skills stop writing `phase:design` / `phase:build`; GitHub's issue status carries the phase alone |
 | `WF_PORTS`, `WF_PROTO_PORTS`, `WF_RISK_GLOBS`, `WF_IGNORE_GLOBS`, `WF_REVIEW_LINES`, `WF_HOLD_LABELS`, `WF_REQUIRED_CHECKS`, `WF_CHECKS_TSV`, `wf_*` functions | see the template | repo | ports, review routing, holds, CI gate, verify / build / after-merge steps |
 
 The model tiers are written by `install.sh`; a repo may override one in its `.claude/issue-workflow.sh` (e.g. `WF_MODEL_HEAVY=opus`). `WF_COMMENT_CAP` and `WF_ISSUE_LOG_DIR` may also come from the environment, which wins. Fixed on purpose: label names and colours (clients such as Tandem read them), the retro thresholds and the CI wait windows.
@@ -76,9 +77,11 @@ The model tiers are written by `install.sh`; a repo may override one in its `.cl
 |---|---|---|
 | Done | issue closed | the merge (`Closes #n`) |
 | Inbox | `inbox`, or open with no lane label (fog included) | filing, `/gh-inbox-dispatcher` |
-| UX Design | `phase:design` | `/design-gh-issue` at its start; removed at the handover |
-| Build | `phase:build`, or an open PR with `Closes #n` | `/specify-gh-issue` or `/build-gh-issue` at its start; kept until close |
-| Backlog | a lane label, no `phase:*` | triage, the Design handover |
+| UX Design | status In progress with the lane `needs-design`, else `phase:design` | `/design-gh-issue` at its start (it also sets the lane `needs-design`); at the handover the status goes back to Backlog and the label is removed |
+| Build | status In progress (any other lane) or In review, else `phase:build`, or an open PR with `Closes #n` | `/specify-gh-issue` or `/build-gh-issue` at its start (In progress), Build after `gh pr create` (In review); kept until close |
+| Backlog | a lane label, no started status and no `phase:*` | triage, the Design handover |
+
+The **status** is GitHub's native issue status (Backlog, Todo, In progress, In review, Done, …), written by `skills/orchestrate-gh-issues/issue-status.sh` next to the phase label, best effort: a repo without statuses, or a call that fails, leaves the label as the only signal, and a status of Backlog, Todo or none says nothing about the phase. Todo means "handed to an agent, not started yet" and is written by the client that hands over (Tandem), never here. `WF_PHASE_LABELS=off` stops the `phase:*` label writes once every client reads the status (the cut-over); the labels already on issues stay until then.
 
 `ux-impact` marks an issue whose result the user should look at after Done (set in Design's handover and by Build for UI changes); its **Look comment** says where.
 
@@ -102,7 +105,7 @@ The model tiers are written by `install.sh`; a repo may override one in its `.cl
 | One-way / two-way decision | One-way: costly to undo or the user's call by definition (Design round, held merge, the profile's "Decisions" list); only these reach the user. Two-way: everything else; the agent decides, records it and continues. |
 | Coordination log | Per-issue Markdown file for agent-to-agent progress (stage starts, milestones, PR link, fix rounds, resume text): `decide.sh log`, at `~/.claude/issue-logs/<owner>/<repo>/<n>.md`, outside the work tree; deleted by `merge-pr.sh after`. The issue thread keeps only what the user reads. |
 | Look comment | Build's marked comment (`<!-- decision-note look -->`) on a `ux-impact` issue: preview URL seeded to show the change, `Path:` for production, final screenshots, what to check. |
-| Comment markers | Every agent comment starts with `<!-- decision-<kind> … -->` so it never reads as the user's. A comment without a marker is the user's and belongs to the decision it names (a first line `D<k>:` with a request or record `D<k>` earlier in the thread), else to the nearest earlier marked comment (a note included: a reply to a note belongs to no decision and is ignored, in Tandem and in `decide.sh` alike). Request and record footers tell the user to start a reply with `D<k>:` to reach an older decision. Decision kinds carry an id (`request D<k>`, `record`, `answer`, `resolved`, `followup`); note kinds are typed for clients: `note round R<k>` (design round; screenshot alt `R<k> · <variant> · <desktop\|mobile>`), `note options` (Specify approaches), `note look`, plain `note` (summary). |
+| Comment markers | Every agent comment starts with `<!-- decision-<kind> … -->` so it never reads as the user's. A comment without a marker is the user's and belongs to the decision it names (a first line `Decision D<k>:`, which is what Tandem writes, or `D<k>:`, with a request or record `D<k>` earlier in the thread), else to the nearest earlier marked comment (a note included: a reply to a note belongs to no decision and is ignored, in Tandem and in `decide.sh` alike). Request and record footers tell the user to start a reply with `D<k>:` to reach an older decision. Decision kinds carry an id (`request D<k>`, `record`, `answer`, `resolved`, `followup`); note kinds are typed for clients: `note round R<k>` (design round; screenshot alt `R<k> · <variant> · <desktop\|mobile>`), `note options` (Specify approaches), `note look`, plain `note` (summary). |
 | Comment cap | Every agent comment stays scannable: at most 1500 visible characters, no line over 400; detail goes into `<details>` (`decide.sh check`, enforced by the guard hook). |
 | Decision request | A one-way question as a marked issue comment (`decide.sh request`) plus label `needs-decision`: numbered questions, lettered options (`★` = recommended), a link to the overview that explains them and a prefilled answer to copy. The user answers in a comment, any time: `ok`, the copied block, `1B 2A` or free text. Format: [docs/decision-format.md](docs/decision-format.md). |
 | Parked | An issue waiting on a decision request. Its worker has ended; a fresh one resumes after the answer. |

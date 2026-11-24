@@ -97,11 +97,11 @@ Recommendation: ok (1B 2A)
 ---
 Copy, change only the letters you disagree with, post as a comment:
 ```
-D1
+Decision D1:
 1 Shell: B (footer bar)
 2 Heading: A (hidden)
 ```
-Or reply `ok` to take every recommendation. Text after a letter is read as a note. Short form: `D1: 1B 2A`. The run picks it up at its next checkpoint.
+Or reply `ok` to take every recommendation. Text after a letter is read as a note. Short form: `Decision D1: 1B 2A`. The run picks it up at its next checkpoint.
 ````
 
 A request with one question lists its options one per line instead (`- A: merge now ★`, `- B: hold (today)`,
@@ -114,11 +114,15 @@ resume text and writes it into the "Resumed" comment and the coordination log):
 
 | Form | Example | Read as |
 |---|---|---|
-| ok | `ok`, `D1: all recommended` | every recommended option |
+| ok | `ok`, `Decision D1: ok`, `D1: all recommended` | every recommended option |
 | block | the copied block; `1 Shell: C (footer bar) but calmer` | question 1 = C, note "but calmer". The brackets may be stale, the letter counts |
-| short | `1B 2A`, `D1: ok. 1A` | those letters; with `ok`, the rest is the recommendation, without it the rest is `no answer` |
+| short | `1B 2A`, `Decision D1: ok. 1A` | those letters; with `ok`, the rest is the recommendation, without it the rest is `no answer` |
 | letter | `B`, `B. wait for the review` | one-question requests only |
 | free text | anything else | passed on word for word, as before |
+
+A reply may start with the decision it answers: `Decision D1:` (what Tandem writes and what the request's template shows) or
+`D1:`. With a request or record of that id earlier in the thread the reply belongs to that decision, also when a later one is
+open; the prefix is not part of the answer. A design round's `R1:` reaction is read as before.
 
 The resume text spells the choices out: `1 Shell: C (top stepper), note: but calmer · 2 Heading: A (hidden)`.
 A request without `<!-- choices -->` lines (posted before this format) is never parsed: its answer is free text.
@@ -133,11 +137,13 @@ and how the format keeps it:
 | markers `decision-request D<k>`, `-answer`, `-resolved`, `-record`, `-followup`, `-note round R<k>` / `options` / `look` | unchanged; the `choices` comments use another prefix |
 | request: the first visible line that is no `###` heading is the question | the question stays a plain line; the heading carries only the id |
 | request: `Preview:` line | unchanged |
-| request: every `-`, `*` or `1.` list line before the first `---` is an option tile; the text before `:` is what a click sends (`D1: B`) | one question: one `- A: …` line per option. Several: the legend uses `+` bullets (no tiles) and the one tile is `- ok: …`. `decide.sh request` refuses list lines in the file's body |
+| request: every `-`, `*` or `1.` list line before the first `---` is an option tile; the text before `:` is what an answer names (`Decision D1: B`) | one question: one `- A: …` line per option. Several: the legend uses `+` bullets (no tiles) and the one tile is `- ok: …`. `decide.sh request` refuses list lines in the file's body |
 | request: the first line containing "recommend" is the recommendation; its first word marks the recommended tile | one `Recommendation:` line (`B (footer bar)`, or `ok (1B 2A)`); the answer template sits below the `---`, where Tandem stops reading |
 | round: `Variants:` keys are the things to pick, written back as `R1:` / `- pick: 1B, 2A` / `- reject: 1C` | `Variants:` lists the short forms; the answer reader takes picks and ignores rejects |
 | round: `### <key>: <name>` headings are also listed, the next line is the summary; images group by alt `R<k> · <key> · <desktop\|mobile>` | question headings `### 1. Shell: …` with a blank line under them; alt `R1 · 1. Shell · …` puts the image under its question |
-| answers it writes: `D1: <key>. <note>` | read as letter, `ok` or short form, see above |
+| request: the hidden `<!-- choices … -->` lines are its questions (one step each), answered in one comment | `decide.sh request` writes one per question line; a request without them is one question from its list lines |
+| round: the `### <n>. <label>: …` sections, their option tables and `★ Why` lines describe the questions; the image under a section is that question's screenshot | `decide.sh check` enforces the shape |
+| answers it writes, all starting `Decision D<k>: `: `ok` · `ok. 1A 3B` · `1B 2A` (a question without ★) · `1 Shell: C (top stepper) but calmer` with one line per further question (as soon as one carries a note) · `B` / `B. note` (one question) · a PR verdict or a challenge to an agent decision | the prefix names the decision (`scan`); `read` strips it and takes `ok`, the short form, the block or the letter, see above |
 | issue body: `^## UX decision` | unchanged |
 
 `test-decide.sh` pins these lines with a copy of Tandem's request rules (`tandem()`).
