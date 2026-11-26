@@ -23,7 +23,7 @@ Change, in order (skip a step whose result already exists: the issue is `ready` 
    ```
    A finding you could not fix in 2 rounds stays `-> open` (the coordinator holds the merge and reports it).
 5. worker_done --outcome succeeded with a body starting `READY #{{N}} PR <url> route=<lead|reviewer>` (or `PARKED #{{N}} D<k>`, `ROUTED #{{N}} needs-design`; failure: --outcome failed, `FAILED #{{N}}: <reason>`).
-Subagents: stuck on a root cause for more than 15 minutes, at most one `Agent` call with `model: {{MODEL_STRONG}}` on that question (say so in the PR); mechanical sweeps (`rg` audits, copy or i18n sweeps, PR-body checks) may use `Agent` with `model: {{MODEL_FAST}}`. A design gate (profile "Design quality") spawns the isolated sub-agent the profile asks for; running it inline is a failed gate, not a budget saving.
+Subagents: stuck on a root cause for more than 15 minutes, at most one `Agent` call with `model: {{MODEL_STRONG}}` on that question (say so in the PR); mechanical sweeps (`rg` audits, copy or i18n sweeps, PR-body checks) may use `Agent` with `model: {{MODEL_FAST}}`. Design gate (profile "Design quality"): a UI PR gets its `/impeccable critique` result in the body BEFORE `gh pr create`; if you cannot spawn the isolated sub-agent, run it inline and say so in the body (the profile allows it; skipping it costs a review finding and a fix round). A flake or red-main fix states its `--repeat-each=20 --retries=0` result in the body (profile "Orchestration").
 Ownership: issue body, comments and labels; worktree {{BRANCH}} only.
 Observable acceptance: PR URL with `Closes #{{N}}`, checks green per the profile, `## Review` in the format above.
 <!-- /stage -->
