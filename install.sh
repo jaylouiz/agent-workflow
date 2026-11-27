@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Install agent-workflow into ~/.claude (or $CLAUDE_CONFIG_DIR): check the requirements, link every skill under skills/
-# and this checkout as ~/.claude/agent-workflow (the skills read reference/ through it), record the global choices in
+# Install agent-workflow into ~/.claude: check the requirements, link every skill under skills/ and this checkout as
+# ~/.claude/agent-workflow (the skills read reference/ and run bin/ through it), record the global choices in
 # ~/.claude/agent-workflow-settings.sh and print the next step. Idempotent: rerun after adding, renaming or removing a
 # skill. In a terminal it asks; without one (or with --yes) it keeps every recorded choice and uses defaults otherwise.
 #
@@ -14,23 +14,34 @@
 #                            else one import line appended to it. --no-global-rules removes either.
 #   --proto-agent            macOS: a login LaunchAgent runs `proto-serve.sh ensure`, so the prototype previews that wait on a
 #                            decision come back after a reboot. --no-proto-agent removes it. Off unless asked for or recorded.
-#   --dev / --no-dev         maintainer only: link /orca-update-review (run by hand after an Orca update)
+#   --dev / --no-dev         maintainer only: link /aw-orca-review (run by hand after an Orca update)
 #   --check                  only check the requirements; exit 1 when a required tool is missing
 #   --uninstall              remove the links and the global rules; keeps the settings file
 #
 # A real file or directory where a link belongs is left alone and reported: the script never overwrites.
+# CLAUDE_CONFIG_DIR is not supported: the links follow it, but the hooks, permission patterns and skill paths name
+# ~/.claude, so the script warns (also with --check) when it points elsewhere.
+# compat/ holds the old script paths (linked next to the skills, no skill) and the skill rename map.
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-# shellcheck source=skills/orchestrate-gh-issues/lib.sh
-. "$ROOT/skills/orchestrate-gh-issues/lib.sh"
+# shellcheck source=bin/lib.sh
+. "$ROOT/bin/lib.sh"
 SETTINGS_FILE=$(wf_global_settings)
 JSON="$CLAUDE_DIR/settings.json"
 CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
 case "$CLAUDE_DIR/" in "$HOME"/*) IMPORT="@~${CLAUDE_DIR#"$HOME"}/agent-workflow/global/CLAUDE.md" ;; *) IMPORT="@$CLAUDE_DIR/agent-workflow/global/CLAUDE.md" ;; esac
 
 warn() { echo "agent-workflow: $*" >&2; }
+# The hooks in the skills' frontmatter, the allowed-tools patterns and the paths in the skill text name ~/.claude: with
+# another config dir the hook commands do not exist (a non-blocking hook error), so guard.sh is silently off.
+config_dir_note() { # prints the warning when CLAUDE_CONFIG_DIR points somewhere other than ~/.claude; else nothing
+  local d=${CLAUDE_CONFIG_DIR:-}
+  while [ "${d%/}" != "$d" ]; do d=${d%/}; done
+  [ -n "$d" ] && [ "$d" != "$HOME/.claude" ] || return 0
+  echo "CLAUDE_CONFIG_DIR=$d is not supported: hooks and paths assume ~/.claude, so with this config dir the guard and Stop hooks do not run and the skills' script paths do not resolve. Supported setup: links in ~/.claude (run install.sh without CLAUDE_CONFIG_DIR)."
+}
 say() { echo "$*"; }
 CHANGES=""
 changed() { CHANGES="$CHANGES
@@ -86,9 +97,10 @@ requirements() {
   need python3 required "brew install python"
   need gh required "brew install gh, then gh auth login"
   need claude required "https://claude.com/claude-code"
-  need orca optional "only for /orchestrate-gh-issues: https://github.com/stablyai/orca"
+  need orca optional "only for /aw-orchestrate: https://github.com/stablyai/orca"
   need lsof optional "prototype preview servers: brew install lsof or sudo apt install lsof"
   if command -v gh >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then say "  warn     gh is not logged in: gh auth login"; fi
+  local note; note=$(config_dir_note); [ -z "$note" ] || say "  warn     $note"
 }
 
 # --- links ---
@@ -135,8 +147,16 @@ open(path, "w", encoding="utf-8").write("\n".join(lines))
 PY
 }
 
-# --- the retired Orca update check hook: older installs registered it in settings.json; every run takes it out ---
-has_hook() { [ -f "$JSON" ] && grep -q 'orca-update-review/check.sh' "$JSON"; }
+# --- skill renames (compat/renames: "<old> <new>" per line) ---
+renames() { grep -v -e '^#' -e '^[[:space:]]*$' "$ROOT/compat/renames" 2>/dev/null; }
+old_name() { renames | awk -v n="$1" '$2 == n { print $1 }'; } # old_name <new name>
+is_old_name() { renames | awk -v n="$1" '$1 == n { f = 1 } END { exit !f }'; }
+RENAMED=0 # 1 once this run removed or repointed a link under an old skill name: the rename map is printed
+
+# --- the retired Orca update check hook: older installs registered it in settings.json (under the skill's old name);
+# every run takes it out ---
+OLD_REVIEW=$(old_name aw-orca-review); OLD_HOOK="$OLD_REVIEW/check.sh"
+has_hook() { [ -n "$OLD_REVIEW" ] && [ -f "$JSON" ] && grep -qF "$OLD_HOOK" "$JSON"; } # no old name known: never match a bare check.sh
 json_edit() { # json_edit <jq filter> [args]: rewrite settings.json, backup first
   local tmp; tmp=$(mktemp)
   if jq "$@" "$JSON" >"$tmp" && [ -s "$tmp" ]; then
@@ -148,7 +168,7 @@ json_edit() { # json_edit <jq filter> [args]: rewrite settings.json, backup firs
 remove_hook() {
   has_hook || return 0
   command -v jq >/dev/null 2>&1 || { warn "jq missing: Orca update check left in $JSON"; return 0; }
-  json_edit '.hooks.SessionStart |= map(select(all(.hooks[]?; (.command // "") | contains("orca-update-review/check.sh") | not)))
+  json_edit --arg hook "$OLD_HOOK" '.hooks.SessionStart |= map(select(all(.hooks[]?; (.command // "") | contains($hook) | not)))
              | if (.hooks.SessionStart | length) == 0 then del(.hooks.SessionStart) else . end' \
     && changed "removed the Orca update check"
 }
@@ -187,7 +207,7 @@ agent_on() {
 <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
 <plist version=\"1.0\"><dict>
 <key>Label</key><string>$AGENT_LABEL</string>
-<key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>bash \"$CLAUDE_DIR/skills/orchestrate-gh-issues/proto-serve.sh\" ensure</string></array>
+<key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>bash \"$CLAUDE_DIR/agent-workflow/bin/proto-serve.sh\" ensure</string></array>
 <key>RunAtLoad</key><true/>
 <key>AbandonProcessGroup</key><true/>
 <key>StandardOutPath</key><string>$CLAUDE_DIR/proto-serve-agent.log</string>
@@ -283,13 +303,22 @@ done
 mkdir -p "$CLAUDE_DIR/skills"
 for skill in "$ROOT"/skills/*/; do
   skill=${skill%/}; name=$(basename "$skill")
-  if [ "$name" = orca-update-review ] && [ "$DEV" != 1 ]; then unlink_ours "$CLAUDE_DIR/skills/$name"; continue; fi
+  if [ "$name" = aw-orca-review ] && [ "$DEV" != 1 ]; then unlink_ours "$CLAUDE_DIR/skills/$name"; continue; fi
   link "$skill" "$CLAUDE_DIR/skills/$name"
+done
+# The old script paths (compat/<old skill name>/, no SKILL.md: no skill is registered) stay reachable next to the skills.
+for dir in "$ROOT"/compat/*/; do
+  [ -d "$dir" ] || continue
+  dir=${dir%/}; path="$CLAUDE_DIR/skills/$(basename "$dir")"
+  case "$(readlink "$path" 2>/dev/null)" in "$ROOT"/skills/*) RENAMED=1 ;; esac # the old skill's link becomes the compat link
+  link "$dir" "$path"
 done
 # Drop links to skills that were removed or renamed here.
 for path in "$CLAUDE_DIR"/skills/*; do
   [ -L "$path" ] || continue
-  case "$(readlink "$path")" in "$ROOT"/skills/*) [ -e "$path" ] || { rm "$path"; changed "removed stale $path"; } ;; esac
+  case "$(readlink "$path")" in "$ROOT"/skills/*)
+    [ -e "$path" ] || { rm "$path"; changed "removed stale $path"; ! is_old_name "$(basename "$path")" || RENAMED=1; } ;;
+  esac
 done
 link "$ROOT" "$CLAUDE_DIR/agent-workflow"
 
@@ -303,6 +332,13 @@ set_setting WF_INSTALL_GLOBAL_RULES "$(rules_state)"
 
 say "agent-workflow installed.${CHANGES:- Nothing changed.}"
 [ -z "$MISSING" ] || say "Missing tools:$MISSING (see Requirements above)"
-say "Settings: $SETTINGS_FILE (bash $CLAUDE_DIR/skills/orchestrate-gh-issues/settings.sh show)"
+say "Settings: $SETTINGS_FILE (bash $CLAUDE_DIR/agent-workflow/bin/settings.sh show)"
+if [ "$RENAMED" = 1 ]; then
+  say ""
+  say "The skills were renamed (type /aw- to list them); the old names are gone:"
+  renames | while read -r old new; do say "  /$old -> /$new"; done
+  say "The shared scripts moved to $CLAUDE_DIR/agent-workflow/bin/; the old script paths keep working for one release."
+fi
+note=$(config_dir_note); [ -z "$note" ] || { say ""; warn "WARNING: $note"; }
 say ""
-say "Next: cd <your repo> && claude, then run /init-issue-workflow to set the repo up."
+say "Next: cd <your repo> && claude, then run /aw-setup to set the repo up."

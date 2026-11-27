@@ -6,14 +6,14 @@ Status: approved 2026-11-15.
 
 agent-workflow is published for other builders, but setting it up today assumes the author's machine and habits: `install.sh` asks nothing and checks nothing, a project gets its profile by copying a 20-section template by hand, and several choices that differ per person (models, Orca, the author's global rules) are baked into the skills. Goal: someone who clones the repo gets a working setup for their own project in one install plus one guided conversation per repo, and can change every person- or project-specific choice in one place, without editing skill files.
 
-Success: a new user runs `install.sh`, answers at most four questions, runs `/init-issue-workflow` in their repo, answers only what the agent could not detect, and ends with a committed profile and config, created labels, and a short "what next".
+Success: a new user runs `install.sh`, answers at most four questions, runs `/aw-setup` in their repo, answers only what the agent could not detect, and ends with a committed profile and config, created labels, and a short "what next".
 
 ## Goals
 
 - `install.sh` checks requirements, asks the optional global choices (interactive terminal only), records them, and prints the next step.
-- A new skill `/init-issue-workflow` sets up one repo: detect, draft, ask only the gaps, validate, create labels, commit. Rerun = update mode.
+- A new skill `/aw-setup` sets up one repo: detect, draft, ask only the gaps, validate, create labels, commit. Rerun = update mode.
 - One settings layer: defaults → global settings file → repo config. Every choice listed under "Settings" below lives there, not in a skill.
-- Skills behave well without a profile: they say so once and point to `/init-issue-workflow` instead of guessing.
+- Skills behave well without a profile: they say so once and point to `/aw-setup` instead of guessing.
 
 ## Non-goals
 
@@ -38,7 +38,7 @@ Success: a new user runs `install.sh`, answers at most four questions, runs `/in
 
 ## Approaches (per-repo setup)
 
-1. **Agent skill `/init-issue-workflow`** (picked by the user). Reads the repo, drafts both files, interviews only the gaps, drops sections that do not apply, creates labels, commits. Can fill the prose profile, which a script cannot.
+1. **Agent skill `/aw-setup`** (picked by the user). Reads the repo, drafts both files, interviews only the gaps, drops sections that do not apply, creates labels, commits. Can fill the prose profile, which a script cannot.
 2. **Interactive shell script.** Deterministic and model-free, but cannot write the prose sections, so users still hand-edit.
 3. **Both** (script for config and labels, skill for prose). More moving parts for little gain.
 
@@ -52,7 +52,7 @@ The global install stays a shell script (it runs before any skill exists), made 
 - `wf_load` (lib.sh) order: built-in defaults → global file → repo `.claude/issue-workflow.sh`. Any `WF_*` may be set in either file; the repo wins. Globbing stays off while sourcing.
 - Environment: only the three variables that are env-driven today (`WF_REPO`, `WF_COMMENT_CAP`, `WF_ISSUE_LOG_DIR`) win over both files when exported; every other `WF_*` comes from the files, as today (`wf_load` keeps assigning defaults unconditionally). `decide.sh` (already sources `lib.sh`) calls `wf_load` so the files can set the two caps; in a scratch dir it gets the global file only, which is intended.
 - A missing global file is normal. One that fails to source prints one line to stderr (`agent-workflow: <path>: syntax error, using defaults`) and the script continues: hooks and guards never stop a session over it. `settings.sh show` reports it as an error line.
-- New `skills/orchestrate-gh-issues/settings.sh`:
+- New `bin/settings.sh`:
   - `settings.sh show`: every setting with value and source (`default`, `global`, `repo`, `env`), one per line, readable by people and agents.
   - `settings.sh get <NAME>`: the resolved value only.
   - `settings.sh path`: the global and repo file paths and whether they exist.
@@ -72,14 +72,14 @@ The global install stays a shell script (it runs before any skill exists), made 
 | `WF_NO_WAIT_CI` | `0` | global or repo | repo config |
 | `WF_PORTS`, `WF_RISK_GLOBS`, `WF_IGNORE_GLOBS`, `WF_REVIEW_LINES`, `WF_HOLD_LABELS`, `WF_REQUIRED_CHECKS`, `WF_CHECKS_TSV`, `wf_*` functions | as today | repo | unchanged |
 | Global rules linked or imported | off | install choice | `--global-rules` flag |
-| Orca update check hook and `/orca-update-review` | off; `install.sh --dev` only | dev mode | always registered |
+| Orca update check hook and `/aw-orca-review` | off; `install.sh --dev` only | dev mode | always registered |
 
 How the model tiers reach their users:
 
 - `spec.sh`: `--model` defaults to `WF_MODEL_STRONG` for stage `review` and `WF_MODEL_DEFAULT` for every other stage; `--model` still overrides. `task-template.md` gets `{{MODEL_STRONG}}` and `{{MODEL_FAST}}` where it names `opus` and `haiku` today.
 - orchestrate SKILL.md section 3: the table names tiers (default, strong, fast) with today's values as defaults and says to read them with `settings.sh show` in Preflight; `--effort high` for risk-area leads stays.
-- design-gh-issue tech check and workflow-retro / global CLAUDE.md retro agent: "the default tier (`settings.sh get WF_MODEL_DEFAULT`)".
-- `build-gh-issue` frontmatter `model: sonnet` is removed (user decision): in a run the worker's model comes from `worker-start --model` (the setting), and an interactive user runs on their session model.
+- aw-ui-design tech check and aw-retro / global CLAUDE.md retro agent: "the default tier (`settings.sh get WF_MODEL_DEFAULT`)".
+- `aw-build` frontmatter `model: sonnet` is removed (user decision): in a run the worker's model comes from `worker-start --model` (the setting), and an interactive user runs on their session model.
 - `usage.py` pricing stays keyed by model family; unknown families keep falling back to opus pricing.
 
 ### 3. `install.sh`
@@ -91,9 +91,9 @@ Order of output, each block a few lines:
 3. **Questions** (only when stdin and stdout are a terminal and `--yes` is not given; otherwise the defaults or the recorded state):
    - Models: `balanced` (sonnet/opus/haiku, default), `quality` (opus/opus/sonnet), `budget` (sonnet/sonnet/haiku), `custom` (asks the three). Written to the global settings file. With an existing file the question shows the current values and defaults to keep.
    - Global rules (show the four rule headings first; default no). No `~/.claude/CLAUDE.md`: link it. A real file: offer to append one import line `@~/.claude/agent-workflow/global/CLAUDE.md` (backup `CLAUDE.md.bak`). Already linked or imported: keep, offer to remove.
-4. **Summary and next step**: what changed, what is missing, then `cd <your repo> && claude`, `/init-issue-workflow`.
+4. **Summary and next step**: what changed, what is missing, then `cd <your repo> && claude`, `/aw-setup`.
 
-Dev mode (user decision): the Orca update check is a convenience for the maintainer, who keeps the skills current with the newest Orca; users get the updated skills through `git pull`. So `install.sh` neither links `skills/orca-update-review` nor registers its SessionStart hook, unless `--dev` is given (no question in the interactive flow). `--dev` records `WF_INSTALL_DEV=1`; `--no-dev` removes the link and the hook. Migration: a machine whose `settings.json` already has the hook and no recorded choice counts as dev mode, so the maintainer's unattended reruns keep it.
+Dev mode (user decision): the Orca update check is a convenience for the maintainer, who keeps the skills current with the newest Orca; users get the updated skills through `git pull`. So `install.sh` neither links `skills/aw-orca-review` nor registers its SessionStart hook, unless `--dev` is given (no question in the interactive flow). `--dev` records `WF_INSTALL_DEV=1`; `--no-dev` removes the link and the hook. Migration: a machine whose `settings.json` already has the hook and no recorded choice counts as dev mode, so the maintainer's unattended reruns keep it.
 
 Recorded choices: install writes `WF_INSTALL_GLOBAL_RULES=link|import|off` and `WF_INSTALL_DEV=1|0` into the global settings file, so a later run can tell "declined" from "never asked". First run without a settings file and without a terminal: models `balanced`, dev mode off (except the migration case), global rules `off` unless a link into this checkout already exists (kept, as today).
 
@@ -105,9 +105,9 @@ Risk to check first in the build: that Claude Code resolves an `@~/...` import f
 
 Flags (scriptable, also for tests): `--yes`, `--models <preset>`, `--global-rules` / `--no-global-rules`, `--dev` / `--no-dev`, `--check` (requirements only, no changes), `--uninstall` (removes the skill links, the checkout link, the dev hook and a global-rules link or import line; keeps the settings file and logs, says so). Non-interactive rerun with no flags keeps every recorded choice (link present, import line present, hook present, settings file content).
 
-### 4. `/init-issue-workflow` skill
+### 4. `/aw-setup` skill
 
-New `skills/init-issue-workflow/SKILL.md` plus a deterministic helper `detect.sh` (prints facts as `key: value` lines; no writes) and `labels.sh` (creates the full label set with `gh label create --force`, like the skills do today). The set and its colours and descriptions are copied from the skills' current `gh label create` lines: `needs-design`, `needs-spec`, `ready`, `phase:design` 5319E7, `phase:build` 1D76DB, `ux-impact` C5DEF5, `needs-decision` D93F0B, `agent-decided` FBCA04, plus `inbox` (global CLAUDE.md text) and the repo's `WF_HOLD_LABELS`. Lane labels without a colour today get one from the builder; the skills keep their own `--force` lines (idempotent, no drift risk in practice). Templates are read through `~/.claude/agent-workflow/reference/`; drafts live in the session scratchpad until step 6.
+New `skills/aw-setup/SKILL.md` plus a deterministic helper `detect.sh` (prints facts as `key: value` lines; no writes) and `labels.sh` (creates the full label set with `gh label create --force`, like the skills do today). The set and its colours and descriptions are copied from the skills' current `gh label create` lines: `needs-design`, `needs-spec`, `ready`, `phase:design` 5319E7, `phase:build` 1D76DB, `ux-impact` C5DEF5, `needs-decision` D93F0B, `agent-decided` FBCA04, plus `inbox` (global CLAUDE.md text) and the repo's `WF_HOLD_LABELS`. Lane labels without a colour today get one from the builder; the skills keep their own `--force` lines (idempotent, no drift risk in practice). Templates are read through `~/.claude/agent-workflow/reference/`; drafts live in the session scratchpad until step 6.
 
 Steps:
 
@@ -118,11 +118,11 @@ Steps:
 5. **Review**: show the draft as a short summary (filled, guessed, left out and why); the user edits or accepts.
 6. **Write and validate**: write `.claude/issue-workflow.md` and `.claude/issue-workflow.sh`; `bash -n` the config; `settings.sh show` from the repo; run the gate command once when the user agrees (it can be slow). `labels.sh`. Commit on `chore/issue-workflow-setup` and open a PR when the repo has a remote; the user may choose the current branch or no commit instead. Only its own two files are staged (`git commit -- <paths>`), so a dirty tree is left as it was. The skill never merges.
 7. **Update mode**: compare the existing profile with the template: sections that now apply but are missing, commands that no longer exist, check names no longer reported. Propose each change; never rewrite user prose without showing the diff.
-8. **Report**: what was detected, asked, left out; next steps (`/specify-gh-issue <n>`, `/build-gh-issue <n>`, `/orchestrate-gh-issues` when Orca is present).
+8. **Report**: what was detected, asked, left out; next steps (`/aw-specify <n>`, `/aw-build <n>`, `/aw-orchestrate` when Orca is present).
 
 ### 5. Skills without a profile
 
-README "Generic vs project" and each stage skill's "Read the profile" step gain one rule: no `.claude/issue-workflow.md` → say once that the repo has no profile and that `/init-issue-workflow` creates one, then continue as if every profile section were missing (those steps do not apply). Unattended workers do not stop for it.
+README "Generic vs project" and each stage skill's "Read the profile" step gain one rule: no `.claude/issue-workflow.md` → say once that the repo has no profile and that `/aw-setup` creates one, then continue as if every profile section were missing (those steps do not apply). Unattended workers do not stop for it.
 
 ### 6. Profile template
 
@@ -130,11 +130,11 @@ README "Generic vs project" and each stage skill's "Read the profile" step gain 
 
 ### 7. README
 
-Install becomes a quickstart: clone, `install.sh`, `/init-issue-workflow`, first issue. New "Settings" section with the table from section 2, `settings.sh show`, and where each file lives. Requirements stay, with the note that `install.sh --check` verifies them.
+Install becomes a quickstart: clone, `install.sh`, `/aw-setup`, first issue. New "Settings" section with the table from section 2, `settings.sh show`, and where each file lives. Requirements stay, with the note that `install.sh --check` verifies them.
 
 ### 8. Tests
 
-- `test-install.sh`: temp `CLAUDE_CONFIG_DIR`, non-interactive flags, idempotent reruns, never overwrites a real file, dev hook and `orca-update-review` link only with `--dev`, migration keeps an existing hook, import line added once, `--uninstall`, a rerun without flags keeps recorded choices.
+- `test-install.sh`: temp `CLAUDE_CONFIG_DIR`, non-interactive flags, idempotent reruns, never overwrites a real file, dev hook and `aw-orca-review` link only with `--dev`, migration keeps an existing hook, import line added once, `--uninstall`, a rerun without flags keeps recorded choices.
 - `test-settings.sh`: layering default → global → repo → env, `show` sources, globs stay patterns.
 - `test-spec.sh`: model default and template tiers come from settings.
 - `detect.sh` and `labels.sh` get small suites with stubbed `gh`.

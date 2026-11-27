@@ -1,0 +1,1 @@
+../../skills/aw-orchestrate/wave-template.md

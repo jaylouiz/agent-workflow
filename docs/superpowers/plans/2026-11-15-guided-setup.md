@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A new user gets from `git clone` to a working, committed per-repo setup through an interactive `install.sh` and a `/init-issue-workflow` skill, and every person- or project-specific choice lives in one settings layer instead of skill text.
+**Goal:** A new user gets from `git clone` to a working, committed per-repo setup through an interactive `install.sh` and a `/aw-setup` skill, and every person- or project-specific choice lives in one settings layer instead of skill text.
 
-**Architecture:** `lib.sh` gains a global settings file between the built-in defaults and the repo config; `settings.sh` prints the resolved values with their source. `install.sh` checks requirements, asks the global questions, records the answers in the global file and keeps the maintainer's Orca update check behind `--dev`. A new skill `init-issue-workflow` (with `detect.sh` and `labels.sh`) drafts and commits the repo's profile and config.
+**Architecture:** `lib.sh` gains a global settings file between the built-in defaults and the repo config; `settings.sh` prints the resolved values with their source. `install.sh` checks requirements, asks the global questions, records the answers in the global file and keeps the maintainer's Orca update check behind `--dev`. A new skill `aw-setup` (with `detect.sh` and `labels.sh`) drafts and commits the repo's profile and config.
 
 **Tech Stack:** bash 3.2, `jq`, `python3 -I`, `gh`, Claude Code skills (Markdown with frontmatter).
 
@@ -26,21 +26,21 @@
 ## Review Focus
 
 - **The maintainer's real global settings leak into test suites.** A `~/.claude/agent-workflow-settings.sh` with `WF_MAX_WORKERS=5` must not change any suite's result: every suite exports `WF_GLOBAL_SETTINGS` to a temp path (Task 1, step 6).
-- **Unattended rerun on the maintainer's machine** (`wf_after_merge` → `install.sh >/dev/null`, no TTY, no settings file yet, hook present): keeps the hook, the `orca-update-review` link and the global-rules symlink (Task 3 test `migration keeps dev`).
+- **Unattended rerun on the maintainer's machine** (`wf_after_merge` → `install.sh >/dev/null`, no TTY, no settings file yet, hook present): keeps the hook, the `aw-orca-review` link and the global-rules symlink (Task 3 test `migration keeps dev`).
 - **A broken global settings file** (syntax error) must not stop `guard.sh` or any hook: one stderr line, defaults used (Task 1 test `broken global`).
 - **Unquoted globs in the global file** (`WF_RISK_GLOBS=(src/**)`) stay patterns, as for the repo file (Task 1 test `global globs stay patterns`).
-- **Rerunning `/init-issue-workflow` or `install.sh` twice** adds nothing twice: one import line, one hook entry, one `KEY=` line per setting (Task 3 tests `idempotent`).
+- **Rerunning `/aw-setup` or `install.sh` twice** adds nothing twice: one import line, one hook entry, one `KEY=` line per setting (Task 3 tests `idempotent`).
 
 ---
 
 ### Task 1: Settings layer
 
 **Files:**
-- Modify: `skills/orchestrate-gh-issues/lib.sh` (`wf_load`, new helpers)
-- Modify: `skills/orchestrate-gh-issues/decide.sh:84,106` (read caps after `wf_load`)
-- Create: `skills/orchestrate-gh-issues/settings.sh`
+- Modify: `bin/lib.sh` (`wf_load`, new helpers)
+- Modify: `bin/decide.sh:84,106` (read caps after `wf_load`)
+- Create: `bin/settings.sh`
 - Create: `reference/global-settings.sh`
-- Test: `skills/orchestrate-gh-issues/test-settings.sh`
+- Test: `bin/test-settings.sh`
 - Modify: every `skills/*/test-*.sh` and `.claude/test-*.sh` that runs a script sourcing `lib.sh` (one `export WF_GLOBAL_SETTINGS=...` line)
 
 **Interfaces:**
@@ -62,11 +62,11 @@
   - `unknown name`: `get WF_NOPE` exits 1.
   - `decide.sh cap from global`: global `WF_COMMENT_CAP=10`, `decide.sh check` on an 11-char file exits 65.
 
-- [ ] **Step 2: Run** `bash skills/orchestrate-gh-issues/test-settings.sh` → FAIL (`settings.sh` missing).
+- [ ] **Step 2: Run** `bash bin/test-settings.sh` → FAIL (`settings.sh` missing).
 
 - [ ] **Step 3: Implement** the lib.sh helpers and `wf_load` order; `settings.sh` derives each source by loading in subshells layer by layer (defaults only; + global; + repo) and comparing `declare -p` output, `env` when the name is one of the two caps and was set before load. `decide.sh`: call `wf_load` once after sourcing `lib.sh` (keep `${WF_COMMENT_CAP:-1500}` as fallback). `reference/global-settings.sh`: header comment (what the file is, load order, that any `WF_*` from `reference/project-config.sh` may go here and the repo wins), then every global setting commented out with its default and one-line meaning, grouped "Models", "Orchestration", "Comments and logs", "Recorded by install.sh (do not edit by hand)".
 
-- [ ] **Step 4: Run** `bash skills/orchestrate-gh-issues/test-settings.sh` and `/bin/bash skills/orchestrate-gh-issues/test-settings.sh` → no `FAIL` lines, exit 0.
+- [ ] **Step 4: Run** `bash bin/test-settings.sh` and `/bin/bash bin/test-settings.sh` → no `FAIL` lines, exit 0.
 
 - [ ] **Step 5: Isolate the other suites**: add `export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh"` right after each suite's `T=$(mktemp -d)` (suites without `$T`: use `/nonexistent/agent-workflow-settings.sh`).
 
@@ -77,14 +77,14 @@
 ### Task 2: Model tiers and digest cap read from settings
 
 **Files:**
-- Modify: `skills/orchestrate-gh-issues/spec.sh:21` (model default per stage), `:76-80` (export `MODEL_STRONG`, `MODEL_FAST`)
-- Modify: `skills/orchestrate-gh-issues/task-template.md:26` (`opus` → `{{MODEL_STRONG}}`, `haiku` → `{{MODEL_FAST}}`)
-- Modify: `skills/orchestrate-gh-issues/SKILL.md` section 0 (Preflight: new step "`settings.sh show`; models, max workers and digest cap come from it"), section 3 table (roles → tiers), every `--model opus`/`sonnet` example and the retro line (`fresh agent on the default tier`), and the digest cap mention (`WF_DIGEST_CAP`)
-- Modify: `skills/orchestrate-gh-issues/next.sh:16` (usage example only)
-- Modify: `skills/design-gh-issue/SKILL.md:52` (`model: sonnet` → the default tier, `settings.sh get WF_MODEL_DEFAULT`)
-- Modify: `skills/workflow-retro/SKILL.md` and `global/CLAUDE.md:24` (retro agent: `model:` = default tier, `bash ~/.claude/skills/orchestrate-gh-issues/settings.sh get WF_MODEL_DEFAULT`)
-- Modify: `skills/build-gh-issue/SKILL.md:4` (delete `model: sonnet`)
-- Test: `skills/orchestrate-gh-issues/test-spec.sh`
+- Modify: `skills/aw-orchestrate/spec.sh:21` (model default per stage), `:76-80` (export `MODEL_STRONG`, `MODEL_FAST`)
+- Modify: `skills/aw-orchestrate/task-template.md:26` (`opus` → `{{MODEL_STRONG}}`, `haiku` → `{{MODEL_FAST}}`)
+- Modify: `skills/aw-orchestrate/SKILL.md` section 0 (Preflight: new step "`settings.sh show`; models, max workers and digest cap come from it"), section 3 table (roles → tiers), every `--model opus`/`sonnet` example and the retro line (`fresh agent on the default tier`), and the digest cap mention (`WF_DIGEST_CAP`)
+- Modify: `skills/aw-orchestrate/next.sh:16` (usage example only)
+- Modify: `skills/aw-ui-design/SKILL.md:52` (`model: sonnet` → the default tier, `settings.sh get WF_MODEL_DEFAULT`)
+- Modify: `skills/aw-retro/SKILL.md` and `global/CLAUDE.md:24` (retro agent: `model:` = default tier, `bash ~/.claude/agent-workflow/bin/settings.sh get WF_MODEL_DEFAULT`)
+- Modify: `skills/aw-build/SKILL.md:4` (delete `model: sonnet`)
+- Test: `skills/aw-orchestrate/test-spec.sh`
 
 **Interfaces:**
 - Consumes: `wf_load` and `WF_MODEL_*` from Task 1; `settings.sh get`.
@@ -96,7 +96,7 @@
   - `fast tier`: global `WF_MODEL_FAST=sonnet` → lead spec contains `model: sonnet` in the subagents line and not `haiku`.
   - `review respects global strong`: global `WF_MODEL_STRONG=fable`, review without `--model` → `by: fable`.
   - `--model still wins`: review with `--model sonnet` → `by: sonnet`.
-- [ ] **Step 2: Run** `bash skills/orchestrate-gh-issues/test-spec.sh` → the new checks FAIL.
+- [ ] **Step 2: Run** `bash skills/aw-orchestrate/test-spec.sh` → the new checks FAIL.
 - [ ] **Step 3: Implement** spec.sh (resolve `model` after `wf_load` when `--model` was not given) and the template placeholders.
 - [ ] **Step 4: Run** `test-spec.sh` → no `FAIL`.
 - [ ] **Step 5: Edit the prose** listed under Files. Section 3 table becomes: Coordinator = the user's session; Lead = default tier (`--effort high` for risk area or cross-cutting); Reviewer worker = strong; Root-cause subagent = strong, at most one per issue; Mechanical subagents = fast; Design, fix and delta-review workers = default. Keep the sentence "No other worker runs the strong tier unless the user says so for the run." Drop the dated "User decision 2026-11-02" pointer only if it no longer matches (it records the tier split, keep it).
@@ -116,30 +116,30 @@
 
 - [ ] **Step 0: Verify the import mechanism.** Ask the `claude-code-guide` agent: does Claude Code load `@~/.claude/agent-workflow/global/CLAUDE.md` from the user-level `~/.claude/CLAUDE.md`, and is there an approval prompt for it? Then try it: a throwaway `CLAUDE_CONFIG_DIR` with such a line and `claude -p "quote the first heading of your global rules"`. If it does not load silently, drop the `import` mode: a real `CLAUDE.md` then gets the line printed for the user to add, and the tests below for `import` become tests for that message.
 - [ ] **Step 1: Write the failing tests** (`CLAUDE_CONFIG_DIR=$T/c`, `WF_GLOBAL_SETTINGS` unset so the path derives from it, `PATH` with stub `gh`, `orca`, `claude`):
-  - `fresh --yes`: all skills except `orca-update-review` linked in `$T/c/skills`, `$T/c/agent-workflow` → repo, settings file has `WF_MODEL_DEFAULT=sonnet`, `WF_INSTALL_DEV=0`, `WF_INSTALL_GLOBAL_RULES=off`, no `CLAUDE.md`, `settings.json` has no `orca-update-review`.
-  - `dev`: `--yes --dev` with a `settings.json` `{}` → `orca-update-review` linked, one SessionStart entry with `check.sh`, `WF_INSTALL_DEV=1`; second run → still one entry.
+  - `fresh --yes`: all skills except `aw-orca-review` linked in `$T/c/skills`, `$T/c/agent-workflow` → repo, settings file has `WF_MODEL_DEFAULT=sonnet`, `WF_INSTALL_DEV=0`, `WF_INSTALL_GLOBAL_RULES=off`, no `CLAUDE.md`, `settings.json` has no `aw-orca-review`.
+  - `dev`: `--yes --dev` with a `settings.json` `{}` → `aw-orca-review` linked, one SessionStart entry with `check.sh`, `WF_INSTALL_DEV=1`; second run → still one entry.
   - `no-dev`: then `--no-dev` → link and hook gone, `settings.json.bak` exists.
-  - `migration keeps dev`: no settings file, `settings.json` with the hook, global `CLAUDE.md` linked into the repo, run with no flags and no TTY → hook kept, `orca-update-review` linked, `CLAUDE.md` link kept, recorded `WF_INSTALL_DEV=1`, `WF_INSTALL_GLOBAL_RULES=link`.
+  - `migration keeps dev`: no settings file, `settings.json` with the hook, global `CLAUDE.md` linked into the repo, run with no flags and no TTY → hook kept, `aw-orca-review` linked, `CLAUDE.md` link kept, recorded `WF_INSTALL_DEV=1`, `WF_INSTALL_GLOBAL_RULES=link`.
   - `models preset`: `--yes --models quality` → `WF_MODEL_DEFAULT=opus`, `WF_MODEL_STRONG=opus`, `WF_MODEL_FAST=sonnet`; rerun `--yes` keeps them.
   - `global rules link`: `--yes --global-rules`, no `CLAUDE.md` → symlink to `global/CLAUDE.md`.
   - `global rules import`: real `CLAUDE.md` with `# mine`, `--yes --global-rules` → file still starts with `# mine`, contains the import line exactly once after two runs, a `CLAUDE.md.bak.*` exists.
-  - `never overwrites`: real directory at `$T/c/skills/build-gh-issue` → left, warning names it, exit 0.
+  - `never overwrites`: real directory at `$T/c/skills/aw-build` → left, warning names it, exit 0.
   - `interactive`: `AW_INSTALL_INTERACTIVE=1` with stdin `budget\nn\n` → budget models recorded, no rules.
   - `check`: `PATH` without `jq` → `--check` exit 1, output line names `jq`, nothing linked.
   - `uninstall`: after `dev` + `import` → no links into the repo, no hook, no import line, settings file kept, output says it was kept.
   - `unknown flag`: exit 2.
   - `stale link removed`: a link in `$T/c/skills/old` pointing into `$ROOT/skills/old` (missing) → removed (today's behaviour).
 - [ ] **Step 2: Run** `bash .claude/test-install.sh` → FAIL.
-- [ ] **Step 3: Implement** in this output order: requirements (`git bash jq python3 gh claude` required, `gh auth status` warned, `orca shellcheck` optional; each line `ok <tool>` or `missing <tool>: <install hint>`), links, questions (models; global rules showing the four `##` headings of `global/CLAUDE.md`; no dev question), summary (what changed, missing tools, then `Next: cd <your repo> && claude, then /init-issue-workflow`). Prompts read with `read -r`, default in brackets, empty answer = default. Migration rule: no recorded `WF_INSTALL_DEV` and `settings.json` contains `orca-update-review/check.sh` → dev; no recorded `WF_INSTALL_GLOBAL_RULES` and `CLAUDE.md` links into the repo → `link`. The hook jq expression stays as today; removal deletes SessionStart entries whose command contains `orca-update-review/check.sh` and drops an emptied `SessionStart`.
+- [ ] **Step 3: Implement** in this output order: requirements (`git bash jq python3 gh claude` required, `gh auth status` warned, `orca shellcheck` optional; each line `ok <tool>` or `missing <tool>: <install hint>`), links, questions (models; global rules showing the four `##` headings of `global/CLAUDE.md`; no dev question), summary (what changed, missing tools, then `Next: cd <your repo> && claude, then /aw-setup`). Prompts read with `read -r`, default in brackets, empty answer = default. Migration rule: no recorded `WF_INSTALL_DEV` and `settings.json` contains `aw-orca-review/check.sh` → dev; no recorded `WF_INSTALL_GLOBAL_RULES` and `CLAUDE.md` links into the repo → `link`. The hook jq expression stays as today; removal deletes SessionStart entries whose command contains `aw-orca-review/check.sh` and drops an emptied `SessionStart`.
 - [ ] **Step 4: Run** `bash .claude/test-install.sh` and `/bin/bash .claude/test-install.sh` → no `FAIL`. `shellcheck install.sh` if installed.
 - [ ] **Step 5: Run** `wf_verify` → exit 0. **Commit** `feat(install): guided install with requirements check, settings and dev mode`.
 
-### Task 4: `/init-issue-workflow` skill
+### Task 4: `/aw-setup` skill
 
 **Files:**
-- Create: `skills/init-issue-workflow/SKILL.md`
-- Create: `skills/init-issue-workflow/detect.sh`, `skills/init-issue-workflow/labels.sh`
-- Test: `skills/init-issue-workflow/test-detect.sh`, `skills/init-issue-workflow/test-labels.sh`
+- Create: `skills/aw-setup/SKILL.md`
+- Create: `skills/aw-setup/detect.sh`, `skills/aw-setup/labels.sh`
+- Test: `skills/aw-setup/test-detect.sh`, `skills/aw-setup/test-labels.sh`
 
 **Interfaces:**
 - Consumes: `settings.sh show|path` (Task 1), templates via `~/.claude/agent-workflow/reference/` (Task 5 tags), `wf_repo_slug` from `lib.sh`.
@@ -153,29 +153,29 @@
 - [ ] **Step 2: Run** both suites → FAIL.
 - [ ] **Step 3: Implement** `detect.sh` and `labels.sh` (`labels.sh` sources `lib.sh` and calls `wf_load` for `WF_HOLD_LABELS`; `detect.sh` uses `python3 -I` for `package.json`).
 - [ ] **Step 4: Run** both suites (also with `/bin/bash`) → no `FAIL`.
-- [ ] **Step 5: Write `SKILL.md`** following the spec's section 4 steps 1-8, in the house style of the other stage skills (Outcome line, numbered sections, commands as typed). Frontmatter: `name: init-issue-workflow`; `description:` "Set up or update agent-workflow for the current repo: detects scripts, CI checks, UI and docs, drafts `.claude/issue-workflow.md` and `.claude/issue-workflow.sh`, asks only what it could not detect, creates the labels and commits the setup as a PR. Use when a repo has no issue-workflow profile yet, when a skill says the profile is missing, or when asked to set up, initialise, onboard or update the workflow for a project."; `argument-hint: "[update]"`; `allowed-tools: Bash(gh *) Bash(git *) Bash(bash *)`. Content decisions it must carry: questions via `AskUserQuestion`, at most two calls of up to four questions, recommended option first; drafts in the session scratchpad; drop sections by the template's `<!-- ui -->` / `<!-- orca -->` tags; reference `CLAUDE.md` facts instead of copying; `git commit -- .claude/issue-workflow.md .claude/issue-workflow.sh` on `chore/issue-workflow-setup`, PR via `gh pr create`, never merge; update mode proposes diffs and never rewrites prose unseen; final report lists detected / asked / left out and the next commands. Keep it under 6 KB (`wc -c`).
-- [ ] **Step 6: Dry run** the skill's deterministic part on this repo: `bash skills/init-issue-workflow/detect.sh --no-gh` → `profile: present`, `ui: no`.
-- [ ] **Step 7: Run** `wf_verify` → exit 0. **Commit** `feat(init): /init-issue-workflow skill with detect.sh and labels.sh`.
+- [ ] **Step 5: Write `SKILL.md`** following the spec's section 4 steps 1-8, in the house style of the other stage skills (Outcome line, numbered sections, commands as typed). Frontmatter: `name: aw-setup`; `description:` "Set up or update agent-workflow for the current repo: detects scripts, CI checks, UI and docs, drafts `.claude/issue-workflow.md` and `.claude/issue-workflow.sh`, asks only what it could not detect, creates the labels and commits the setup as a PR. Use when a repo has no issue-workflow profile yet, when a skill says the profile is missing, or when asked to set up, initialise, onboard or update the workflow for a project."; `argument-hint: "[update]"`; `allowed-tools: Bash(gh *) Bash(git *) Bash(bash *)`. Content decisions it must carry: questions via `AskUserQuestion`, at most two calls of up to four questions, recommended option first; drafts in the session scratchpad; drop sections by the template's `<!-- ui -->` / `<!-- orca -->` tags; reference `CLAUDE.md` facts instead of copying; `git commit -- .claude/issue-workflow.md .claude/issue-workflow.sh` on `chore/issue-workflow-setup`, PR via `gh pr create`, never merge; update mode proposes diffs and never rewrites prose unseen; final report lists detected / asked / left out and the next commands. Keep it under 6 KB (`wc -c`).
+- [ ] **Step 6: Dry run** the skill's deterministic part on this repo: `bash skills/aw-setup/detect.sh --no-gh` → `profile: present`, `ui: no`.
+- [ ] **Step 7: Run** `wf_verify` → exit 0. **Commit** `feat(init): /aw-setup skill with detect.sh and labels.sh`.
 
 ### Task 5: Template, missing-profile rule and README
 
 **Files:**
 - Modify: `reference/project-profile.md` (reorder; `<!-- ui -->` after each UI heading: Design quality, Components, Pattern check, Design feedback, Screenshots, Prototype, Canvas; `<!-- orca -->` after Orchestration; drop "digest cap" line, point to `WF_DIGEST_CAP`)
 - Modify: `reference/project-config.sh` header (mentions the global file and `settings.sh show`)
-- Modify: `skills/design-gh-issue/SKILL.md`, `skills/specify-gh-issue/SKILL.md`, `skills/build-gh-issue/SKILL.md`, `skills/orchestrate-gh-issues/SKILL.md` (the "Read the profile" step), `README.md`
+- Modify: `skills/aw-ui-design/SKILL.md`, `skills/aw-specify/SKILL.md`, `skills/aw-build/SKILL.md`, `skills/aw-orchestrate/SKILL.md` (the "Read the profile" step), `README.md`
 - Modify: `.claude/issue-workflow.md` (this repo: drop "digest cap: 2h", default)
 
 **Interfaces:**
 - Consumes: everything above (names only).
 
 - [ ] **Step 1: Template**: reorder to Labels, Sources, Jobs, Risk areas, Branches, Verification, Pull requests, Decisions, then the UI block, then Orchestration, Retro. Section headings unchanged (verify: `diff <(git show HEAD:reference/project-profile.md | grep '^## ' | sort) <(grep '^## ' reference/project-profile.md | sort)` → empty).
-- [ ] **Step 2: Missing-profile rule**, one sentence in each listed skill's profile step and in README "Generic vs project": "No `.claude/issue-workflow.md`: say once that this repo has no profile and that `/init-issue-workflow` creates one, then continue as if every profile section were missing; an unattended worker does not stop for it."
-- [ ] **Step 3: README**: Install becomes "Quickstart" (clone; `bash agent-workflow/install.sh`; in your repo `/init-issue-workflow`; first issue `/specify-gh-issue <n>` or `/build-gh-issue <n>`), flags list, `install.sh --check`, "Maintainer: `--dev` adds the Orca update check" (the current hook paragraph moves here). New "Settings" section: the spec's section 2 table, load order, `settings.sh show`, file locations. Update "Per project" to point at the skill, keeping the manual-copy path as a one-liner.
-- [ ] **Step 4: Sweep** `rg -n 'digest cap|--global-rules|orca-update-review/check.sh' skills global reference README.md .claude -g '!**/snapshot/**'` → every hit matches the new behaviour; `wc -c skills/*/SKILL.md global/CLAUDE.md` → `global/CLAUDE.md` under 15000.
+- [ ] **Step 2: Missing-profile rule**, one sentence in each listed skill's profile step and in README "Generic vs project": "No `.claude/issue-workflow.md`: say once that this repo has no profile and that `/aw-setup` creates one, then continue as if every profile section were missing; an unattended worker does not stop for it."
+- [ ] **Step 3: README**: Install becomes "Quickstart" (clone; `bash agent-workflow/install.sh`; in your repo `/aw-setup`; first issue `/aw-specify <n>` or `/aw-build <n>`), flags list, `install.sh --check`, "Maintainer: `--dev` adds the Orca update check" (the current hook paragraph moves here). New "Settings" section: the spec's section 2 table, load order, `settings.sh show`, file locations. Update "Per project" to point at the skill, keeping the manual-copy path as a one-liner.
+- [ ] **Step 4: Sweep** `rg -n 'digest cap|--global-rules|aw-orca-review/check.sh' skills global reference README.md .claude -g '!**/snapshot/**'` → every hit matches the new behaviour; `wc -c skills/*/SKILL.md global/CLAUDE.md` → `global/CLAUDE.md` under 15000.
 - [ ] **Step 5: Run** `wf_verify` → exit 0. **Commit** `docs: quickstart, settings and missing-profile rule`.
 
 ### Task 6: Branch gate and handover
 
 - [ ] **Step 1:** `wf_verify` on the branch → exit 0; every touched suite also with `/bin/bash`.
 - [ ] **Step 2:** Push `feat/guided-setup`, open the PR (summary, ACs as a checklist with evidence, what was left out; the PR touches `install.sh` and `global/CLAUDE.md`, so `merge-pr.sh route` → reviewer).
-- [ ] **Step 3:** Ask the user before running the new `install.sh` on their machine (one-way per the profile); after a yes, run it without flags and confirm: hook kept, `orca-update-review` linked, `CLAUDE.md` link kept, `settings.sh show` shows defaults.
+- [ ] **Step 3:** Ask the user before running the new `install.sh` on their machine (one-way per the profile); after a yes, run it without flags and confirm: hook kept, `aw-orca-review` linked, `CLAUDE.md` link kept, `settings.sh show` shows defaults.

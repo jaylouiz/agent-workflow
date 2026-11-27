@@ -1,6 +1,6 @@
 # issue-workflow profile: <project>
 
-<!-- Read by the agent-workflow skills; /init-issue-workflow writes and updates it. Project facts only (README
+<!-- Read by the agent-workflow skills; /aw-setup writes and updates it. Project facts only (README
      "Generic vs project"): reference CLAUDE.md instead of copying it; delete a section that does not apply (a missing
      section means the step does not apply). A "ui" tag comment under a heading marks a section only a project with a
      UI needs, "orca" one only Orca orchestration needs. Settings (models, max workers, digest cap): settings.sh show. -->
@@ -45,7 +45,7 @@
 
 ## Decisions
 
-- one-way (ask the user; everything else the agent decides and records): <list; default: orchestrate-gh-issues section 5>
+- one-way (ask the user; everything else the agent decides and records): <list; default: aw-orchestrate section 5>
 - explicitly two-way: <calls the user trusts agents with, e.g. internal structure, data shape changes with migration>
 
 ## Design quality

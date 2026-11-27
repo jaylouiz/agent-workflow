@@ -1,10 +1,10 @@
 # shellcheck shell=bash
-# issue-workflow config: <project>/.claude/issue-workflow.sh, sourced by the orchestrate-gh-issues scripts
+# issue-workflow config: <project>/.claude/issue-workflow.sh, sourced by the agent-workflow scripts
 # (spec.sh, merge-pr.sh, guard.sh). Executable project facts only; prose facts stay in .claude/issue-workflow.md.
 # Every variable has a default (lib.sh); a function left undefined means that step does not apply. Load order: defaults,
 # then ~/.claude/agent-workflow-settings.sh (models, max workers, digest cap for every repo; template
-# reference/global-settings.sh), then this file, which wins. /init-issue-workflow writes it; check the result with
-# bash ~/.claude/skills/orchestrate-gh-issues/settings.sh show
+# reference/global-settings.sh), then this file, which wins. /aw-setup writes it; check the result with
+# bash ~/.claude/agent-workflow/bin/settings.sh show
 # Functions run with the cwd noted; keep them quiet on success and print one line on failure.
 
 WF_PORTS=3101-3105                    # dev-server/E2E ports, one per concurrent worker (spec.sh)

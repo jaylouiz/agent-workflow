@@ -1,0 +1,1 @@
+../../bin/merge-pr.sh

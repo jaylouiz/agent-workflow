@@ -11,14 +11,14 @@
 
 ## Sources
 
-- method and vocabulary: `README.md`; templates: `reference/project-profile.md`, `reference/project-config.sh`, `reference/global-settings.sh`; per-repo setup: `/init-issue-workflow`
+- method and vocabulary: `README.md`; templates: `reference/project-profile.md`, `reference/project-config.sh`, `reference/global-settings.sh`; per-repo setup: `/aw-setup`
 - no product doc, design system or design backlog
 
 ## Risk areas
 
-- `~/.claude/skills/*` and `~/.claude/CLAUDE.md` are symlinks into the main checkout (`install.sh`): a merge changes every session of the user as soon as the main checkout is pulled (`wf_after_merge` does that). Never edit the main checkout by hand.
+- `~/.claude/skills/*`, `~/.claude/agent-workflow` (the skills run `bin/` and read `reference/` through it) and `~/.claude/CLAUDE.md` are symlinks into the main checkout (`install.sh`): a merge changes every session of the user as soon as the main checkout is pulled (`wf_after_merge` does that). Never edit the main checkout by hand.
 - Hooks and always-loaded files (a bug breaks every session; globs in `WF_RISK_GLOBS`): `guard.sh`, `worker-done-stop.sh`, `global/CLAUDE.md`, `install.sh`. PRs touching them get a separate Opus reviewer.
-- `lib.sh` is sourced by every orchestrate script; a bash-3.2-incompatible construct breaks macOS runs: run its suite with `/bin/bash` (the gate uses the `bash` on PATH).
+- `lib.sh` is sourced by every `bin/` script and by `install.sh`; a bash-3.2-incompatible construct breaks macOS runs: run its suite with `/bin/bash` (the gate uses the `bash` on PATH).
 
 ## Branches
 
@@ -28,11 +28,11 @@
 
 ## Verification
 
-- gate command: `bash test.sh` = every `skills/*/test-*.sh` and `.claude/test-*.sh`, one summary naming the failed suites; `wf_verify` runs it with `--fail-fast`. Run the suites that touch your change while working, `bash test.sh` before the PR.
+- gate command: `bash test.sh` = every `bin/test-*.sh`, `skills/*/test-*.sh` and `.claude/test-*.sh`, one summary naming the failed suites; `wf_verify` runs it with `--fail-fast`. Run the suites that touch your change while working, `bash test.sh` before the PR.
 - CI: `.github/workflows/test.yml` runs `test.sh` on `macos-latest` (bash 3.2) and `ubuntu-latest` on every PR and on pushes to `main`; a Linux-only failure is fixed in the PR that shows it.
 - leak lint: `.claude/test-generic.sh` (in the suite) fails when `skills/**/*.md` or `reference/*.md` names a stack, a file layout or a 3+-digit issue; a deliberate exception is one line with its reason in `.claude/generic-allowlist.txt`.
 - shellcheck on touched scripts when installed (it was not on this machine).
-- extra greps: after renaming or removing a script, skill or section, `rg` the old name in `skills/`, `global/`, `README.md`, `reference/` (skills point to profile sections by name: "the profile's X").
+- extra greps: after renaming or removing a script, skill or section, `rg` the old name in `bin/`, `skills/`, `global/`, `README.md`, `reference/` (skills point to profile sections by name: "the profile's X").
 
 ## Pull requests
 
@@ -40,7 +40,7 @@
 
 ## Decisions
 
-- one-way: the default list (orchestrate-gh-issues section 5) plus anything that edits `~/.claude` settings or runs `install.sh` outside `wf_after_merge`.
+- one-way: the default list (aw-orchestrate section 5) plus anything that edits `~/.claude` settings or runs `install.sh` outside `wf_after_merge`.
 - two-way: script internals, test layout, wording of skills, what goes into the profile.
 
 ## Orchestration
