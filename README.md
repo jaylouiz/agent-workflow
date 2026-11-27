@@ -16,24 +16,30 @@ cd <your repo> && claude             # then: /aw-setup
 
 ## Requirements
 
-- [Claude Code](https://claude.com/claude-code), [`gh`](https://cli.github.com) logged in, `git`, `bash` (3.2 is enough), `jq`, `python3`. macOS is the tested platform. `install.sh --check` checks them and changes nothing.
-- [Orca](https://github.com/stablyai/orca) and its `orca` CLI for `/aw-coordinate` (workers, messages). The single-issue skills (`/aw-ui-design`, `/aw-specify`, `/aw-build`) run without it.
+- [Claude Code](https://claude.com/claude-code), [`gh`](https://cli.github.com) logged in, `git`, `bash` (3.2 is enough), `jq`, `python3`. macOS is the tested platform. `install.sh --check` checks them (also the `gh` version: screenshots in issue comments need `gh` 2.99.0 or newer) and changes nothing.
+- [Orca](https://github.com/stablyai/orca) and its `orca` CLI for `/aw-coordinate` (workers, messages). The supported minimum and the tested version are `ORCA_MIN` and `ORCA_TESTED` in [bin/lib.sh](bin/lib.sh); `install.sh --check` and `/aw-coordinate` warn below the minimum. The single-issue skills (`/aw-ui-design`, `/aw-specify`, `/aw-build`) run without it.
 - Skills and plugins the skills call but this repo does not ship: `/code-review` (Claude Code), and optionally `/gh-inbox-dispatcher`, `/ui-canvas`, `harvesting-session-knowledge` and the Impeccable plugin. A step whose tool is missing is skipped or reported, not guessed.
 
 ## Install
 
 `install.sh` links every `skills/*` into `~/.claude/skills/` and this checkout to `~/.claude/agent-workflow` (the skills read `reference/` and run the shared scripts in `bin/` through it). Every skill starts with `aw-`: type `/aw-` to list them. `CLAUDE_CONFIG_DIR` is not supported: hooks and paths assume `~/.claude`, and `install.sh` (also `--check`) warns when it points elsewhere. The script paths from before the rename keep working for one release through [compat/](compat/README.md). In a terminal it asks two things and records the answers in `~/.claude/agent-workflow-settings.sh`:
 
-- **Models**: one per tier, default / strong / fast / heavy (what each runs: [Settings](#settings)), each a Claude Code alias or a full model ID; Enter keeps the value shown (the one you set before, else the shipped `sonnet` / `opus` / `haiku` / `claude-fable-5-2`). No Fable access: answer `opus` for heavy. Without prompts: `--models balanced` (the shipped values), `quality` (opus / opus / sonnet / claude-fable-5-2) or `budget` (sonnet / sonnet / haiku / opus), and `--model-default|strong|fast|heavy <id>` per tier over the preset.
+- **Models**: one per tier, default / strong / fast / heavy (what each runs: [Settings](#settings)), each a Claude Code alias (the heavy tier also takes a full model ID; the other three are passed to subagents, which need an alias); Enter keeps the value shown (the one you set before, else the shipped `sonnet` / `opus` / `haiku` / `claude-fable-5-2`). No Fable access: answer `opus` for heavy. Without prompts: `--models balanced` (the shipped values), `quality` (opus / opus / sonnet / claude-fable-5-2) or `budget` (sonnet / sonnet / haiku / opus), and `--model-default|strong|fast|heavy <id>` per tier over the preset.
 - **Global rules**: the author's [global/CLAUDE.md](global/CLAUDE.md) (inbox issues for side findings, the user's direction first for vague goals, the friction ledger and retro, screening several issues first, committing without asking). Off by default. On: linked as `~/.claude/CLAUDE.md`, or, when you have your own, one import line `@~/.claude/agent-workflow/global/CLAUDE.md` appended to it (a timestamped backup is kept).
 
-Rerun it after `git pull` or after adding, renaming or removing a skill: without a terminal (or with `--yes`) it keeps every recorded choice. It never overwrites a real file where a link belongs. A rerun never changes a tier you set unless you answer or flag a new value. Flags: `--yes`, `--models <preset>`, `--model-<tier> <id>`, `--global-rules` / `--no-global-rules`, `--check`, `--uninstall` (removes the links and the global rules, keeps the settings file). Edit skills in this repo only.
+Update with `bash install.sh --update` ([Updating](#updating-and-releases)). Rerun the install after adding, renaming or removing a skill: without a terminal (or with `--yes`) it keeps every recorded choice. It never overwrites a real file where a link belongs. A rerun never changes a tier you set unless you answer or flag a new value. Flags: `--yes`, `--models <preset>`, `--model-<tier> <id>`, `--global-rules` / `--no-global-rules`, `--proto-agent` / `--no-proto-agent` (restart waiting prototype previews at login: a LaunchAgent on macOS, a `systemd --user` unit on Linux), `--check`, `--update`, `--uninstall` (removes the links and the global rules, keeps the settings file). Edit skills in this repo only.
 
-Maintainer only: `--dev` also links `/aw-orca-review`, which the maintainer runs by hand after an Orca update: it reviews the new version against this workflow (`skills/aw-orca-review/snapshot/version`) and asks before it changes anything. Users get the result through `git pull`.
+Maintainer only: `--dev` also links `/aw-orca-review`, which the maintainer runs by hand after an Orca update: it reviews the new version against this workflow (`skills/aw-orca-review/snapshot/version`) and asks before it changes anything. Users get the result through `install.sh --update`.
 
 Per project without the skill: copy [reference/project-profile.md](reference/project-profile.md) to `<project>/.claude/issue-workflow.md` and [reference/project-config.sh](reference/project-config.sh) to `<project>/.claude/issue-workflow.sh`, fill them in and commit them.
 
 Cloud sessions (Claude Code on the web) do not get these skills (only the attached repo, no `gh issue`/`gh pr`, no plugins); what works there lives in each project's `CLAUDE.md`.
+
+## Updating and releases
+
+`bash install.sh --update` updates the checkout and the install: it refuses local changes to tracked files, runs `git pull --ff-only`, reruns the install only when a skill was added, renamed or removed or `install.sh` changed, and prints the version jump (or the new commits) and the new **Breaking** entries of the [CHANGELOG](CHANGELOG.md). Restart open Claude sessions and coordinators afterwards: a running session keeps the skill text it loaded.
+
+Releases are semver tags (`vX.Y.Z`). Maintainer: the release procedure (version rules, `ORCA_MIN`, CHANGELOG, tag) is [docs/releasing.md](docs/releasing.md).
 
 ## Settings
 

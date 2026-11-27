@@ -135,6 +135,10 @@ check "healthy: prepare still diffs a changed help" 'grep -q "orca skills get" "
 rm -f "$T/snap/help/worktree-show.txt"; echo stale >"$T/snap/help/gone.txt"
 out=$(bash "$S/snapshot.sh" 2>"$T/err"); rc=$?
 check "healthy: snapshot exits 0, rewrites version and guide" '[ $rc = 0 ] && [ "$(cat "$T/snap/version")" = 1.4.300 ] && [ "$(cat "$T/snap/orchestration-guide.md")" = "guide text" ]'
+check "healthy: without the shared lib.sh next to it, snapshot still reports the tested version" 'printf "%s\n" "$out" | grep -q "^versions: ORCA_TESTED=1.4.300 ORCA_MIN=unknown "'
+echo 'ORCA_MIN=1.4.250' >"$T/bin/lib.sh" # where the copied skill finds the shared lib (../../bin)
+check "healthy: snapshot reports the tested version and the minimum of the shared lib.sh" 'bash "$S/snapshot.sh" 2>/dev/null | grep -q "^versions: ORCA_TESTED=1.4.300 ORCA_MIN=1.4.250 "'
+rm -f "$T/bin/lib.sh"
 check "healthy: snapshot leaves no staging residue in snapshot/" '[ -z "$(find "$T/snap" -name ".new.*" -o -name "help.old")" ]'
 check "healthy: snapshot saves all 5 helps, drops a stale one" '[ "$(ls "$T/snap/help" | wc -l | tr -d " ")" = 5 ] && [ ! -e "$T/snap/help/gone.txt" ] && [ -e "$T/snap/help/worktree-show.txt" ]'
 

@@ -47,6 +47,7 @@ echo 'WF_X=(' >"$WF_GLOBAL_SETTINGS"
 out=$(bash "$S" get WF_MAX_WORKERS 2>"$T/err"); rc=$?
 eq "broken global: exit 0" "$rc" 0
 eq "broken global: defaults" "$out" 3
+eq "broken global: show labels the values default, not global" "$(bash "$S" show 2>/dev/null | grep -c '(global)')/$(bash "$S" show 2>/dev/null | grep -c '^WF_MAX_WORKERS=3  (default)$')" "0/1"
 check "broken global: one stderr line naming the file" '[ "$(wc -l <"$T/err" | tr -d " ")" = 1 ] && grep -qF "$WF_GLOBAL_SETTINGS" "$T/err"'
 
 reset
@@ -59,6 +60,21 @@ eq "2h" "$(wf_seconds 2h)" 7200
 eq "90m" "$(wf_seconds 90m)" 5400
 eq "plain seconds" "$(wf_seconds 300)" 300
 wf_seconds soon >/dev/null 2>&1; eq "junk fails" "$?" 1
+eq "300s" "$(wf_seconds 300s)" 300
+eq "a leading zero is decimal" "$(wf_seconds 08m)" 480
+out=$(wf_seconds 1h30m 2>&1); eq "two units fail without a bash error" "$?/$out" "1/"
+eq "decide.sh falls back to 2h on such a cap, quietly" "$(cap=$(wf_seconds 1h30m 2>&1) || cap=7200; echo "$cap")" 7200
+
+# supported versions: plain lines in lib.sh, the tested Orca read from the review snapshot, min never above tested
+eq "ORCA_TESTED is the snapshot version" "$ORCA_TESTED" "$(cat "$DIR/../skills/aw-orca-review/snapshot/version")"
+check "ORCA_MIN is at most ORCA_TESTED" '[ -n "$ORCA_MIN" ] && ! wf_version_lt "$ORCA_TESTED" "$ORCA_MIN"'
+check "GH_MIN is a version" '[[ $GH_MIN =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]'
+vlt() { if wf_version_lt "$1" "$2"; then echo lt; else echo ge; fi; }
+eq "version compare" "$(vlt 1.4.268 1.4.269) $(vlt 1.4.269 1.4.269) $(vlt 1.4.270 1.4.269) $(vlt 1.9.9 1.10.0) $(vlt 2.0 1.99.99) $(vlt 1.4 1.4.1)" "lt ge ge lt ge lt"
+mkdir -p "$T/vbin"; printf '#!/bin/sh\necho "tool version 3.21.4 (2026-01-01)"\n' >"$T/vbin/vtool"; chmod +x "$T/vbin/vtool"
+eq "tool version: the first dotted number" "$(PATH="$T/vbin:$PATH" wf_tool_version vtool)" 3.21.4
+eq "tool version: a missing tool prints nothing" "$(wf_tool_version no-such-tool-xyz)" ""
+eq "the installed revision is a setting" "$(bash "$S" show 2>/dev/null | grep -c '^WF_INSTALLED_REV=')" 1
 
 # decide.sh takes the comment cap from the global file
 echo 'WF_COMMENT_CAP=10' >"$WF_GLOBAL_SETTINGS"
