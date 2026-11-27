@@ -81,27 +81,31 @@ check "no old name is a skill folder" '! grep -v "^#" "$R" | awk "NF { print \$1
 # old-name check: no old skill name of the map is left in the text of this checkout. Outside compat/ (the map, the old
 # paths) only history may name a skill as it was called then: the files matching OLD_NAME_OK (basename globs).
 OLD_NAME_OK="CHANGELOG* retro-log.md"
-old_name_hits() { # old_name_hits <root>: `<file>:<line>:<text>` of every old skill name under <root>, compat/ and .git left out
-  local root=$1 o x e
+old_name_hits() { # old_name_hits <root>: `<file>:<line>:<text>` of every old skill name in the TRACKED files of <root> (git grep), compat/ left out
+  local root=$1 o x
   set --
-  for x in $OLD_NAME_OK; do set -- "$@" "--exclude=$x"; done
   for o in $(grep -v '^#' "$R" | awk 'NF { print $1 }'); do set -- "$@" -e "$o"; done
-  (cd "$root" && for e in * .[!.]*; do
-    case $e in compat | .git) continue ;; esac
-    [ -e "$e" ] && grep -rnF "$@" -- "$e"
-  done)
+  set -- "$@" -- . ':(exclude)compat'
+  for x in $OLD_NAME_OK; do set -- "$@" ":(exclude,glob)**/$x"; done
+  git -C "$root" grep -nIF "$@" || true
 }
-F="$T/oldnames"; mkdir -p "$F/skills/x" "$F/compat/any" "$F/.git" "$F/.claude" "$F/docs"
+F="$T/oldnames"; mkdir -p "$F/skills/x" "$F/compat/any" "$F/.claude" "$F/docs" "$F/node_modules/p"; git -C "$F" init -q
 echo "run /$COORD" >"$F/skills/x/SKILL.md"
-for o in $OLDS; do echo "$o" >>"$F/compat/any/README.md"; echo "$o" >>"$F/.git/HEAD"; echo "then /$o ran" >>"$F/.claude/retro-log.md"; echo "$o" >>"$F/CHANGELOG.md"; done
-eq "old-name check: compat/, .git and history files may name an old skill" "$(old_name_hits "$F")" ""
+for o in $OLDS; do echo "$o" >>"$F/compat/any/README.md"; echo "then /$o ran" >>"$F/.claude/retro-log.md"; echo "$o" >>"$F/CHANGELOG.md"; done
+git -C "$F" add -A
+eq "old-name check: compat/ and history files may name an old skill" "$(old_name_hits "$F")" ""
 for o in $OLDS; do
-  echo "see /$o section 5" >"$F/docs/a.md"
+  mkdir -p "$F/docs" "$F/.claude"; echo "see /$o section 5" >"$F/docs/a.md"; git -C "$F" add docs/a.md
   eq "old-name check: $o in a doc is reported" "$(old_name_hits "$F")" "docs/a.md:1:see /$o section 5"
-  rm "$F/docs/a.md"; echo "~/.claude/skills/$o/next.sh" >"$F/.claude/profile.md"
+  git -C "$F" rm -qf docs/a.md; echo "~/.claude/skills/$o/next.sh" >"$F/.claude/profile.md"; git -C "$F" add .claude/profile.md
   eq "old-name check: $o in a dot folder is reported" "$(old_name_hits "$F" | cut -d: -f1,2)" ".claude/profile.md:1"
-  rm "$F/.claude/profile.md"
+  git -C "$F" rm -qf .claude/profile.md
 done
+# only tracked files count: untracked or ignored content (.claude/worktrees/, node_modules/, scratch files) never fails the check
+echo "node_modules/" >"$F/.gitignore"; git -C "$F" add .gitignore
+for o in $OLDS; do echo "/$o" >"$F/scratch.md"; echo "$o" >"$F/node_modules/p/x.md"; done
+eq "old-name check: untracked and gitignored files naming an old skill are not reported" "$(old_name_hits "$F")" ""
+rm "$F/scratch.md"
 hits=$(old_name_hits "$ROOT"); n=$((n + 1))
 if [ -n "$hits" ]; then
   fail=$((fail + 1)); echo "FAIL [no old skill name outside compat/]"; printf '%s\n' "$hits" | cut -c1-200 | sed 's/^/  /'
