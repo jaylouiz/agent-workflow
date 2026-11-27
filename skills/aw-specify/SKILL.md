@@ -3,7 +3,7 @@ name: aw-specify
 description: "Specify stage for a GitHub issue (label `needs-spec`): turn a UX decision or a clear request into a ready-to-build spec (acceptance criteria, implementation notes, verification), choosing between technical approaches where the build is open. Rewrites the issue body and marks it `ready`. Never edits code and does not redesign the UX."
 argument-hint: <issue-number>
 arguments: [issue]
-allowed-tools: Bash(gh issue view *) Bash(gh issue comment *) Bash(gh issue edit *) Bash(gh label create *) Bash(gh label list *) Bash(~/.claude/agent-workflow/bin/issue-status.sh *)
+allowed-tools: Bash(gh issue view *) Bash(gh issue comment *) Bash(gh issue edit *) Bash(gh label create *) Bash(gh label list *) Bash(~/.claude/agent-workflow/bin/issue-status.sh *) Bash(~/.claude/agent-workflow/bin/decide.sh *)
 hooks:
   PreToolUse:
     - matcher: Bash
@@ -25,15 +25,16 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 ## 1. Load and route
 
 1. `gh issue view $issue --json number,title,body,labels,comments`; `gh label create needs-spec --force --description "Rough idea, spec not written yet"` and `gh label create ready --force --description "Spec confirmed, ready to build"`.
-2. If the issue names a design backlog entry, read it as the profile's "Sources" describes.
-3. Already `ready`: say so and ask whether to re-specify.
-4. Classify: **UI** (visible interface, copy, layout, interaction) or **non-UI** (tech-only per the issue standard when nothing user-visible changes).
-5. **Route by the triage rule** (rarely triggers):
+2. **Resume**: `~/.claude/agent-workflow/bin/decide.sh resume $issue` (the rules: `~/.claude/agent-workflow/reference/decisions.md`, "Resume"). `none`: go on (with a `resumed` log line under it, an answer was taken and nothing was logged since: the rules say when to continue as for `resumed`). `waiting` (exit 2): tell the user which decision waits and stop, changing nothing. `resumed`, for the request Specify parked on its options comment: the answer is the choice of step 6.1; continue there, skipping the steps before it. Any other request: as the rules say.
+3. If the issue names a design backlog entry, read it as the profile's "Sources" describes.
+4. Already `ready`: say so and ask whether to re-specify.
+5. Classify: **UI** (visible interface, copy, layout, interaction) or **non-UI** (tech-only per the issue standard when nothing user-visible changes).
+6. **Route by the triage rule** (rarely triggers):
    - **Fog**: comment what is unclear, keep `needs-spec`, ask the user to set the direction; stop.
    - **Open direction** (UI without a `## UX decision`): relabel `needs-design` with a one-line comment and suggest `/aw-ui-design $issue`. Stop.
    - Otherwise continue, in Phase Build: `~/.claude/agent-workflow/bin/issue-status.sh phase $issue build` (sets GitHub's issue status In progress and the label `phase:build`). A `## UX decision` in the body is **input**: do not reopen its choices; a real conflict with code or invariants goes to the user as a question. The same holds for Design's stories and UACs.
    - **Issue standard**: no `## Problem`, `Job:` or `## Solution` in the body yet: infer them per the issue rules ("Infer, then record") before anything else; the request's own idea goes to Solution, never into Problem. If not even the problem can be named from context, it is fog (above).
-6. **Epic check.** A clear destination that spans several independently shippable slices is specified as an epic: options and Decision cover the cross-cutting choices only, the body becomes a tracker (goal, decisions, sequenced sub-issue table), each slice becomes a sub-issue in the lane the triage rule gives it (scope paragraph, AC slice, dependencies), linked with `gh api repos/{owner}/{repo}/issues/$issue/sub_issues -F sub_issue_id=<sub-issue numeric .id, not its number>`, and the parent gets `ready` as tracker only. Skip the current-state review; the sub-issues' own runs do it.
+7. **Epic check.** A clear destination that spans several independently shippable slices is specified as an epic: options and Decision cover the cross-cutting choices only, the body becomes a tracker (goal, decisions, sequenced sub-issue table), each slice becomes a sub-issue in the lane the triage rule gives it (scope paragraph, AC slice, dependencies), linked with `gh api repos/{owner}/{repo}/issues/$issue/sub_issues -F sub_issue_id=<sub-issue numeric .id, not its number>`, and the parent gets `ready` as tracker only. Skip the current-state review; the sub-issues' own runs do it.
 
 ## 2. Tracks
 
@@ -52,7 +53,7 @@ Read the profile's "Sources", then run its current-state review on the current i
 
 1. Settle the scope: in, out, what done looks like. Interactive: ask the user what the issue leaves open. Workers assert the answers from the issue and the docs.
 2. When the build is open, produce **2-3 technical approaches**: one paragraph each, trade-offs, risk (name the profile's "Risk areas" touched), rough size, the conventions they rely on. When only one approach is sensible (most bugs, most issues after Design), write that one and say why.
-3. Light UI without a UX decision: one ASCII sketch at desktop and mobile width, box-and-label only, real copy and names from the profile's "Sources". Anything that needs more than ASCII is an open direction (step 1.5).
+3. Light UI without a UX decision: one ASCII sketch at desktop and mobile width, box-and-label only, real copy and names from the profile's "Sources". Anything that needs more than ASCII is an open direction (step 1.6).
 
 ## 5. Record options
 
@@ -60,6 +61,6 @@ Write the approaches to a scratchpad file whose first line is `<!-- decision-not
 
 ## 6. Choose and write the spec
 
-1. Choose. Interactive: `AskUserQuestion` with the approaches (ASCII sketches in `preview`), plus any open question that changes the spec. Orchestrated worker (a lead) or autonomous run: never `AskUserQuestion`, no `ask` for approaches unless the task spec says the issue is interactive (then the approaches and your recommendation go through the preamble's `ask`). Otherwise: a two-way choice goes into the spec's `## Decisions` plus `decide.sh record`, a one-way one is a `decide.sh request` and the issue parks (`/aw-coordinate` section 5).
+1. Choose. Interactive: `AskUserQuestion` with the approaches (ASCII sketches in `preview`), plus any open question that changes the spec. Orchestrated worker (a lead) or autonomous run: never `AskUserQuestion`, no `ask` for approaches unless the task spec says the issue is interactive (then the approaches and your recommendation go through the preamble's `ask`). Otherwise: a two-way choice goes into the spec's `## Decisions` plus `decide.sh record`, a one-way one is a `decide.sh request` and the issue parks (`~/.claude/agent-workflow/reference/decisions.md`).
 2. Draft the body from [spec-template.md](spec-template.md) into a scratchpad file: keep `## UX decision` and Design's UACs verbatim (technical ACs go below them), carry the author's text under "Original notes", add the profile's default ACs for UI when Design did not. A time-scoped group or panel ("ends with its day") gets an AC for the stale case (older items), not only the fresh one. A change to a create or push path of a synced source gets an AC for the fetch-then-push order (a fetch landing between create and lookup), not the push alone. A flake issue names its suspected cause as a hypothesis and requires the proof run (the profile's repeat-run command, 30 runs) to decide whether a second cause remains. Before an AC relies on how existing code or a tool behaves (the ARIA role of the component it adds a control to, what a store actually persists, the cost of a lint or type mode), read or measure it on the default branch, and observe runtime behaviour (focus, what collapses or re-renders) in the running app or label it `unverified` in the spec; two ACs that cannot both hold are resolved in the spec, not left to Build. An action that cannot be undone gets a `## Hazards` list (see the template). If the profile defines a testing mode, size the spec's Verification section (and the tests it names) to the current mode. Apply directly (issue edits are easy to revert): `gh issue edit $issue --body-file <file> --remove-label needs-spec --add-label ready`.
 3. Reply with the issue URL, a two-line summary, and the assumed defaults the user may want to change. Suggest `/aw-build $issue`.

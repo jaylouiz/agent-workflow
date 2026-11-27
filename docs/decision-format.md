@@ -153,7 +153,8 @@ and how the format keeps it:
 | File | What |
 |---|---|
 | `bin/decision_format.py` | builds the request, checks the overview, reads answers |
-| `bin/decide.sh` | `request` (builds from question lines), `check` (cap plus overview shape), `status` (`reads as`), `resolve` (resume text), `digest` (answer hint) |
-| `skills/aw-coordinate/SKILL.md` section 5, `task-template.md` | how to write a request, what to quote to the resumed worker |
+| `bin/decide.sh` | `request` (builds from question lines), `check` (cap plus overview shape), `status` (`reads as`), `resolve` (resume text), `resume` (a stage's Resume step: `none`, `waiting` or the resume text), `digest` (answer hint) |
+| `reference/decisions.md` | one-way or two-way, how to write a request and a record, parking and the Resume step |
+| `skills/aw-coordinate/SKILL.md` section 5, `task-template.md` | the coordinator's sweep and digest, what to quote to the resumed worker |
 | `skills/aw-ui-design/SKILL.md` sections 1, 3, 7 | round comment template: questions instead of variants and axes |
 | `skills/aw-specify/SKILL.md` section 5 | options comment uses the overview shape |

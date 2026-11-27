@@ -3,7 +3,7 @@
 # blocking a worker; two-way decisions are recorded (label `agent-decided`) and never block. The user answers
 # by commenting on the issue, any time; the coordinator sweeps with `status` and batches pings with `digest`.
 #
-#   decide.sh request <n> <file>   post a decision request and park. <file>: line 1 the question in plain words, then
+#   decide.sh request <n> <file>   post a decision request and park (also logs `parked D<k>: <question>`). <file>: line 1 the question in plain words, then
 #                                  optional `Preview: <url>` (the digest shows it) and `Overview: <link to the round
 #                                  or options comment>`, then one line per question:
 #                                  `1 Shell: A (back on top, today) · B ★ (footer bar) · C (top stepper)`
@@ -15,6 +15,14 @@
 #   decide.sh resolve <n> <text> [D<k>]   unpark: drop `needs-decision`, post "Resumed", stop the issue's prototype server
 #                                  (proto-serve.sh stop; its message goes to stderr); prints `<text>` spelled out
 #                                  (`1 Shell: B (footer bar) · …`) when it reads as `ok`, the answer block or `1B 2A`
+#   decide.sh resume  <n>          a stage's Resume step (reference/decisions.md): reads the one issue and prints
+#                                  `none` (no open request; exit 0, nothing written), or a `waiting  #<n> D<k> …`
+#                                  line per unanswered request (exit 2, nothing written, also when another request
+#                                  of the issue is answered), or, answered, what `resolve` prints per request, then
+#                                  `log: <path>` and the last 20 coordination-log entries (exit 0). Idempotent: a
+#                                  second run prints `none`, followed by the same log lines while `resumed` is
+#                                  the log's last entry. The answer is passed on as one line, up to 20000 chars
+#                                  (the log keeps 1000); a cut is marked
 #   decide.sh followup <n> <m> [D<k>]     note that change request on #n became issue #m
 #                                  (answer/resolve/followup act on the newest decision unless D<k> is given: pass the
 #                                  id `status` printed, an older decision can be the one that was answered or challenged)
@@ -129,7 +137,12 @@ log_dir() { echo "${WF_ISSUE_LOG_DIR:-$HOME/.claude/issue-logs}/$REPO"; }
 # An empty <label> scans the 100 most recently updated issues of that state (an answer updates its issue).
 scan() { # <label|""> <state>
   local f=(--label "$1"); [ -n "$1" ] || f=(--search "sort:updated-desc")
-  gh issue list "${f[@]}" --state "$2" --limit 100 --json number,url,comments | jq -r '
+  gh issue list "${f[@]}" --state "$2" --limit 100 --json number,url,comments | rows
+}
+# <issue>: the same rows for one issue, the answer in full (a stage acts on it; `status` and `digest` only show it)
+scan_one() { gh issue view "$1" --json number,url,comments | jq -s . | rows 20000; }
+rows() { # [<answer cap, chars>]; stdin: a JSON array of issues (number, url, comments)
+  jq -r --argjson cap "${1:-1000}" '
     def owner($cs; $e):
       ($e.pre) as $p
       | if $p != null and ([$cs[] | select(.key < $e.key and .c != null and (.c.kind == "request" or .c.kind == "record") and .c.id == $p)] | length) > 0
@@ -153,7 +166,7 @@ scan() { # <label|""> <state>
        ($q.v.body | split("\n") | map(select(test("^(<!--|###|$)") | not)) | first // "-" | .[0:120]),
        (now - ($q.v.createdAt | fromdateiso8601) | floor),
        ((if $m.c.kind == "answer" then [$m.v.body | split("\n")[1:] | join(" ") | sub("^Answer from the user \\(via the coordinator\\): "; "")] else [] end) + $after
-        | join(" / ") | gsub("\\s+"; " ") | .[0:1000]),
+        | join(" / ") | gsub("\\s+"; " ") | .[0:$cap]),
        ($q.v.body | split("\n") | map(select(test("^Preview: "))) | first // "" | sub("^Preview: "; "")),
        ([$q.v.body | scan("<!-- choices (.*?) -->") | .[0]] | join("\u001e"))]
     | map(tostring | gsub("\u001f"; " ")) | join("\u001f")'
@@ -166,7 +179,7 @@ pending() { { scan needs-decision open; scan "" open; } | awk -F'\037' '!seen[$1
 age() { local s=$1; if [ "$s" -ge 3600 ]; then echo "$((s / 3600))h"; else echo "$((s / 60))m"; fi; }
 
 cmd=${1:-}; shift || true
-case "$cmd" in request|record|answer|resolve|followup|note|log|status|digest) need_repo ;; esac
+case "$cmd" in request|record|answer|resolve|resume|followup|note|log|status|digest) need_repo ;; esac
 case "$cmd" in
   request|record)
     [ $# -eq 2 ] && [ -s "$2" ] || die "usage: $cmd <issue> <file>"
@@ -175,6 +188,8 @@ case "$cmd" in
       python3 -I "$DIR/decision_format.py" request "$2" "D$id" >"$tmp" || { rm -f "$tmp"; exit 65; }
       check "$tmp" || { rm -f "$tmp"; exit 65; }
       post "$1" "$tmp"; gh issue edit "$1" --add-label needs-decision >/dev/null
+      # where the stage stopped, for the run that resumes it (`resume` prints the log tail)
+      "$0" log "$1" "parked D$id: $(sed -n 1p "$2")" || echo "decide.sh: coordination log not written" >&2
     else
       { echo "<!-- decision-record D$id -->"; echo "### Agent decision (D$id): not blocking"; echo; cat "$2"; echo
         echo "---"; echo "To change it, comment here, starting with \`Decision D$id:\` so it reaches this decision and not a later one. To accept, remove the \`agent-decided\` label."; } >"$tmp"
@@ -193,12 +208,45 @@ case "$cmd" in
       req=$(comments "$1" | jq -r --arg re "<!-- decision-request D$id -->" '[.[].body | select(test($re))] | last // ""')
       spelled=$(reads_as "$req" "$2"); with=$2; [ -z "$spelled" ] || with="$spelled (answer: $2)"
       printf '<!-- decision-resolved D%s -->\nResumed (D%s)%s\n' "$id" "$id" "${spelled:+ with: $spelled}." >"$tmp"
+      # the log first: `resume` finds a taken answer there when a later step of this one, or the run after it, fails.
+      # One screen of it is enough for the log (every later reader gets the entry); stdout carries the whole text.
+      short=$with; [ "${#with}" -le 1000 ] || short="${with:0:1000} … (cut: the full answer is the comment on the issue)"
+      "$0" log "$1" "resumed D$id with: $short" || echo "decide.sh: coordination log not written" >&2
       post "$1" "$tmp"; gh issue edit "$1" --remove-label needs-decision >/dev/null
       echo "resumed D$id with: $with"
-      "$0" log "$1" "resumed D$id with: $with" || echo "decide.sh: coordination log not written" >&2
       "$DIR/proto-serve.sh" stop "$1" >&2 || echo "decide.sh: prototype server not stopped (proto-serve.sh list)" >&2 # the preview need not outlive the wait
     fi
     rm -f "$tmp"
+    ;;
+  resume)
+    [ $# -eq 1 ] || die "usage: resume <issue>"
+    case "$1" in *[!0-9]* | "") die "usage: resume <issue>" ;; esac
+    all=$(scan_one "$1")
+    open=$(printf '%s\n' "$all" | awk -F'\037' '$3 == "request" && $7 == ""')
+    if [ -n "$open" ]; then # a waiting request keeps the issue parked: resolving another one would drop its label
+      while IFS=$'\x1f' read -r n url kind id q secs _ans _prev _choices; do
+        echo "waiting  #$n $id ($(age "$secs")): $q"; link=$url # the read that ends the loop empties its variables
+      done <<<"$open"
+      echo "Answer on the issue (${link:-#$1}), then run the stage again. Nothing was changed."
+      exit 2
+    fi
+    done_rows=$(printf '%s\n' "$all" | awk -F'\037' '$3 == "answered" || ($3 == "request" && $7 != "")')
+    f="$(log_dir)/$1.md"
+    log_tail() {
+      [ -f "$f" ] || { echo "log: $f (no log on this machine)"; return 0; }
+      echo "log: $f"; grep '^- ' "$f" | tail -n 20 || true
+    }
+    if [ -z "$done_rows" ]; then
+      echo "none"
+      # an answer was taken and nothing was logged since (the run that took it ended there): show it, so it is not lost
+      if [ -f "$f" ] && grep '^- ' "$f" | tail -n 1 | grep -q '^- [^ ]* resumed D'; then log_tail; fi
+      exit 0
+    fi
+    while IFS=$'\x1f' read -r n _url _kind id _q _secs ans _prev _choices; do
+      [ "${#ans}" -lt 20000 ] || ans="$ans … (cut: the full answer is the comment on the issue)"
+      "$0" resolve "$n" "$ans" "$id" </dev/null
+    done <<<"$done_rows"
+    log_tail
     ;;
   note)
     [ $# -eq 2 ] || die "usage: note <issue> <text>"
@@ -280,5 +328,5 @@ case "$cmd" in
     echo "Answer on the issue or here (\"385: ok\" takes the recommendations, \"385: 1B 2A\" picks). All: $repo/issues?q=is:open+label:needs-decision"
     echo "FYI $reviews issue(s) with agent decisions to review: $repo/issues?q=label:agent-decided"
     ;;
-  *) sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
+  *) sed -n '2,51p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
 esac
