@@ -10,7 +10,7 @@
 #        exit 0 when the PR body's `## Review` is complete: reviewed (`by:`), no finding `-> open`, and not
 #        `route: lead` where the route says reviewer. Else exit 1 with the reasons.
 #   merge-pr.sh prep <pr>
-#        refuse on a hold label, an open needs-decision, no `Closes #<n>` (opt-out: `No-issue: <reason>`) or a
+#        refuse on a hold label, an open needs-decision, no `Closes #<n>` (opt-out: `No-issue: <reason>` or `Part of #<n>`) or a
 #        failing review-check; then, in the PR's worktree (wf_install first when the base brought a package.json change),
 #        fast-forward to a remote head that moved ahead (gh pr update-branch; diverged = exit 64, nothing pushed),
 #        merge the base branch in when behind (no rebase, no force-push), wf_verify (+ wf_build when
@@ -154,8 +154,8 @@ case "$cmd" in
     bodyf=$(mktemp); jq -r .body <<<"$info" >"$bodyf"
     issues=$(issues_of "$bodyf" || true)
     # A PR without an issue (e.g. the user's own PR added to a run) opts out with a line-leading `No-issue: <reason>`
-    [ -n "$issues" ] || grep -Eq '^No-issue: [^[:space:]]' "$bodyf" ||
-      stop="$stop\nPR body has no line-leading 'Closes #<n>' (or 'No-issue: <reason>')"
+    [ -n "$issues" ] || grep -Eq '^(No-issue: [^[:space:]]|Part of +([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+)' "$bodyf" ||
+      stop="$stop\nPR body has no line-leading 'Closes #<n>' (or 'No-issue: <reason>' or 'Part of #<n>')"
     for n in $issues; do # every closed issue (a batch PR closes several); a failed lookup holds (fail closed)
       ilabels=$(gh issue view "$n" --json labels -q '.labels[].name') || die "gh issue view $n failed: cannot check holds"
       for l in $ilabels; do
