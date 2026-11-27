@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Merge-queue steps for the aw-orchestrate coordinator (and the lead's review routing).
+# Merge-queue steps for the aw-coordinate coordinator (and the lead's review routing).
 # `gh pr merge` is NOT in here: it stays the coordinator's own call between prep and after, so the project's
 # pre-merge gate hook (PreToolUse on that command) still fires.
 #

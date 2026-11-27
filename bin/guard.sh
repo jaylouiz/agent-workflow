@@ -14,7 +14,7 @@
 #      them; a waiter takes the mail Orca would wake them with), and `ask` never ends in a trailing `&`.
 #   5. `gh pr merge` is its own call: a real invocation followed by another command in the same call (`&&`, `;`,
 #      `||`, `|`, `&`, a newline; also inside `bash -c '…'`) is blocked, so the project gate hook sees the merge
-#      before `merge-pr.sh after` runs (aw-orchestrate section 2). Preceding commands (`cd x && gh pr merge`)
+#      before `merge-pr.sh after` runs (aw-coordinate section 2). Preceding commands (`cd x && gh pr merge`)
 #      and a lone merge stay allowed; heredoc bodies and quoted text never count.
 # One lexing path for every check: prep() (one quote-aware scan: `#` comments, heredoc bodies and line continuations
 # dropped, `$'..'` and `"$(..)"` normalised, `<<` in `$((..))` is a shift) feeds shlex; newlines separate commands. So text

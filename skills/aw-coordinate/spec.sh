@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Print a complete Orca task spec for one issue and stage, from task-template.md (aw-orchestrate section 4).
+# Print a complete Orca task spec for one issue and stage, from task-template.md (aw-coordinate section 4).
 #
 #   spec.sh <lead|design|review|delta-review|fix> <issue> --ledger <run ledger dir>
 #           [--tier <text>] [--model <alias>: default the settings' WF_MODEL_STRONG for review and delta-review, else WF_MODEL_DEFAULT] [--branch <b>] [--pr <n>] [--wt <path>] [--extra <file>] [--batch <n,m,...>: lead only, the other issues of a batch] [--no-port] [--interactive]

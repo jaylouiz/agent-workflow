@@ -77,14 +77,14 @@
 ### Task 2: Model tiers and digest cap read from settings
 
 **Files:**
-- Modify: `skills/aw-orchestrate/spec.sh:21` (model default per stage), `:76-80` (export `MODEL_STRONG`, `MODEL_FAST`)
-- Modify: `skills/aw-orchestrate/task-template.md:26` (`opus` → `{{MODEL_STRONG}}`, `haiku` → `{{MODEL_FAST}}`)
-- Modify: `skills/aw-orchestrate/SKILL.md` section 0 (Preflight: new step "`settings.sh show`; models, max workers and digest cap come from it"), section 3 table (roles → tiers), every `--model opus`/`sonnet` example and the retro line (`fresh agent on the default tier`), and the digest cap mention (`WF_DIGEST_CAP`)
-- Modify: `skills/aw-orchestrate/next.sh:16` (usage example only)
+- Modify: `skills/aw-coordinate/spec.sh:21` (model default per stage), `:76-80` (export `MODEL_STRONG`, `MODEL_FAST`)
+- Modify: `skills/aw-coordinate/task-template.md:26` (`opus` → `{{MODEL_STRONG}}`, `haiku` → `{{MODEL_FAST}}`)
+- Modify: `skills/aw-coordinate/SKILL.md` section 0 (Preflight: new step "`settings.sh show`; models, max workers and digest cap come from it"), section 3 table (roles → tiers), every `--model opus`/`sonnet` example and the retro line (`fresh agent on the default tier`), and the digest cap mention (`WF_DIGEST_CAP`)
+- Modify: `skills/aw-coordinate/next.sh:16` (usage example only)
 - Modify: `skills/aw-ui-design/SKILL.md:52` (`model: sonnet` → the default tier, `settings.sh get WF_MODEL_DEFAULT`)
 - Modify: `skills/aw-retro/SKILL.md` and `global/CLAUDE.md:24` (retro agent: `model:` = default tier, `bash ~/.claude/agent-workflow/bin/settings.sh get WF_MODEL_DEFAULT`)
 - Modify: `skills/aw-build/SKILL.md:4` (delete `model: sonnet`)
-- Test: `skills/aw-orchestrate/test-spec.sh`
+- Test: `skills/aw-coordinate/test-spec.sh`
 
 **Interfaces:**
 - Consumes: `wf_load` and `WF_MODEL_*` from Task 1; `settings.sh get`.
@@ -96,7 +96,7 @@
   - `fast tier`: global `WF_MODEL_FAST=sonnet` → lead spec contains `model: sonnet` in the subagents line and not `haiku`.
   - `review respects global strong`: global `WF_MODEL_STRONG=fable`, review without `--model` → `by: fable`.
   - `--model still wins`: review with `--model sonnet` → `by: sonnet`.
-- [ ] **Step 2: Run** `bash skills/aw-orchestrate/test-spec.sh` → the new checks FAIL.
+- [ ] **Step 2: Run** `bash skills/aw-coordinate/test-spec.sh` → the new checks FAIL.
 - [ ] **Step 3: Implement** spec.sh (resolve `model` after `wf_load` when `--model` was not given) and the template placeholders.
 - [ ] **Step 4: Run** `test-spec.sh` → no `FAIL`.
 - [ ] **Step 5: Edit the prose** listed under Files. Section 3 table becomes: Coordinator = the user's session; Lead = default tier (`--effort high` for risk area or cross-cutting); Reviewer worker = strong; Root-cause subagent = strong, at most one per issue; Mechanical subagents = fast; Design, fix and delta-review workers = default. Keep the sentence "No other worker runs the strong tier unless the user says so for the run." Drop the dated "User decision 2026-11-02" pointer only if it no longer matches (it records the tier split, keep it).
@@ -162,7 +162,7 @@
 **Files:**
 - Modify: `reference/project-profile.md` (reorder; `<!-- ui -->` after each UI heading: Design quality, Components, Pattern check, Design feedback, Screenshots, Prototype, Canvas; `<!-- orca -->` after Orchestration; drop "digest cap" line, point to `WF_DIGEST_CAP`)
 - Modify: `reference/project-config.sh` header (mentions the global file and `settings.sh show`)
-- Modify: `skills/aw-ui-design/SKILL.md`, `skills/aw-specify/SKILL.md`, `skills/aw-build/SKILL.md`, `skills/aw-orchestrate/SKILL.md` (the "Read the profile" step), `README.md`
+- Modify: `skills/aw-ui-design/SKILL.md`, `skills/aw-specify/SKILL.md`, `skills/aw-build/SKILL.md`, `skills/aw-coordinate/SKILL.md` (the "Read the profile" step), `README.md`
 - Modify: `.claude/issue-workflow.md` (this repo: drop "digest cap: 2h", default)
 
 **Interfaces:**

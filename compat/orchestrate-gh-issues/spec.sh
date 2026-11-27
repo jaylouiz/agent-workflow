@@ -1,1 +1,1 @@
-../../skills/aw-orchestrate/spec.sh
+../../skills/aw-coordinate/spec.sh

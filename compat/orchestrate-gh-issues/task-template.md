@@ -1,1 +1,1 @@
-../../skills/aw-orchestrate/task-template.md
+../../skills/aw-coordinate/task-template.md

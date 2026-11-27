@@ -1,0 +1,1 @@
+../../skills/aw-coordinate/msgs.sh

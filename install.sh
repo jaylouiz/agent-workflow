@@ -97,7 +97,7 @@ requirements() {
   need python3 required "brew install python"
   need gh required "brew install gh, then gh auth login"
   need claude required "https://claude.com/claude-code"
-  need orca optional "only for /aw-orchestrate: https://github.com/stablyai/orca"
+  need orca optional "only for /aw-coordinate: https://github.com/stablyai/orca"
   need lsof optional "prototype preview servers: brew install lsof or sudo apt install lsof"
   if command -v gh >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then say "  warn     gh is not logged in: gh auth login"; fi
   local note; note=$(config_dir_note); [ -z "$note" ] || say "  warn     $note"

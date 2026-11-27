@@ -154,6 +154,6 @@ and how the format keeps it:
 |---|---|
 | `bin/decision_format.py` | builds the request, checks the overview, reads answers |
 | `bin/decide.sh` | `request` (builds from question lines), `check` (cap plus overview shape), `status` (`reads as`), `resolve` (resume text), `digest` (answer hint) |
-| `skills/aw-orchestrate/SKILL.md` section 5, `task-template.md` | how to write a request, what to quote to the resumed worker |
+| `skills/aw-coordinate/SKILL.md` section 5, `task-template.md` | how to write a request, what to quote to the resumed worker |
 | `skills/aw-ui-design/SKILL.md` sections 1, 3, 7 | round comment template: questions instead of variants and axes |
 | `skills/aw-specify/SKILL.md` section 5 | options comment uses the overview shape |
