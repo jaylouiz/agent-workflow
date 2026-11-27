@@ -2,8 +2,8 @@
 
 <!-- profile-template: 1 -->
 
-<!-- Read by the agent-workflow skills; /aw-setup writes and updates it. Project facts only (README
-     "Generic vs project"): reference CLAUDE.md instead of copying it; delete a section that does not apply (a missing
+<!-- Read by the agent-workflow skills; /aw-setup writes and updates it. Project facts only
+     (docs/vocabulary.md "Generic vs project"): reference CLAUDE.md instead of copying it; delete a section that does not apply (a missing
      section means the step does not apply). A "ui" tag comment under a heading marks a section only a project with a
      UI needs, "orca" one only Orca orchestration needs. Settings (models, max workers, digest cap): settings.sh show.
 
@@ -29,7 +29,7 @@
 
 ## Jobs
 
-<!-- The user's main jobs that every issue names (README "Issue standard"). -->
+<!-- The user's main jobs that every issue names (`reference/issue-rules.md`, "Issue standard"). -->
 - list: <path and section, e.g. PRODUCT.md "Jobs to be done", with the IDs>
 
 ## Risk areas

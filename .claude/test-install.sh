@@ -292,6 +292,29 @@ eq "interactive: strong answered" "$(setting WF_MODEL_STRONG)" sonnet
 eq "interactive: Enter takes the default (fast)" "$(setting WF_MODEL_FAST)" haiku
 eq "interactive: heavy answered" "$(setting WF_MODEL_HEAVY)" opus
 check "interactive: heavy prompt names the opus fallback" 'grep -q "heavy (.*no Fable access: opus) \[claude-fable-5-2\]" "$T/out"'
+# the global-rules question: one summary line per rule of global/CLAUDE.md (global/rules.txt), `needs:` where a rule
+# names an optional skill; every heading has its line, no line is stale, and a rule naming an optional skill says so
+RULES_TXT="$ROOT/global/rules.txt"; OPTIONAL_SKILLS="gh-inbox-dispatcher ui-canvas impeccable harvesting-session-knowledge"
+sed -n '/^Global rules (/,/^Use them/p' "$T/out" | grep '^  - ' >"$T/rules"
+eq "rules prompt: one line per rule" "$(wc -l <"$T/rules" | tr -d ' ')" "$(grep -c '^## ' "$ROOT/global/CLAUDE.md")"
+check "rules prompt: the inbox rule is a sentence, with what it needs" 'grep -q "^  - a side finding outside the task becomes a GitHub issue labelled .inbox. .*; needs: /gh-inbox-dispatcher (optional" "$T/rules"'
+eq "rules prompt: only that rule needs an optional skill" "$(grep -c "; needs: " "$T/rules")" 1
+check "rules prompt: no rule falls back to its bare heading" '! grep -q -e "->" -e "^  - Waiting in shell loops" "$T/rules"'
+check "rules prompt: the question still follows" 'grep -q "^Use them? (y/n) \[n\]" "$T/out"'
+while IFS= read -r h; do
+  h=${h#"## "}
+  check "rules.txt: a line for '$h'" 'grep -v "^#" "$RULES_TXT" | grep -qF -- "$h :: "'
+  body=$(awk -v h="## $h" '$0 == h { on = 1; next } /^## / { on = 0 } on' "$ROOT/global/CLAUDE.md")
+  for o in $OPTIONAL_SKILLS; do
+    if printf '%s' "$body" | grep -qi -- "$o"; then
+      check "rules.txt: '$h' names /$o as needed" 'grep -F -- "$h :: " "$RULES_TXT" | grep -q -- ":: .*:: /$o "'
+    fi
+  done
+done < <(grep '^## ' "$ROOT/global/CLAUDE.md")
+while IFS= read -r line; do
+  h=${line%% :: *}
+  check "rules.txt: '$h' is a heading of global/CLAUDE.md" 'grep -qxF -- "## $h" "$ROOT/global/CLAUDE.md"'
+done < <(grep -v -e '^#' -e '^[[:space:]]*$' "$RULES_TXT")
 printf '\n\n\n\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1
 check "interactive rerun shows the set value" 'grep -q "heavy (.*) \[opus\]" "$T/out"'
 eq "interactive rerun: Enter keeps it" "$(setting WF_MODEL_HEAVY)" opus
@@ -299,7 +322,6 @@ printf '\n\n\n\nn\n' | CLAUDE_CONFIG_DIR=$C PATH=$P AW_INSTALL_INTERACTIVE=1 bas
 check "interactive: a flagged tier is not asked" '! grep -q "heavy (" "$T/out"'
 eq "interactive: the flag sets it" "$(setting WF_MODEL_HEAVY)" claude-fable-5-2
 eq "interactive: rules off" "$(setting WF_INSTALL_GLOBAL_RULES)" off
-check "interactive: shows the rule headings" 'grep -q "Out-of-scope opportunities" "$T/out"'
 
 # the template copied as the settings file (no active model lines): Enter takes the defaults, uncommented
 new; cp "$ROOT/reference/global-settings.sh" "$C/agent-workflow-settings.sh"

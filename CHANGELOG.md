@@ -24,7 +24,8 @@ under **Breaking**, first in its release: `install.sh --update` prints those ent
   Breaking entries, and reminds you to restart open sessions.
 - Supported Orca version: `ORCA_MIN` and `ORCA_TESTED` in `bin/lib.sh`. `install.sh --check` and the
   `/aw-coordinate` preflight warn when the installed Orca is older than `ORCA_MIN`; they never block.
-- `install.sh --check` also reports a `gh` older than 2.99.0 (the first release with `gh issue comment --attach`),
+- `install.sh --check` also reports a `gh` older than `GH_MIN` of `bin/lib.sh` (the first release with
+  `gh issue comment --attach`),
   `bash`, optional `shellcheck`, and whether `/code-review`, `ui-canvas` and Impeccable are installed.
 - Linux: `install.sh --proto-agent` installs a `systemd --user` unit that restarts the prototype preview servers
   at login, as the LaunchAgent does on macOS.
@@ -38,6 +39,13 @@ under **Breaking**, first in its release: `install.sh --update` prints those ent
 
 ### Changed
 
+- The README is rewritten for someone new: a walkthrough of a first issue, requirements per platform, what works
+  without and with Orca, Orca setup, Updating and Troubleshooting. The full vocabulary moved to
+  [docs/vocabulary.md](docs/vocabulary.md).
+- The interactive `install.sh` describes each global rule in one line before it asks, with `needs:` where a rule
+  names an optional skill (`global/rules.txt`).
+- Skill steps that use an optional skill (`/gh-inbox-dispatcher`, `/ui-canvas`, Impeccable,
+  `harvesting-session-knowledge`) say what to do when it is not installed.
 - `install.sh` warns when the default, strong or fast model tier is set to a full model ID: subagents of these
   tiers need a Claude Code alias. The heavy tier takes either.
 

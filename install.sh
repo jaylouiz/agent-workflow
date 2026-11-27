@@ -223,6 +223,22 @@ rules_state() { # link | import | off, from what is on disk
   if [ -f "$CLAUDE_MD" ] && grep -qxF "$IMPORT" "$CLAUDE_MD"; then echo import; else echo off; fi
 }
 backup_md() { cp "$CLAUDE_MD" "$CLAUDE_MD.bak.$(date +%Y%m%d-%H%M%S)"; }
+rules_list() { # one line per rule (`## ` heading) of global/CLAUDE.md: its summary and `needs:` from global/rules.txt, else the heading
+  local h line rest sum needs
+  while IFS= read -r h; do
+    h=${h#"## "}; sum=$h; needs=""
+    if [ -f "$ROOT/global/rules.txt" ]; then
+      while IFS= read -r line; do
+        case "$line" in "$h :: "*)
+          rest=${line#"$h :: "}; sum=${rest%% ::*}; needs=${rest#*::}
+          [ "$needs" != "$rest" ] || needs=""
+          needs=${needs# }; break ;;
+        esac
+      done <"$ROOT/global/rules.txt"
+    fi
+    say "  - $sum${needs:+; needs: $needs}"
+  done < <(grep '^## ' "$ROOT/global/CLAUDE.md")
+}
 rules_on() {
   case "$(rules_state)" in link | import) return 0 ;; esac
   if [ ! -e "$CLAUDE_MD" ] && [ ! -L "$CLAUDE_MD" ]; then
@@ -453,8 +469,8 @@ if [ "$INTERACTIVE" = 1 ]; then
     eval "M_$t=\$a"
   done
   say ""
-  say "Global rules (global/CLAUDE.md, the author's habits for every project):"
-  grep '^## ' "$ROOT/global/CLAUDE.md" | sed 's/^## /  - /'
+  say "Global rules (global/CLAUDE.md, the author's habits, loaded into every Claude session of every project):"
+  rules_list
   d=n; [ "$RULES" = on ] && d=y
   case "$(ask "Use them? (y/n)" "$d")" in y* | Y*) RULES=on ;; *) RULES=off ;; esac
   say ""
