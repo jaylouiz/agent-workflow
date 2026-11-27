@@ -51,7 +51,7 @@ Measure the files in the profile's "Context files" (`wc -w`; `wc -c` too for eac
 
 ## 5. Apply and record
 
-- Small, certain edits: apply now with the writing rules of `harvesting-session-knowledge` (read first, replace don't append). Method changes go to the agent-workflow repo (`~/.claude/agent-workflow`, a link to its checkout; commit and push); project facts go where the profile's "Retro" says.
+- Small, certain edits: apply now with the writing rules of `harvesting-session-knowledge` (if installed; otherwise these two: read first, replace don't append). Method changes go to the agent-workflow repo (`~/.claude/agent-workflow`, a link to its checkout; commit and push); project facts go where the profile's "Retro" says.
 - Routing: a lesson that names a framework, a tool's flags, a file layout or a project issue is a project fact, however general it feels. It goes to the project's path-scoped `.claude/rules/` (`paths:`) when it is about files, else to the profile. The skill keeps only the generic sentence, with no issue number and no cost note (the agent-workflow suite's `test-generic.sh` fails on such a leak).
 - Larger or uncertain ones: an `inbox` issue in the repo that owns the target (global CLAUDE.md rules).
 - Watch-list rows you acted on get `fixed <date> <file>` plus the expected effect, so the next retro can check it.

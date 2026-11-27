@@ -1,7 +1,7 @@
 # issue-workflow profile: agent-workflow
 
 <!-- profile-template: 1 -->
-<!-- Facts the code cannot tell. Executable facts: `.claude/issue-workflow.sh`. Method and vocabulary: README.md.
+<!-- Facts the code cannot tell. Executable facts: `.claude/issue-workflow.sh`. Method: README.md; vocabulary: docs/vocabulary.md.
      No UI here (shell scripts and Markdown), so there is no Design quality, Pattern check, Design feedback, Screenshots,
      Prototype, Canvas or Components section: those steps do not apply. -->
 
@@ -12,7 +12,7 @@
 
 ## Sources
 
-- method and vocabulary: `README.md`; templates: `reference/project-profile.md`, `reference/project-config.sh`, `reference/global-settings.sh`; per-repo setup: `/aw-setup`
+- method: `README.md`; vocabulary: `docs/vocabulary.md`; templates: `reference/project-profile.md`, `reference/project-config.sh`, `reference/global-settings.sh`; per-repo setup: `/aw-setup`
 - no product doc, design system or design backlog
 
 ## Risk areas

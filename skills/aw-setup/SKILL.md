@@ -7,7 +7,7 @@ allowed-tools: Bash(gh auth status*) Bash(gh repo view *) Bash(gh label *) Bash(
 
 # Set up agent-workflow in this repo
 
-Outcome: the repo has a committed profile (`.claude/issue-workflow.md`, the facts the skills leave open) and config (`.claude/issue-workflow.sh`, the executable facts), the workflow labels exist, and the user knows the next command. The user answers only what the repo cannot tell. Method and vocabulary: `~/.claude/agent-workflow/README.md`; templates: `~/.claude/agent-workflow/reference/project-profile.md` and `project-config.sh`.
+Outcome: the repo has a committed profile (`.claude/issue-workflow.md`, the facts the skills leave open) and config (`.claude/issue-workflow.sh`, the executable facts), the workflow labels exist, and the user knows the next command. The user answers only what the repo cannot tell. Method: `~/.claude/agent-workflow/README.md`, vocabulary: `~/.claude/agent-workflow/docs/vocabulary.md`; templates: `~/.claude/agent-workflow/reference/project-profile.md` and `project-config.sh`.
 
 ## 1. Preflight
 

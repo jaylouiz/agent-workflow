@@ -1,6 +1,6 @@
 # Issue rules
 
-Loaded by every stage skill (`/aw-ui-design`, `/aw-specify`, `/aw-build`, `/aw-coordinate`, `/gh-inbox-dispatcher`). The human overview with vocabulary and the lane diagram is the [README](../README.md).
+Loaded by every stage skill (`/aw-ui-design`, `/aw-specify`, `/aw-build`, `/aw-coordinate`, `/gh-inbox-dispatcher`). The human overview is the [README](../README.md); the vocabulary and the diagrams are in [docs/vocabulary.md](../docs/vocabulary.md).
 
 ## Issue standard
 
