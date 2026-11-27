@@ -50,23 +50,23 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set +e
-          mkdir -p "$RUNNER_TEMP/wt"; log="$RUNNER_TEMP/srv.log"
-          pid=$(python3 -I -c '
-          import os, subprocess, sys
-          wt, port, log, cmd = sys.argv[1:5]
-          with open(log, "ab") as out:
-              p = subprocess.Popen(["sh", "-c", "exec " + cmd], cwd=wt, env=dict(os.environ, PORT=port),
-                                   stdin=subprocess.DEVNULL, stdout=out, stderr=out, start_new_session=True)
-          print(p.pid)' "$RUNNER_TEMP/wt" 49556 "$log" 'python3 -m http.server "$PORT" --bind 127.0.0.1')
-          sleep 3; echo "pid=$pid"; ps -o pid,pgid,stat,command -p "$pid"
-          echo "--- log"; cat "$log"
-          echo "--- lsof"; lsof -nP -tiTCP:49556 -sTCP:LISTEN; echo "rc=$?"
-          echo "--- lsof verbose"; lsof -nP -iTCP:49556 -sTCP:LISTEN; echo "rc=$?"
-          echo "--- lsof -p"; lsof -nP -a -p "$pid" -i; echo "rc=$?"
-          echo "--- netstat"; netstat -anv -p tcp | grep 49556
-          echo "--- nc"; nc -z 127.0.0.1 49556; echo "rc=$?"
-          kill "$pid"
-          echo "--- test -x"; bash -x skills/orchestrate-gh-issues/test-proto-serve.sh 2>&1 | head -120 | cut -c1-300
+          mkdir -p "$RUNNER_TEMP/wt"; cd "$RUNNER_TEMP"
+          export WF_GLOBAL_SETTINGS="$RUNNER_TEMP/none.sh" WF_PROTO_DIR="$RUNNER_TEMP/state" WF_PROTO_WAIT=4
+          export WF_PROTO_CMD='python3 -m http.server "$PORT" --bind 127.0.0.1'
+          fp=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+          i=100
+          for port in 49557 "$fp"; do
+            i=$((i + 1)); echo "===== port $port issue $i"
+            bash -x "$GITHUB_WORKSPACE/skills/orchestrate-gh-issues/proto-serve.sh" start "$i" "$RUNNER_TEMP/wt" "$port" 2>&1 | grep -v 'sleep 0.2\|i=\|alive\|kill -0\|-lt 20' | tail -45 | cut -c1-250
+            echo "--- registry"; cat "$WF_PROTO_DIR/servers.tsv"
+            pid=$(awk -F'\t' -v p="$port" '$3 == p {print $5}' "$WF_PROTO_DIR/servers.tsv")
+            echo "--- ps $pid"; ps -o pid,ppid,pgid,stat,etime,command -p "$pid"
+            echo "--- log"; cat "$WF_PROTO_DIR/$i.log"
+            echo "--- netstat"; netstat -anv -p tcp | grep "$port"
+            echo "--- lsof -p"; lsof -nP -p "$pid" | grep -v ' txt ' | cut -c1-200
+            echo "--- lsof port"; lsof -nP -iTCP:"$port"; echo "rc=$?"
+            echo "--- all python"; ps -axo pid,ppid,pgid,stat,command | grep -i '[p]ython' | cut -c1-220
+          done
           exit 1
 
       - name: Run every suite
