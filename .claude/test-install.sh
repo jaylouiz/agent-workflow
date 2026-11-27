@@ -202,10 +202,10 @@ eq "unit on: recorded" "$(setting WF_INSTALL_PROTO_AGENT)" 1
 check "unit on: said" 'grep -q "systemd user unit" "$T/out"'
 check "unit on: no LaunchAgent on Linux" '[ ! -e "$AW_LAUNCHAGENTS_DIR" ]'
 : >"$SYSTEMCTL_LOG"; lrun --yes
-check "unit rerun: the recorded choice keeps the unit, nothing is reloaded" '[ -f "$U" ] && [ ! -s "$SYSTEMCTL_LOG" ]'
+check "unit rerun: the recorded choice keeps the unit, nothing is reloaded" '[ -f "$U" ] && ! grep -qv -e is-enabled "$SYSTEMCTL_LOG"'
 lrun --yes --no-proto-agent
 check "unit off: file removed" '[ ! -e "$U" ]'
-eq "unit off: disabled and stopped, then reloaded" "$(cat "$SYSTEMCTL_LOG")" "--user disable --now $UNIT
+eq "unit off: disabled and stopped, then reloaded" "$(grep -v is-enabled "$SYSTEMCTL_LOG")" "--user disable --now $UNIT
 --user daemon-reload"
 eq "unit off: recorded" "$(setting WF_INSTALL_PROTO_AGENT)" 0
 lrun --yes --proto-agent; lrun --uninstall
@@ -217,6 +217,20 @@ eq "unit: found on disk, kept and recorded" "$([ -f "$AW_SYSTEMD_USER_DIR/$UNIT"
 stub "$T/sysd-fail" uname 'echo Linux'; stub "$T/sysd-fail" systemctl 'exit 1'
 new; CLAUDE_CONFIG_DIR=$C PATH="$T/sysd-fail:$P" bash "$ROOT/install.sh" --yes --proto-agent </dev/null >"$T/out" 2>&1; rc=$?
 check "unit: failing systemctl is a warning, exit 0, file kept" '[ $rc = 0 ] && grep -q "systemctl --user enable --now $UNIT failed" "$T/out" && [ -f "$AW_SYSTEMD_USER_DIR/$UNIT" ]'
+# the enable that failed is retried by the next install (unchanged file, unit not enabled), and a success says so
+stub "$T/sysd-retry" uname 'echo Linux'
+stub "$T/sysd-retry" systemctl 'echo "$*" >>"$SYSTEMCTL_LOG"; case $2 in is-enabled) [ -f "$SYSTEMCTL_LOG.on" ] ;; enable) touch "$SYSTEMCTL_LOG.on" ;; esac'
+rm -f "$SYSTEMCTL_LOG.on"; : >"$SYSTEMCTL_LOG"
+new; CLAUDE_CONFIG_DIR=$C PATH="$T/sysd-fail:$P" bash "$ROOT/install.sh" --yes --proto-agent </dev/null >"$T/out" 2>&1
+check "unit retry: the failed enable tells the next run retries it" 'grep -q "the next install.sh or --update retries it" "$T/out"'
+CLAUDE_CONFIG_DIR=$C PATH="$T/sysd-retry:$P" bash "$ROOT/install.sh" --yes </dev/null >"$T/out" 2>&1
+check "unit retry: unchanged unit, not enabled -> enable --now again, said" 'grep -qx -e "--user enable --now $UNIT" "$SYSTEMCTL_LOG" && grep -q "enabled the systemd user unit" "$T/out"'
+: >"$SYSTEMCTL_LOG"; CLAUDE_CONFIG_DIR=$C PATH="$T/sysd-retry:$P" bash "$ROOT/install.sh" --yes </dev/null >"$T/out" 2>&1
+check "unit retry: once enabled, no further enable" '! grep -q -e "enable --now" "$SYSTEMCTL_LOG"'
+# a still-failing retry warns again, exit 0
+new; CLAUDE_CONFIG_DIR=$C PATH="$T/sysd-fail:$P" bash "$ROOT/install.sh" --yes --proto-agent </dev/null >"$T/out" 2>&1
+CLAUDE_CONFIG_DIR=$C PATH="$T/sysd-fail:$P" bash "$ROOT/install.sh" --yes </dev/null >"$T/out" 2>&1; rc=$?
+check "unit retry: still failing -> warned again, exit 0" '[ $rc = 0 ] && grep -q "enable --now $UNIT failed" "$T/out"'
 # Linux without systemd: a warning, nothing installed, recorded off
 new; CLAUDE_CONFIG_DIR=$C PATH="$T/linux:$P" bash "$ROOT/install.sh" --yes --proto-agent </dev/null >"$T/out" 2>&1; rc=$?
 check "no systemctl: exit 0, warned, no unit" '[ $rc = 0 ] && grep -q "needs systemd (no systemctl on PATH)" "$T/out" && [ ! -e "$AW_SYSTEMD_USER_DIR" ]'
@@ -336,7 +350,10 @@ CLAUDE_CONFIG_DIR=$C PATH=$P bash "$ROOT/install.sh" --check >"$T/out" 2>&1; rc=
 eq "external skills: exit 0" "$rc" 0
 check "external skills: ui-canvas found in skills/" 'grep -q "found      ui-canvas (skills/ui-canvas)" "$T/out"'
 check "external skills: impeccable found as a plugin" 'grep -q "found      impeccable (plugin)" "$T/out"'
-check "external skills: code-review not found, with what it is for" 'grep -q "not found  code-review: the review step" "$T/out"'
+check "external skills: code-review is built into Claude Code (a claude on PATH)" 'grep -q "found      code-review (built into Claude Code)" "$T/out"'
+mkdir -p "$T/noclaude"; for t in "$T"/bin/*; do [ "${t##*/}" = claude ] || ln -sf "$t" "$T/noclaude/"; done
+CLAUDE_CONFIG_DIR=$C PATH="$T/noclaude:$T/jq" bash "$ROOT/install.sh" --check >"$T/out" 2>&1
+check "external skills: code-review not found without claude, with what it is for" 'grep -q "not found  code-review: the review step" "$T/out"'
 
 # the retired hook path somewhere else in settings.json (a permission rule): no jq error, nothing removed, no dev mode
 new; jq -n --arg c "Bash($C/skills/$OLD_REVIEW/check.sh)" '{permissions: {allow: [$c]}}' >"$C/settings.json"; cp "$C/settings.json" "$T/before.json"
@@ -354,6 +371,8 @@ eq "shared group: the user's hook stays" "$(jq -r '.hooks.SessionStart[0].hooks[
 # a full model ID on a tier that subagents use is warned about (it is still recorded); heavy takes one silently
 new; run --yes --model-strong claude-opus-5-5
 check "model ID on the strong tier: warned" 'grep -q "WF_MODEL_STRONG=claude-opus-5-5 is a full model ID" "$T/out"'
+new; run --yes --model-fast us.anthropic.claude-haiku-5-5-v1:0
+check "Bedrock-style model ID on the fast tier: warned" 'grep -q "WF_MODEL_FAST=us.anthropic.claude-haiku-5-5-v1:0 is a full model ID" "$T/out"'
 check "model ID on the heavy tier (the shipped default): no warning" '! grep -q "WF_MODEL_HEAVY=.* is a full model ID" "$T/out"'
 
 # the installed revision is recorded on every install
@@ -462,6 +481,20 @@ check "uninstall: no checkout link" '[ ! -L "$C/agent-workflow" ]'
 eq "uninstall: no hook" "$(hooks)" 0
 eq "uninstall: no import line" "$(grep -cxF "$(imp)" "$C/CLAUDE.md")" 0
 check "uninstall: settings kept and said" '[ -f "$C/agent-workflow-settings.sh" ] && grep -q "kept" "$T/out"'
+
+# run through the ~/.claude/agent-workflow link (the documented rerun): ROOT must be the physical checkout, never the
+# link itself, else the link is repointed at itself and every skill link fails with "too many levels of symbolic links"
+clone; echo "# upstream" >>"$O/README.md"; commit "docs: via link"
+LNK="$C/agent-workflow"
+check "via link: fixture is a link to the clone" '[ "$(readlink "$LNK")" = "$K" ]'
+CLAUDE_CONFIG_DIR=$C PATH=$P bash "$LNK/install.sh" --yes </dev/null >"$T/out" 2>&1; rc=$?
+check "via link: install exit 0, no loop" '[ $rc = 0 ] && ! grep -q "too many levels" "$T/out"'
+eq "via link: the link still points at the clone" "$(readlink "$LNK")" "$K"
+check "via link: skill links resolve" '[ -f "$C/skills/aw-build/SKILL.md" ]'
+CLAUDE_CONFIG_DIR=$C PATH=$P bash "$LNK/install.sh" --update </dev/null >"$T/out" 2>&1; rc=$?
+check "via link: --update exit 0, no loop" '[ $rc = 0 ] && ! grep -q "too many levels" "$T/out"'
+eq "via link: --update left the link alone" "$(readlink "$LNK")" "$K"
+check "via link: the update pulled" '[ "$(head_of "$K")" = "$(head_of "$O")" ]'
 
 run --frob; eq "unknown flag: exit 2" "$?" 2
 

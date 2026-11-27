@@ -5,7 +5,8 @@
 # run goes on), 69 it is not (the message below, on stdout, is what the user gets).
 set -u
 if command -v orca >/dev/null 2>&1; then
-  LIB="${BASH_SOURCE[0]%/*}/../../bin/lib.sh"
+  SRC=${BASH_SOURCE[0]}; case $SRC in */*) SRC=${SRC%/*} ;; *) SRC=. ;; esac # no dirname: the PATH may be bare
+  LIB="$SRC/../../bin/lib.sh"
   if [ -f "$LIB" ]; then
     # shellcheck source=../../bin/lib.sh
     . "$LIB"

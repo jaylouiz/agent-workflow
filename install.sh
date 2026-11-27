@@ -30,7 +30,7 @@
 # compat/ holds the old script paths (linked next to the skills, no skill) and the skill rename map.
 set -uo pipefail
 
-ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P) # physical: run through the ~/.claude/agent-workflow link, ROOT must not be the link itself
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 # shellcheck source=bin/lib.sh
 . "$ROOT/bin/lib.sh"
@@ -123,7 +123,8 @@ requirements() {
 }
 external() { # external <name> <what for>: found / not found in the config dir's skills/ and plugins/; a note, never a failure
   local where=""
-  if [ -e "$CLAUDE_DIR/skills/$1" ]; then where="skills/$1"
+  if [ "$1" = code-review ] && command -v claude >/dev/null 2>&1; then where="built into Claude Code" # /code-review ships with it
+  elif [ -e "$CLAUDE_DIR/skills/$1" ]; then where="skills/$1"
   elif grep -qs "\"$1@" "$CLAUDE_DIR/plugins/installed_plugins.json"; then where="plugin"
   fi
   if [ -n "$where" ]; then say "  found      $1 ($where)"; else say "  not found  $1: $2"; fi
@@ -262,7 +263,7 @@ agent_off() {
 UNIT_NAME=agent-workflow-proto-serve.service
 UNIT_DIR=${AW_SYSTEMD_USER_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user}
 UNIT_FILE=$UNIT_DIR/$UNIT_NAME
-unit_systemctl() { systemctl --user "$@" >/dev/null 2>&1 || warn "systemctl --user $* failed (no user session?); run it again after logging in"; }
+unit_systemctl() { systemctl --user "$@" >/dev/null 2>&1 || { warn "systemctl --user $* failed (no user session?); the next install.sh or --update retries it"; return 1; }; }
 unit_on() {
   local want dir=${CLAUDE_DIR//%/%%} # % starts a specifier in a unit file
   want="[Unit]
@@ -278,7 +279,12 @@ StandardError=append:$dir/proto-serve-agent.log
 
 [Install]
 WantedBy=default.target"
-  [ "$(cat "$UNIT_FILE" 2>/dev/null)" = "$want" ] && return 0
+  if [ "$(cat "$UNIT_FILE" 2>/dev/null)" = "$want" ]; then
+    # unchanged file: retry the enable a failed earlier run left undone (no user bus over ssh, WSL, containers)
+    command -v systemctl >/dev/null 2>&1 && ! systemctl --user is-enabled "$UNIT_NAME" >/dev/null 2>&1 &&
+      { unit_systemctl enable --now "$UNIT_NAME" && changed "enabled the systemd user unit $UNIT_FILE"; }
+    return 0
+  fi
   mkdir -p "$UNIT_DIR"; printf '%s\n' "$want" >"$UNIT_FILE"
   unit_systemctl daemon-reload; unit_systemctl enable --now "$UNIT_NAME"
   changed "systemd user unit $UNIT_FILE (proto-serve.sh ensure at login)"
@@ -455,7 +461,7 @@ for t in $TIERS; do # a flag, preset or answer; else the recorded value stays; e
   # default, strong and fast are also passed to the Agent tool's `model:`, which takes an alias, not a model ID
   case "$t:$(recorded "WF_MODEL_$t")" in
     HEAVY:*) ;;
-    *:claude-*) warn "WF_MODEL_$t=$(recorded "WF_MODEL_$t") is a full model ID: workers start with it, but subagents of this tier (the Agent tool's model:) need an alias such as sonnet, opus or haiku" ;;
+    *:claude-* | *:*.anthropic.claude-* | *:anthropic.claude-*) warn "WF_MODEL_$t=$(recorded "WF_MODEL_$t") is a full model ID: workers start with it, but subagents of this tier (the Agent tool's model:) need an alias such as sonnet, opus or haiku" ;;
   esac
 done
 

@@ -34,6 +34,10 @@ out=$(PATH="$T/orca" "$BASH_BIN" "$DIR/preflight.sh" 2>"$T/err"); code=$?
 eq "old Orca: exit 0 (a warning never blocks)" "$code" 0
 has "old Orca: warning names the installed and the minimum version" "Warning: Orca 1.4.100 is older than the supported minimum $MIN"
 eq "old Orca: one line, nothing on stderr" "$(printf '%s\n' "$out" | wc -l | tr -d ' ')/$(cat "$T/err")" "1/"
+# run by bare name (cd + `bash preflight.sh`): the warning must still appear
+printf '#!/bin/sh\necho 1.4.100\n' >"$T/orca/orca"
+out=$(cd "$DIR" && PATH="$T/orca" "$BASH_BIN" preflight.sh 2>&1); code=$?
+has "bare name: the warning still appears" "Warning: Orca 1.4.100 is older"
 printf '#!/bin/sh\necho %s\n' "$MIN" >"$T/orca/orca"
 out=$(PATH="$T/orca" "$BASH_BIN" "$DIR/preflight.sh" 2>&1); code=$?
 eq "Orca at the minimum: exit 0, no output" "$code/$out" "0/"
