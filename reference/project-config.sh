@@ -16,6 +16,7 @@ WF_IGNORE_GLOBS=(package-lock.json)   # not counted for the diff-size route
 WF_REVIEW_LINES=400                   # changed lines above which the route is reviewer
 WF_HOLD_LABELS="on-hold-after-spec do-not-merge"   # PR or issue labels that hold a merge
 # WF_PHASE_LABELS=on                               # off = no phase:design / phase:build writes; GitHub's issue status carries the phase alone
+# WF_PR_ATTRIBUTION=on                             # off = guard.sh no longer requires the "Generated with [Claude Code]" line in a PR body; usually set globally
 WF_REQUIRED_CHECKS=""                 # GitHub checks prep waits for, comma-separated names as GitHub shows them (e.g. "CI / quality, build"); empty = every reported check must not fail
 WF_NO_WAIT_CI=0                      # 1 = prep does not WAIT for pending checks (a failed check still blocks)
 WF_CHECKS_TSV=""                      # gate log with the PR head SHA per row, printed by merge-pr.sh after
@@ -37,5 +38,6 @@ WF_CHECKS_TSV=""                      # gate log with the PR head SHA per row, p
 # wf_proto_preview_url() { echo "https://${1//\//-}.preview.example"; }   # print the URL once built; return 1 = none (local link instead)
 # wf_proto_preview_delete() { :; }      # remove it; sweep.sh runs it when it removes the proto branch of a closed issue
 
-# $1 = the PR body file; print the reason and return 1 to block gh pr create (guard.sh).
+# $1 = the PR body file; print the reason and return 1 to block gh pr create and gh pr edit (guard.sh). Runs for PRs of
+# this repo only: a PR opened for another repo (-R, --repo, GH_REPO=) skips it.
 # wf_pr_body_check() { grep -q '^Test plan:' "$1" || { echo "missing 'Test plan:' line"; return 1; }; }

@@ -37,7 +37,56 @@ expect 0 "pr create after cd &&" "cd $T && gh pr create --title x --body-file go
 printf 'wf_pr_body_check() { grep -q "^E2E-specs:" "$1" || { echo "missing E2E-specs: line"; return 1; }; }\n' >"$T/.claude/issue-workflow.sh"
 expect 2 "project check fails" "gh pr create --title x --body-file $T/no-e2e.md"
 expect 0 "project check passes" "gh pr create --title x --body-file $T/with-e2e.md"
+expect 2 "project check on pr edit" "gh pr edit 5 --body-file $T/no-e2e.md"
+# The project check belongs to the session's repo: a PR for another repo (-R, --repo, GH_REPO=) skips it, the generic
+# checks stay. No GitHub remote, or a target the shell builds at run time: the check applies (it cannot be told).
+expect 2 "-R without a GitHub remote: project check applies" "gh pr create -R other/repo --title x --body-file $T/no-e2e.md"
+git -C "$T" remote add origin git@github.com:Acme/Widgets.git
+git -C "$T" remote add upstream https://github.com/up/widgets
+expect 2 "no -R: project check applies" "gh pr create --title x --body-file $T/no-e2e.md"
+expect 2 "-R the session repo: project check applies" "gh pr create -R acme/widgets --title x --body-file $T/no-e2e.md"
+expect 2 "--repo= the session repo as a URL" "gh pr create --repo=https://github.com/acme/widgets.git --title x --body-file $T/no-e2e.md"
+expect 2 "-R HOST/OWNER/REPO of the session repo" "gh pr create --title x --body-file $T/no-e2e.md -R github.com/acme/widgets"
+expect 2 "-R another remote of the checkout (fork to upstream)" "gh pr create -R up/widgets --title x --body-file $T/no-e2e.md"
+expect 2 "-R built at run time: project check applies" "gh pr create -R \"\$REPO\" --title x --body-file $T/no-e2e.md"
+expect 0 "-R another repo: project check skipped" "gh pr create -R other/repo --title x --body-file $T/no-e2e.md"
+expect 0 "--repo another repo, after the body" "gh pr create --title x --body-file $T/no-e2e.md --repo other/repo"
+expect 0 "--repo= another repo" "gh pr create --repo=other/repo --title x --body-file $T/no-e2e.md"
+expect 0 "GH_REPO= another repo" "GH_REPO=other/repo gh pr create --title x --body-file $T/no-e2e.md"
+expect 0 "pr edit -R another repo: project check skipped" "gh pr edit 5 -R other/repo --body-file $T/no-e2e.md"
+expect 2 "pr edit -R the session repo" "gh pr edit 5 -R acme/widgets --body-file $T/no-e2e.md"
+expect 2 "-R another repo: Closes still required" "gh pr create -R other/repo --title x --body-file $T/no-closes.md"
+expect 2 "-R another repo: attribution still required" "gh pr create -R other/repo --title x --body-file $T/no-attr.md"
+expect 2 "-R another repo, then one for the session repo in the same call" "gh pr create -R other/repo --title x --body-file $T/no-e2e.md && gh pr create --title y --body-file $T/no-e2e.md"
+git -C "$T" remote remove origin; git -C "$T" remote remove upstream
 rm "$T/.claude/issue-workflow.sh"
+
+# WF_PR_ATTRIBUTION (global settings file or repo config): on by default, off drops the attribution check only
+expect 2 "attribution default on: pr create" "gh pr create --title x --body-file $T/no-attr.md"
+expect 2 "attribution default on: pr edit" "gh pr edit 5 --body-file $T/no-attr.md"
+expect 2 "attribution: an exported value does not switch it off" "WF_PR_ATTRIBUTION=off gh pr create --title x --body-file $T/no-attr.md"
+echo 'WF_PR_ATTRIBUTION=on' >"$T/.claude/issue-workflow.sh"
+expect 2 "attribution on in the repo config" "gh pr create --title x --body-file $T/no-attr.md"
+echo 'WF_PR_ATTRIBUTION=off' >"$T/.claude/issue-workflow.sh"
+expect 0 "attribution off in the repo config: pr create" "gh pr create --title x --body-file $T/no-attr.md"
+expect 0 "attribution off in the repo config: pr edit" "gh pr edit 5 --body-file $T/no-attr.md"
+expect 0 "attribution off: a body with the line still passes" "gh pr create --title x --body-file $T/good.md"
+expect 2 "attribution off: Closes still required" "gh pr create --title x --body-file $T/no-closes.md"
+expect 2 "attribution off: pr edit fragment still blocked" "gh pr edit 5 --body 'Review: ok'"
+expect 2 "attribution off: pr create without a body still blocked" "gh pr create --title x --fill"
+printf 'WF_PR_ATTRIBUTION=off\nwf_pr_body_check() { grep -q "^E2E-specs:" "$1" || { echo "missing E2E-specs: line"; return 1; }; }\n' >"$T/.claude/issue-workflow.sh"
+expect 2 "attribution off: project check still runs" "gh pr create --title x --body-file $T/no-attr.md"
+rm "$T/.claude/issue-workflow.sh"
+echo 'WF_PR_ATTRIBUTION=off' >"$WF_GLOBAL_SETTINGS"
+expect 0 "attribution off in the global settings: pr create" "gh pr create --title x --body-file $T/no-attr.md"
+expect 0 "attribution off in the global settings: pr edit" "gh pr edit 5 --body-file $T/no-attr.md"
+echo 'WF_PR_ATTRIBUTION=on' >"$T/.claude/issue-workflow.sh"
+expect 2 "attribution: the repo config (on) wins over global (off)" "gh pr create --title x --body-file $T/no-attr.md"
+rm "$T/.claude/issue-workflow.sh" "$WF_GLOBAL_SETTINGS"
+expect 2 "attribution back on without the files" "gh pr create --title x --body-file $T/no-attr.md"
+n=$((n + 2))
+[ "$(cd "$T" && bash "$DIR/settings.sh" get WF_PR_ATTRIBUTION)" = on ] || { fail=$((fail + 1)); echo "FAIL [WF_PR_ATTRIBUTION defaults to on]"; }
+(cd "$T" && bash "$DIR/settings.sh" show) | grep -q '^WF_PR_ATTRIBUTION=on *(default)$' || { fail=$((fail + 1)); echo "FAIL [settings.sh show lists WF_PR_ATTRIBUTION]"; }
 
 # gh issue comment
 expect 2 "issue comment inline body" "gh issue comment 5 --body \"hi\""

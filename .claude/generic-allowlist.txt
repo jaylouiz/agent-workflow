@@ -1,0 +1,4 @@
+# Deliberate exceptions to the leak lint (.claude/test-generic.sh), one per line:
+#   <file> :: <pattern name> :: <text the line contains> :: <reason>
+# An entry that excuses nothing fails the lint: delete it with the text it covered.
+reference/project-profile.md :: repeat-each :: e.g. `npx playwright test <spec> --repeat-each=<n> :: the template's one example of a repeat-run command, marked "e.g." (issue 32 AC)

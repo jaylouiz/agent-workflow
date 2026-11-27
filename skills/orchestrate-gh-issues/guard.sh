@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # PreToolUse hook (Bash), registered in the workflow skills' frontmatter. Turns three prose rules into checks:
-#   1. `gh pr create`: body has `Closes #<n>` and the Claude Code attribution, and passes the project's
-#      wf_pr_body_check (<repo>/.claude/issue-workflow.sh), e.g. a required `E2E-specs:` line.
+#   1. `gh pr create`: body has `Closes #<n>` and the Claude Code attribution (WF_PR_ATTRIBUTION=off in the global
+#      settings file or the repo config drops the attribution check), and passes the project's wf_pr_body_check
+#      (<repo>/.claude/issue-workflow.sh), e.g. a required `Test plan:` line. The project check belongs to the
+#      session's repo: a PR for another repo (`-R`, `--repo`, a `GH_REPO=` prefix) skips it.
 #   2. `gh issue comment`: body carries a `<!-- decision-` marker, so `decide.sh status` never reads an agent
 #      comment as the user's (use `decide.sh note`; with --attach, put `<!-- decision-note -->` in the file),
 #      and stays scannable (`decide.sh check`: visible length cap, no wall-of-text line).
 #   3. `gh issue edit|create` and `gh pr edit` with a body: the body is not empty; a `gh pr edit` body also has
-#      `Closes #<n>` and the attribution (not a fragment) (a truncated or empty
-#      --body-file once wiped an issue spec, #614).
+#      `Closes #<n>` and the attribution (not a fragment) and passes the project check as in 1. (a truncated or
+#      empty --body-file once wiped an issue spec).
 #   4. Orca V3 (1.4.246+): no `orca orchestration check --wait` at all (coordinators end their turn and Orca wakes
 #      them; a waiter takes the mail Orca would wake them with), and `ask` never ends in a trailing `&`.
 #   5. `gh pr merge` is its own call: a real invocation followed by another command in the same call (`&&`, `;`,
@@ -35,7 +37,8 @@ cwd=$(printf '%s' "$input" | jq -r '.cwd // ""')
 # Cheap prefilter before parsing.
 printf '%s' "$cmd" | grep -Eq 'gh +(pr +(create|edit)|issue +(comment|edit|create))|gh +.*pr +merge|orca +orchestration' || exit 0
 
-# Parse with shlex: one TSV line per finding: kind \t body-kind (file|inline|none) \t value (inline: base64).
+# Parse with shlex: one TSV line per finding: kind \t body-kind (file|inline|none) \t target repo (`-`: none given)
+# \t value (inline: base64). The value comes last: `read` merges empty tab fields.
 findings=$(CMD="$cmd" "${GUARD_PYTHON:-python3}" -I -c '
 import os, re, shlex, base64
 cmd = os.environ["CMD"]
@@ -185,7 +188,7 @@ def merge_scan(text, depth=0):  # (has a real `gh pr merge`, another command fol
                 later = strip_env(later)
                 if later and not later[0].startswith("#") and later[0] not in END: return True, True
     return has, False
-if merge_scan(cmd)[1]: print("merge-chain\tnone\t")
+if merge_scan(cmd)[1]: print("merge-chain\tnone\t-\t")
 def dyn(v):  # built by the shell at run time (command substitution, variable, heredoc): cannot be checked here
     return "$" in v or "`" in v or "<<" in v
 def inline(v):
@@ -197,29 +200,37 @@ def body(s):
         if t in ("--body", "-b") and i + 1 < len(s): return inline(s[i + 1])
         if t.startswith("--body="): return inline(t.split("=", 1)[1])
     return "none", ""
+def target(s, env):  # the repo a gh call names: -R / --repo, else a GH_REPO= prefix; "-" when it names none
+    for i, t in enumerate(s):
+        if t in ("-R", "--repo") and i + 1 < len(s): return s[i + 1] or "-"
+        if t.startswith("--repo="): return t.split("=", 1)[1] or "-"
+        if t.startswith("-R") and not t.startswith("-R=") and len(t) > 2: return t[2:]
+    for t in env:
+        if t.startswith("GH_REPO="): return t.split("=", 1)[1] or "-"
+    return "-"
 def findings(segs, seps):
-    for s, sep in zip(segs, seps):
-        s = strip_env(s)
+    for raw, sep in zip(segs, seps):
+        s = strip_env(raw)
         if not s: continue
         exe = os.path.basename(s[0])
         if exe == "gh" and s[1:3] == ["pr", "create"]:
-            yield "pr-create\t%s\t%s" % body(s)
+            k, v = body(s); yield "pr-create\t%s\t%s\t%s" % (k, target(s, raw[:len(raw) - len(s)]), v)
         elif exe == "gh" and s[1:3] == ["issue", "comment"]:
-            yield "issue-comment\t%s\t%s" % body(s)
+            yield "issue-comment\t%s\t-\t%s" % body(s)
         elif exe == "gh" and s[1:3] == ["pr", "edit"]:
-            yield "pr-edit\t%s\t%s" % body(s)
+            k, v = body(s); yield "pr-edit\t%s\t%s\t%s" % (k, target(s, raw[:len(raw) - len(s)]), v)
         elif exe == "gh" and s[1:3] in (["issue", "edit"], ["issue", "create"]):
-            yield "body-write\t%s\t%s" % body(s)
+            yield "body-write\t%s\t-\t%s" % body(s)
         elif exe == "orca" and s[1:2] == ["orchestration"] and s[2:3] == ["check"] and "--wait" in s:
-            yield "check-wait\tnone\t"
+            yield "check-wait\tnone\t-\t"
         elif exe == "orca" and s[1:2] == ["orchestration"] and sep == "&" and s[2:3] == ["ask"]:
-            yield "trailing-amp\tnone\t"
+            yield "trailing-amp\tnone\t-\t"
 # One view: prep() (comments, heredoc bodies and line continuations gone, quotes normalised) lexed by shlex. A command it
 # still cannot lex is reported as `unparsable` (the shell part warns; D2 on #36), never dropped silently.
 try:
     segs, seps = clean_split(cmd)
 except ValueError:
-    print("unparsable\tnone\t")
+    print("unparsable\tnone\t-\t")
 else:
     seen = set()
     for f in findings(segs, seps):
@@ -247,7 +258,43 @@ body_file() { # body_file <kind> <value>: print a readable path, or nothing when
   esac
 }
 
-while IFS=$'\t' read -r kind bkind value; do
+CFG=""
+load_cfg() { # the settings and the project's functions, once: defaults, the global file, the repo config
+  [ -z "$CFG" ] || return 0
+  # shellcheck source=lib.sh
+  . "$DIR/lib.sh"; wf_load; CFG=1
+}
+attribution_on() { load_cfg; [ "${WF_PR_ATTRIBUTION:-on}" != off ]; }
+has_closes() { grep -Eqi '(closes|fixes|resolves) +(#|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#)[0-9]+' "$1" || grep -Eq '^No-issue: [^[:space:]]' "$1"; }
+has_attribution() { grep -Fq 'Generated with [Claude Code]' "$1"; }
+slug() { # slug <owner/repo | HOST/owner/repo | URL>: owner/repo in lower case
+  local s=${1%/}
+  s=${s%.git}
+  case "$s" in *://*) s=${s#*://}; s=${s#*/} ;; *@*:*) s=${s#*:} ;; */*/*) s=${s#*/} ;; esac
+  printf '%s' "$s" | tr '[:upper:]' '[:lower:]'
+}
+same_repo() { # same_repo <target>: 1 only when the PR names a repo that no GitHub remote of this checkout points to
+  local t r u known=0
+  case "$1" in - | "" | *'$'* | *'`'*) return 0 ;; esac # none named, or built at run time: this repo, as far as we can tell
+  t=$(slug "$1")
+  for r in $(git remote 2>/dev/null); do
+    u=$(git remote get-url "$r" 2>/dev/null) || continue
+    case "$u" in *github.com[:/]*/*) ;; *) continue ;; esac
+    known=1
+    [ "$(slug "$u")" != "$t" ] || return 0
+  done
+  [ "$known" = 0 ] # no GitHub remote to compare with: apply the check
+}
+project_check() { # project_check <body file> <target repo>: the session repo's wf_pr_body_check, for its own PRs only
+  local msg
+  same_repo "$2" || return 0
+  load_cfg
+  if wf_has wf_pr_body_check; then
+    msg=$(wf_pr_body_check "$1" 2>&1) || block "project check (.claude/issue-workflow.sh wf_pr_body_check): $msg"
+  fi
+}
+
+while IFS=$'\t' read -r kind bkind repo value; do
   case "$kind" in
     unparsable)
       # Valid bash this lexer cannot read, or a command the shell rejects too: fail open, but say so (D2 on #36).
@@ -262,27 +309,25 @@ while IFS=$'\t' read -r kind bkind value; do
       block "'gh pr merge' must be its own call, after you have read the 'merge-pr.sh prep' output: no '&&', ';', '||', '|' or newline chain with another command (e.g. 'merge-pr.sh after'). Run the merge alone, read its result, then run 'merge-pr.sh after' as a second call." ;;
     pr-create)
       [ "$bkind" = unverifiable ] && continue
-      [ "$bkind" = none ] && block "gh pr create needs --body-file (or --body) with 'Closes #<n>' and the PR attribution line; --fill is not enough."
+      need="'Closes #<n>'"; attribution_on && need="$need and the PR attribution line"
+      [ "$bkind" = none ] && block "gh pr create needs --body-file (or --body) with $need; --fill is not enough."
       f=$(body_file "$bkind" "$value"); [ -n "$f" ] || continue
-      { grep -Eqi '(closes|fixes|resolves) +(#|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#)[0-9]+' "$f" || grep -Eq '^No-issue: [^[:space:]]' "$f"; } || block "PR body lacks 'Closes #<n>' (the issue it closes) or a line-leading 'No-issue: <reason>' (ad-hoc PR)."
-      grep -Fq 'Generated with [Claude Code]' "$f" || block "PR body lacks the attribution line from the session's attribution instructions ('🤖 Generated with [Claude Code](...)')."
-      # shellcheck source=lib.sh
-      . "$DIR/lib.sh"; wf_load
-      if wf_has wf_pr_body_check; then
-        msg=$(wf_pr_body_check "$f" 2>&1) || block "project check (.claude/issue-workflow.sh wf_pr_body_check): $msg"
-      fi ;;
+      has_closes "$f" || block "PR body lacks 'Closes #<n>' (the issue it closes) or a line-leading 'No-issue: <reason>' (ad-hoc PR)."
+      if attribution_on; then
+        has_attribution "$f" || block "PR body lacks the attribution line from the session's attribution instructions ('🤖 Generated with [Claude Code](...)'). A setup without that line sets WF_PR_ATTRIBUTION=off (global settings file or repo config)."
+      fi
+      project_check "$f" "$repo" ;;
     pr-edit)
-      # A PR body written whole must still be a whole body: a fragment (one review line) once replaced PR #253's body.
+      # A PR body written whole must still be a whole body: a fragment (one review line) once replaced a PR's body.
       case "$bkind" in unverifiable|none) continue ;; esac
       f=$(body_file "$bkind" "$value"); [ -n "$f" ] || continue
       grep -q '[^[:space:]]' "$f" || block "refusing an empty issue/PR body ($value): it would wipe the current body."
-      { grep -Eqi '(closes|fixes|resolves) +(#|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#)[0-9]+' "$f" || grep -Eq '^No-issue: [^[:space:]]' "$f"; } && grep -Fq 'Generated with [Claude Code]' "$f" || block "gh pr edit --body replaces the WHOLE body, and this one lacks 'Closes #<n>' or the attribution line (a fragment?). Fetch it ('gh pr view <n> --json body -q .body > file'), change the section, write the whole file back with --body-file."
-      # The edited body must pass the project's body check too (PR 460: results in parentheses on the E2E-specs line, found only at merge).
-      # shellcheck source=lib.sh
-      . "$DIR/lib.sh"; wf_load
-      if wf_has wf_pr_body_check; then
-        msg=$(wf_pr_body_check "$f" 2>&1) || block "project check (.claude/issue-workflow.sh wf_pr_body_check): $msg"
-      fi ;;
+      whole=1; need="'Closes #<n>'"
+      has_closes "$f" || whole=0
+      if attribution_on; then need="$need or the attribution line"; has_attribution "$f" || whole=0; fi
+      [ "$whole" = 1 ] || block "gh pr edit --body replaces the WHOLE body, and this one lacks $need (a fragment?). Fetch it ('gh pr view <n> --json body -q .body > file'), change the section, write the whole file back with --body-file."
+      # The edited body must pass the project's body check too (a line it requires, broken by an edit, would show only at merge).
+      project_check "$f" "$repo" ;;
     body-write)
       case "$bkind" in unverifiable|none) continue ;; esac
       f=$(body_file "$bkind" "$value"); [ -n "$f" ] || continue
