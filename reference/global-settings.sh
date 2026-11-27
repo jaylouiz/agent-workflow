@@ -6,7 +6,8 @@
 #   bash ~/.claude/agent-workflow/bin/settings.sh show
 # Uncomment a line to change it; the value shown is the default.
 
-# --- Models (Claude Code aliases or full model IDs) ---
+# --- Models: a Claude Code alias (sonnet, opus, haiku, ...). default, strong and fast are also passed to the Agent
+# tool's `model:` for subagents, which takes an alias only; heavy is used for workers alone and may be a full model ID. ---
 # WF_MODEL_DEFAULT=sonnet     # normal lead, design and fix workers; Design's tech check; the retro agent
 # WF_MODEL_STRONG=opus        # coordinators, reviewer and delta-review workers, the one root-cause subagent of a stuck lead
 # WF_MODEL_FAST=haiku         # mechanical subagents: rg audits, copy sweeps, PR-body checks
@@ -24,3 +25,4 @@
 # WF_ISSUE_LOG_DIR="$HOME/.claude/issue-logs"   # per-issue coordination logs, outside every work tree
 
 # --- Recorded by install.sh: rerun install.sh to change them ---
+# WF_INSTALLED_REV=           # the checkout commit of the last install or `install.sh --update` (what --update reports from)

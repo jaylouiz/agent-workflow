@@ -27,6 +27,17 @@ has "says how a parked issue goes on" "run the same stage skill again"
 out=$(PATH="$T/orca" "$BASH_BIN" "$DIR/preflight.sh" 2>&1); code=$?
 eq "with orca on PATH: exit 0, no output" "$code/$out" "0/"
 
+# an Orca older than ORCA_MIN (bin/lib.sh): one warning line naming both versions, still exit 0; at the minimum: nothing
+MIN=$(. "$DIR/../../bin/lib.sh"; echo "$ORCA_MIN")
+printf '#!/bin/sh\necho 1.4.100\n' >"$T/orca/orca"
+out=$(PATH="$T/orca" "$BASH_BIN" "$DIR/preflight.sh" 2>"$T/err"); code=$?
+eq "old Orca: exit 0 (a warning never blocks)" "$code" 0
+has "old Orca: warning names the installed and the minimum version" "Warning: Orca 1.4.100 is older than the supported minimum $MIN"
+eq "old Orca: one line, nothing on stderr" "$(printf '%s\n' "$out" | wc -l | tr -d ' ')/$(cat "$T/err")" "1/"
+printf '#!/bin/sh\necho %s\n' "$MIN" >"$T/orca/orca"
+out=$(PATH="$T/orca" "$BASH_BIN" "$DIR/preflight.sh" 2>&1); code=$?
+eq "Orca at the minimum: exit 0, no output" "$code/$out" "0/"
+
 # the skill runs it first, before the Orca guide it cannot load without the CLI
 first=$(awk '/^## 0\. Preflight/ {p = 1; next} p && /^1\. / {print; exit}' "$DIR/SKILL.md")
 n=$((n + 1)); case "$first" in *preflight.sh*) ;; *) fail=$((fail + 1)); echo "FAIL [SKILL.md preflight step 1 runs preflight.sh] got '$(printf '%s' "$first" | cut -c1-80)'" ;; esac

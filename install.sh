@@ -12,10 +12,16 @@
 #                            value shown); a tier set before is never changed unless asked or flagged.
 #   --global-rules           use the author's global rules (global/CLAUDE.md): a link when there is no ~/.claude/CLAUDE.md,
 #                            else one import line appended to it. --no-global-rules removes either.
-#   --proto-agent            macOS: a login LaunchAgent runs `proto-serve.sh ensure`, so the prototype previews that wait on a
-#                            decision come back after a reboot. --no-proto-agent removes it. Off unless asked for or recorded.
+#   --proto-agent            at login, run `proto-serve.sh ensure`, so the prototype previews that wait on a decision come
+#                            back after a reboot: a LaunchAgent on macOS, a `systemd --user` unit on Linux.
+#                            --no-proto-agent removes it. Off unless asked for or recorded.
 #   --dev / --no-dev         maintainer only: link /aw-orca-review (run by hand after an Orca update)
-#   --check                  only check the requirements; exit 1 when a required tool is missing
+#   --check                  only check the requirements; exit 1 when a required tool is missing. Warnings (an Orca older
+#                            than ORCA_MIN or a gh older than GH_MIN of bin/lib.sh, external skills not found) never fail it.
+#   --update                 update this checkout and the install: refuses local changes to tracked files, runs
+#                            `git pull --ff-only`, reruns the install (--yes) only when a skill was added, renamed or
+#                            removed or install.sh changed, and prints the version jump or the new commits, the new
+#                            "Breaking" entries of CHANGELOG.md and the reminder to restart open sessions.
 #   --uninstall              remove the links and the global rules; keeps the settings file
 #
 # A real file or directory where a link belongs is left alone and reported: the script never overwrites.
@@ -65,6 +71,7 @@ while [ $# -gt 0 ]; do
     --dev) DEV=1 ;;
     --no-dev) DEV=0 ;;
     --check) MODE=check ;;
+    --update) MODE=update ;;
     --uninstall) MODE=uninstall ;;
     *) warn "unknown option: $1 (see the header of install.sh)"; exit 2 ;;
   esac
@@ -92,6 +99,7 @@ need() { # need <tool> <required|optional> <hint>
 }
 requirements() {
   say "Requirements"
+  need bash required "bash 3.2 or newer"
   need git required "https://git-scm.com"
   need jq required "brew install jq"
   need python3 required "brew install python"
@@ -99,8 +107,26 @@ requirements() {
   need claude required "https://claude.com/claude-code"
   need orca optional "only for /aw-coordinate: https://github.com/stablyai/orca"
   need lsof optional "prototype preview servers: brew install lsof or sudo apt install lsof"
+  need shellcheck optional "lint for changed scripts: brew install shellcheck or sudo apt install shellcheck"
   if command -v gh >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then say "  warn     gh is not logged in: gh auth login"; fi
-  local note; note=$(config_dir_note); [ -z "$note" ] || say "  warn     $note"
+  local note v
+  v=$(wf_tool_version gh)
+  if [ -n "$v" ] && wf_version_lt "$v" "$GH_MIN"; then
+    say "  warn     gh $v is older than $GH_MIN: \`gh issue comment --attach\` (screenshots in design rounds and Look comments) needs $GH_MIN; update gh"
+  fi
+  note=$(wf_orca_note); [ -z "$note" ] || say "  warn     $note"
+  note=$(config_dir_note); [ -z "$note" ] || say "  warn     $note"
+  say "External skills (not shipped here; a step whose tool is missing is skipped or reported)"
+  external code-review "the review step; built into current Claude Code (type /code-review to see it), else a plugin"
+  external ui-canvas "canvas sketches in /aw-ui-design (optional)"
+  external impeccable "the design gate of UI projects (optional)"
+}
+external() { # external <name> <what for>: found / not found in the config dir's skills/ and plugins/; a note, never a failure
+  local where=""
+  if [ -e "$CLAUDE_DIR/skills/$1" ]; then where="skills/$1"
+  elif grep -qs "\"$1@" "$CLAUDE_DIR/plugins/installed_plugins.json"; then where="plugin"
+  fi
+  if [ -n "$where" ]; then say "  found      $1 ($where)"; else say "  not found  $1: $2"; fi
 }
 
 # --- links ---
@@ -156,7 +182,11 @@ RENAMED=0 # 1 once this run removed or repointed a link under an old skill name:
 # --- the retired Orca update check hook: older installs registered it in settings.json (under the skill's old name);
 # every run takes it out ---
 OLD_REVIEW=$(old_name aw-orca-review); OLD_HOOK="$OLD_REVIEW/check.sh"
-has_hook() { [ -n "$OLD_REVIEW" ] && [ -f "$JSON" ] && grep -qF "$OLD_HOOK" "$JSON"; } # no old name known: never match a bare check.sh
+has_hook() { # the retired check as a SessionStart hook command; the path anywhere else in settings.json is not ours
+  { [ -n "$OLD_REVIEW" ] && [ -f "$JSON" ] && grep -qF "$OLD_HOOK" "$JSON"; } || return 1 # no old name known: never match a bare check.sh
+  command -v jq >/dev/null 2>&1 || return 0 # cannot look closer; remove_hook says that jq is missing
+  jq -e --arg hook "$OLD_HOOK" '[.hooks.SessionStart[]?.hooks[]? | (.command? // "") | select(contains($hook))] | length > 0' "$JSON" >/dev/null 2>&1
+}
 json_edit() { # json_edit <jq filter> [args]: rewrite settings.json, backup first
   local tmp; tmp=$(mktemp)
   if jq "$@" "$JSON" >"$tmp" && [ -s "$tmp" ]; then
@@ -168,7 +198,9 @@ json_edit() { # json_edit <jq filter> [args]: rewrite settings.json, backup firs
 remove_hook() {
   has_hook || return 0
   command -v jq >/dev/null 2>&1 || { warn "jq missing: Orca update check left in $JSON"; return 0; }
-  json_edit --arg hook "$OLD_HOOK" '.hooks.SessionStart |= map(select(all(.hooks[]?; (.command // "") | contains($hook) | not)))
+  # Only the retired command goes: a group that also holds a hook of the user keeps that hook, a group left empty is dropped.
+  json_edit --arg hook "$OLD_HOOK" 'def old: (.command? // "") | contains($hook);
+             .hooks.SessionStart |= map(if any(.hooks[]?; old) then (.hooks |= map(select(old | not))) | select((.hooks | length) > 0) else . end)
              | if (.hooks.SessionStart | length) == 0 then del(.hooks.SessionStart) else . end' \
     && changed "removed the Orca update check"
 }
@@ -223,11 +255,133 @@ agent_off() {
   agent_launchctl bootout "gui/$(id -u)/$AGENT_LABEL"; rm -f "$AGENT_PLIST"; changed "removed the login LaunchAgent $AGENT_PLIST"
 }
 
+
+# The Linux counterpart: a `systemd --user` unit, enabled for default.target (the user's login). The servers `ensure`
+# starts must outlive the command: RemainAfterExit keeps the unit active, KillMode=process leaves them alone on stop.
+# AW_SYSTEMD_USER_DIR redirects the unit file (tests); systemctl is always the one on PATH.
+UNIT_NAME=agent-workflow-proto-serve.service
+UNIT_DIR=${AW_SYSTEMD_USER_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user}
+UNIT_FILE=$UNIT_DIR/$UNIT_NAME
+unit_systemctl() { systemctl --user "$@" >/dev/null 2>&1 || warn "systemctl --user $* failed (no user session?); run it again after logging in"; }
+unit_on() {
+  local want dir=${CLAUDE_DIR//%/%%} # % starts a specifier in a unit file
+  want="[Unit]
+Description=agent-workflow: restart the prototype preview servers that wait on a decision (proto-serve.sh ensure)
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+KillMode=process
+ExecStart=/bin/bash -lc 'bash \"$dir/agent-workflow/bin/proto-serve.sh\" ensure'
+StandardOutput=append:$dir/proto-serve-agent.log
+StandardError=append:$dir/proto-serve-agent.log
+
+[Install]
+WantedBy=default.target"
+  [ "$(cat "$UNIT_FILE" 2>/dev/null)" = "$want" ] && return 0
+  mkdir -p "$UNIT_DIR"; printf '%s\n' "$want" >"$UNIT_FILE"
+  unit_systemctl daemon-reload; unit_systemctl enable --now "$UNIT_NAME"
+  changed "systemd user unit $UNIT_FILE (proto-serve.sh ensure at login)"
+}
+unit_off() {
+  [ -e "$UNIT_FILE" ] || return 0
+  if command -v systemctl >/dev/null 2>&1; then unit_systemctl disable --now "$UNIT_NAME"; fi
+  rm -f "$UNIT_FILE"
+  if command -v systemctl >/dev/null 2>&1; then unit_systemctl daemon-reload; fi
+  changed "removed the systemd user unit $UNIT_FILE"
+}
+# Which of the two this machine uses: launchd (macOS), systemd (Linux), none.
+case "$(uname)" in
+  Darwin) PROTO_KIND=launchd PROTO_FILE=$AGENT_PLIST PROTO_WHAT="a LaunchAgent" ;;
+  Linux) PROTO_KIND=systemd PROTO_FILE=$UNIT_FILE PROTO_WHAT="a systemd user unit" ;;
+  *) PROTO_KIND=none PROTO_FILE="" PROTO_WHAT="" ;;
+esac
+proto_on() { case $PROTO_KIND in launchd) agent_on ;; systemd) unit_on ;; esac; }
+proto_off() { case $PROTO_KIND in launchd) agent_off ;; systemd) unit_off ;; esac; }
+
+# --- the installed revision and --update ---
+checkout_rev() { [ -e "$ROOT/.git" ] && git -C "$ROOT" rev-parse HEAD 2>/dev/null; } # nothing outside a git checkout
+record_rev() { local r; r=$(checkout_rev) || return 0; [ -z "$r" ] || set_setting WF_INSTALLED_REV "$r"; }
+tag_of() { git -C "$ROOT" describe --tags --match 'v[0-9]*' --abbrev=0 "$1" 2>/dev/null; } # the nearest release tag at or before a commit
+breaking_since() { # breaking_since <old rev> <new rev>: the items under a "Breaking" heading of CHANGELOG.md that <old> did not have
+  python3 -I - "$ROOT" "$1" "$2" <<'PY'
+import re, subprocess, sys
+root, old, new = sys.argv[1:]
+def items(rev):
+    r = subprocess.run(["git", "-C", root, "show", rev + ":CHANGELOG.md"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    if r.returncode != 0:
+        return []
+    out, ver, on = [], "", False
+    for line in r.stdout.decode("utf-8", "replace").split("\n"):
+        if line.startswith("## "):
+            ver, on = line[3:].strip(), False
+        elif line.startswith("### "):
+            on = line[4:].strip().lower().startswith("breaking")
+        elif on and re.match(r"[-*] ", line):
+            out.append([ver, line[2:].strip()])
+        elif on and out and line.startswith("  ") and line.strip():
+            out[-1][1] += " " + line.strip()
+    return out
+had = set(t for _, t in items(old))
+for ver, text in items(new):
+    if text not in had:
+        print("  ! %s: %s" % (re.sub(r"\s+-\s+.*$", "", ver), text))
+PY
+}
+update() { # see --update in the header. One function, parsed before the pull replaces this file; the rerun is a new process.
+  local old new from n t_old t_new extra brk
+  { command -v git >/dev/null 2>&1 && [ -e "$ROOT/.git" ]; } || { warn "--update: $ROOT is not a git checkout; update it the way you got it, then run install.sh"; return 1; }
+  if [ -n "$(git -C "$ROOT" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+    warn "--update: $ROOT has local changes to tracked files. Commit, stash or discard them first (git -C \"$ROOT\" status). Nothing was pulled."
+    return 1
+  fi
+  old=$(git -C "$ROOT" rev-parse HEAD) || { warn "--update: cannot read HEAD of $ROOT"; return 1; }
+  # Since the last recorded install or update, so a `git pull` done by hand is reported (and relinked) too.
+  from=$(recorded WF_INSTALLED_REV)
+  { [ -n "$from" ] && git -C "$ROOT" merge-base --is-ancestor "$from" "$old" 2>/dev/null; } || from=$old
+  say "agent-workflow update ($ROOT)"
+  git -C "$ROOT" pull --ff-only -q || { warn "--update: git pull --ff-only failed (no upstream, no network, or local commits that diverge). Nothing else was changed."; return 1; }
+  new=$(git -C "$ROOT" rev-parse HEAD)
+  if [ "$from" = "$new" ]; then
+    [ ! -f "$SETTINGS_FILE" ] || set_setting WF_INSTALLED_REV "$new"
+    t_new=$(tag_of "$new"); say "Already up to date${t_new:+ ($t_new)}. Nothing was changed."
+    return 0
+  fi
+  if [ "$(git -C "$ROOT" ls-tree --name-only "$from" skills/ compat/)" != "$(git -C "$ROOT" ls-tree --name-only "$new" skills/ compat/)" ] ||
+    ! git -C "$ROOT" diff --quiet "$from" "$new" -- install.sh; then
+    say "A skill was added, renamed or removed, or install.sh changed: rerunning the install."; say ""
+    bash "$ROOT/install.sh" --yes || { warn "--update: the install rerun failed (see above); the checkout is at $new"; return 1; }
+  else
+    [ ! -f "$SETTINGS_FILE" ] || set_setting WF_INSTALLED_REV "$new"
+    say "No skill was added, renamed or removed and install.sh is unchanged: the links stay as they are."
+  fi
+  say ""
+  t_old=$(tag_of "$from"); t_new=$(tag_of "$new"); n=$(git -C "$ROOT" rev-list --count "$from..$new")
+  if [ -n "$t_new" ] && [ "$t_old" != "$t_new" ]; then
+    extra=$(git -C "$ROOT" rev-list --count "$t_new..$new")
+    say "Version: ${t_old:-no release} → $t_new$([ "$extra" = 0 ] || echo " (+$extra commits after it)")"
+  else
+    say "$n commit(s) since the last update${t_new:+ (after $t_new)}:"
+    git -C "$ROOT" log --oneline --no-decorate -20 "$from..$new" | sed 's/^/  /'
+    [ "$n" -le 20 ] || say "  … and $((n - 20)) more"
+  fi
+  brk=$(breaking_since "$from" "$new") || brk=""
+  if [ -n "$brk" ]; then
+    say ""
+    if [ -t 1 ]; then printf '\033[1;31m%s\033[0m\n' "BREAKING CHANGES since your last update (CHANGELOG.md has the details):"
+    else say "BREAKING CHANGES since your last update (CHANGELOG.md has the details):"; fi
+    say "$brk"
+  fi
+  say ""
+  say "Restart open Claude sessions and coordinators to load the new skills."
+}
+
 # --- run ---
 if [ "$MODE" = check ]; then requirements; [ "$REQ_OK" = 1 ]; exit; fi
+if [ "$MODE" = update ]; then update; exit $?; fi
 
 if [ "$MODE" = uninstall ]; then
-  rules_off; remove_hook; agent_off
+  rules_off; remove_hook; proto_off
   for path in "$CLAUDE_DIR"/skills/*; do [ -L "$path" ] && unlink_ours "$path"; done
   unlink_ours "$CLAUDE_DIR/agent-workflow"
   say "agent-workflow uninstalled:${CHANGES:- nothing to remove}"
@@ -247,7 +401,7 @@ if [ -z "$RULES" ]; then
 fi
 
 [ -n "$PROTO_AGENT" ] || PROTO_AGENT=$(recorded WF_INSTALL_PROTO_AGENT)
-[ -n "$PROTO_AGENT" ] || { [ -e "$AGENT_PLIST" ] && PROTO_AGENT=1 || PROTO_AGENT=0; }
+[ -n "$PROTO_AGENT" ] || { [ -n "$PROTO_FILE" ] && [ -e "$PROTO_FILE" ] && PROTO_AGENT=1 || PROTO_AGENT=0; }
 
 # Model tiers in the order of the presets and the questions; shipped defaults come from lib.sh.
 TIERS="DEFAULT STRONG FAST HEAVY"
@@ -274,7 +428,7 @@ if [ -n "$p" ]; then
 fi
 
 if [ "$INTERACTIVE" = 1 ]; then
-  say "Models per tier (a Claude Code alias or a full model ID; Enter keeps the value in brackets):"
+  say "Models per tier (a Claude Code alias; heavy also takes a full model ID; Enter keeps the value in brackets):"
   for t in $TIERS; do
     [ -z "$(tier_get "$t")" ] || continue
     a=$(ask "  $(echo "$t" | tr A-Z a-z) ($(tier_use "$t"))" "$(rec_or "WF_MODEL_$t" "$(tier_default "$t")")")
@@ -287,10 +441,10 @@ if [ "$INTERACTIVE" = 1 ]; then
   d=n; [ "$RULES" = on ] && d=y
   case "$(ask "Use them? (y/n)" "$d")" in y* | Y*) RULES=on ;; *) RULES=off ;; esac
   say ""
-  if [ "$(uname)" = Darwin ]; then
+  if [ "$PROTO_KIND" = launchd ] || { [ "$PROTO_KIND" = systemd ] && command -v systemctl >/dev/null 2>&1; }; then
     say "Prototype previews: design rounds keep their preview server running while a decision waits (proto-serve.sh)."
     d=n; [ "$PROTO_AGENT" = 1 ] && d=y
-    case "$(ask "Restart them at login with a LaunchAgent? (y/n)" "$d")" in y* | Y*) PROTO_AGENT=1 ;; *) PROTO_AGENT=0 ;; esac
+    case "$(ask "Restart them at login with $PROTO_WHAT? (y/n)" "$d")" in y* | Y*) PROTO_AGENT=1 ;; *) PROTO_AGENT=0 ;; esac
     say ""
   fi
 fi
@@ -298,6 +452,11 @@ fi
 for t in $TIERS; do # a flag, preset or answer; else the recorded value stays; else the shipped default
   v=$(tier_get "$t"); [ -n "$v" ] || [ -n "$(recorded "WF_MODEL_$t")" ] || v=$(tier_default "$t")
   [ -z "$v" ] || set_setting "WF_MODEL_$t" "$v"
+  # default, strong and fast are also passed to the Agent tool's `model:`, which takes an alias, not a model ID
+  case "$t:$(recorded "WF_MODEL_$t")" in
+    HEAVY:*) ;;
+    *:claude-*) warn "WF_MODEL_$t=$(recorded "WF_MODEL_$t") is a full model ID: workers start with it, but subagents of this tier (the Agent tool's model:) need an alias such as sonnet, opus or haiku" ;;
+  esac
 done
 
 mkdir -p "$CLAUDE_DIR/skills"
@@ -324,11 +483,17 @@ link "$ROOT" "$CLAUDE_DIR/agent-workflow"
 
 remove_hook
 if [ "$RULES" = on ]; then rules_on; else rules_off; fi
-if [ "$PROTO_AGENT" = 1 ] && [ "$(uname)" != Darwin ]; then warn "--proto-agent is macOS only"; PROTO_AGENT=0; fi
-if [ "$PROTO_AGENT" = 1 ]; then agent_on; else agent_off; fi
+if [ "$PROTO_AGENT" = 1 ]; then
+  case $PROTO_KIND in
+    none) warn "--proto-agent: macOS (LaunchAgent) and Linux (systemd --user) only"; PROTO_AGENT=0 ;;
+    systemd) command -v systemctl >/dev/null 2>&1 || { warn "--proto-agent needs systemd (no systemctl on PATH); after a reboot run proto-serve.sh ensure yourself"; PROTO_AGENT=0; } ;;
+  esac
+fi
+if [ "$PROTO_AGENT" = 1 ]; then proto_on; else proto_off; fi
 set_setting WF_INSTALL_PROTO_AGENT "$PROTO_AGENT"
 set_setting WF_INSTALL_DEV "$DEV"
 set_setting WF_INSTALL_GLOBAL_RULES "$(rules_state)"
+record_rev
 
 say "agent-workflow installed.${CHANGES:- Nothing changed.}"
 [ -z "$MISSING" ] || say "Missing tools:$MISSING (see Requirements above)"

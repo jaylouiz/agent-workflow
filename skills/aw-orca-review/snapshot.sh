@@ -32,3 +32,7 @@ mv "$T/help" "$SNAP/help" || { [ ! -e "$T/help.old" ] || mv "$T/help.old" "$SNAP
 mv "$T/orchestration-guide.md" "$SNAP/orchestration-guide.md" || fail "guide not replaced (new help/ is in place; rerun)"
 echo "$v" >"$SNAP/version"
 echo "snapshot: Orca $v, guide + $n command helps in $SNAP"
+# ORCA_TESTED (bin/lib.sh) is read from snapshot/version, so it now is $v; ORCA_MIN is a line there that the review raises by hand.
+ORCA_MIN=""
+[ ! -f "$DIR/../../bin/lib.sh" ] || . "$DIR/../../bin/lib.sh"
+echo "versions: ORCA_TESTED=$v ORCA_MIN=${ORCA_MIN:-unknown} (raise ORCA_MIN in bin/lib.sh when an applied change needs behaviour older Orca versions lack)"

@@ -35,9 +35,10 @@ Post the findings (class, file:line, evidence, proposed change, one line each) a
 
 - agent-workflow: edit, run every `skills/*/test-*.sh` the change touches, commit, push to `main` (solo repo).
 - A project repo: its own worktree and branch (never the main checkout: a release or dev server may run there), its commit and push rules; say when a push waits (e.g. a running release).
+- Supported versions: `ORCA_TESTED` is the snapshot's version, so `snapshot.sh` moves it. `ORCA_MIN` (one line in the shared `lib.sh`) is raised by hand, to the Orca version that introduced it, whenever an applied change makes the workflow rely on a command, flag or message older versions lack; otherwise it stays. Add the change to the changelog's Unreleased section.
 - Then `bash snapshot.sh`, commit `snapshot/` with the change (`... for Orca <v>`), push. Delete `~/.claude/orca-updates/<v>.*` only after the snapshot is committed.
 - Out-of-scope findings go to the `inbox` rule (`~/.claude/CLAUDE.md`).
 
-Report one line per applied change and where it went.
+Report one line per applied change and where it went, then the supported versions as `snapshot.sh` printed them: `ORCA_TESTED <old> -> <new>`, `ORCA_MIN <value>` (unchanged, or `<old> -> <new>` with the reason).
 
 Workspace Cleanup (Orca 1.4.269, Settings; no docs, rules read from app.asar): never removes a running agent or terminal, the active workspace, activity in the last hour, dirty files, unpushed commits, pinned, or the main worktree. "Orchestration workers" = released by the coordinator and head merged. "Inactive N days" can remove a parked proto or idle open-PR worktree (branch kept). Ledgers (`<git common dir>/agent-ledgers`) and Claude transcripts (`~/.claude/projects`) live outside worktrees, so cleanup never touches them. Re-check this after an Orca update that changes cleanup.

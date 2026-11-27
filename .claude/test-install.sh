@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Tests for install.sh in a throwaway CLAUDE_CONFIG_DIR: links, recorded choices, dev mode, global rules, uninstall,
-# the rename migration (stale links, rename map, compat link) and the CLAUDE_CONFIG_DIR warning (throwaway HOME).
+# the rename migration (stale links, rename map, compat link), the CLAUDE_CONFIG_DIR warning (throwaway HOME), the
+# version and external-skill notes of --check, the systemd user unit (stubbed uname and systemctl, redirected unit dir)
+# and --update (throwaway origin and clones). Nothing here reads or writes the real ~/.claude or the real login agents.
 # Run: bash .claude/test-install.sh
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -20,7 +22,9 @@ for t in gh claude orca; do printf '#!/bin/sh\nexit 0\n' >"$T/bin/$t"; chmod +x 
 ln -s "$(command -v jq)" "$T/jq/jq"
 P="$T/bin:$T/jq"
 
-new() { C="$T/c$((n))"; mkdir -p "$C"; } # fresh config dir per scenario
+# fresh config dir per scenario; the login-agent dirs are redirected too, so no run ever sees or writes the real ones
+new() { C="$T/c$((n))"; mkdir -p "$C"; export AW_LAUNCHAGENTS_DIR="$T/la$n" AW_SYSTEMD_USER_DIR="$T/units$n"; }
+stub() { mkdir -p "$1"; printf '#!/bin/sh\n%s\n' "$3" >"$1/$2"; chmod +x "$1/$2"; } # stub <dir> <tool> <sh body>
 run() { CLAUDE_CONFIG_DIR=$C PATH=$P bash "$ROOT/install.sh" "$@" </dev/null >"$T/out" 2>&1; }
 setting() { sed -n "s/^$1=//p" "$C/agent-workflow-settings.sh" | tail -1; }
 # The old skill names live only in compat/renames ("<old> <new>" per line); the retired hook sat under the old name.
@@ -173,9 +177,63 @@ check "the bin path runs through the checkout link" '[ "$(WF_GLOBAL_SETTINGS=$C/
 
 # the login LaunchAgent starts proto-serve.sh from bin/ (macOS only; the plist dir is redirected, launchctl skipped)
 if [ "$(uname)" = Darwin ]; then
-  new; CLAUDE_CONFIG_DIR=$C PATH=$P AW_LAUNCHAGENTS_DIR="$T/agents" bash "$ROOT/install.sh" --yes --proto-agent </dev/null >"$T/out" 2>&1
-  check "proto agent: runs bin/proto-serve.sh" 'grep -qF "$C/agent-workflow/bin/proto-serve.sh" "$T/agents"/*.plist && [ -f "$C/agent-workflow/bin/proto-serve.sh" ]'
+  new; run --yes --proto-agent
+  check "proto agent: runs bin/proto-serve.sh" 'grep -qF "$C/agent-workflow/bin/proto-serve.sh" "$AW_LAUNCHAGENTS_DIR"/*.plist && [ -f "$C/agent-workflow/bin/proto-serve.sh" ]'
 fi
+
+# Linux: the same flag installs a systemd user unit. uname and systemctl are stubs first on PATH (the suite runs on
+# macOS and Linux alike), the unit dir is redirected; the stub logs every systemctl call.
+UNIT=agent-workflow-proto-serve.service
+stub "$T/linux" uname 'echo Linux'
+stub "$T/sysd" uname 'echo Linux'
+stub "$T/sysd" systemctl 'echo "$*" >>"$SYSTEMCTL_LOG"'
+export SYSTEMCTL_LOG="$T/systemctl.log"
+lrun() { CLAUDE_CONFIG_DIR=$C PATH="$T/sysd:$P" bash "$ROOT/install.sh" "$@" </dev/null >"$T/out" 2>&1; }
+new; : >"$SYSTEMCTL_LOG"; lrun --yes --proto-agent; rc=$?
+U="$AW_SYSTEMD_USER_DIR/$UNIT"
+eq "unit on: exit 0" "$rc" 0
+check "unit on: the unit file is in the redirected dir" '[ -f "$U" ]'
+check "unit on: runs bin/proto-serve.sh ensure in a login shell" 'grep -qxF "ExecStart=/bin/bash -lc '"'"'bash \"$C/agent-workflow/bin/proto-serve.sh\" ensure'"'"'" "$U"'
+check "unit on: oneshot that leaves the servers running" 'grep -qx "Type=oneshot" "$U" && grep -qx "RemainAfterExit=yes" "$U" && grep -qx "KillMode=process" "$U"'
+check "unit on: started at login" 'grep -qx "WantedBy=default.target" "$U"'
+eq "unit on: reloaded, then enabled and started" "$(cat "$SYSTEMCTL_LOG")" "--user daemon-reload
+--user enable --now $UNIT"
+eq "unit on: recorded" "$(setting WF_INSTALL_PROTO_AGENT)" 1
+check "unit on: said" 'grep -q "systemd user unit" "$T/out"'
+check "unit on: no LaunchAgent on Linux" '[ ! -e "$AW_LAUNCHAGENTS_DIR" ]'
+: >"$SYSTEMCTL_LOG"; lrun --yes
+check "unit rerun: the recorded choice keeps the unit, nothing is reloaded" '[ -f "$U" ] && [ ! -s "$SYSTEMCTL_LOG" ]'
+lrun --yes --no-proto-agent
+check "unit off: file removed" '[ ! -e "$U" ]'
+eq "unit off: disabled and stopped, then reloaded" "$(cat "$SYSTEMCTL_LOG")" "--user disable --now $UNIT
+--user daemon-reload"
+eq "unit off: recorded" "$(setting WF_INSTALL_PROTO_AGENT)" 0
+lrun --yes --proto-agent; lrun --uninstall
+check "unit: uninstall removes it" '[ ! -e "$U" ]'
+# a unit file from an install whose settings file is gone: the choice is read from disk
+new; lrun --yes --proto-agent; rm "$C/agent-workflow-settings.sh"; lrun --yes
+eq "unit: found on disk, kept and recorded" "$([ -f "$AW_SYSTEMD_USER_DIR/$UNIT" ] && setting WF_INSTALL_PROTO_AGENT)" 1
+# a systemctl that fails (no user session): warned, the install still succeeds and the unit file stays for the next login
+stub "$T/sysd-fail" uname 'echo Linux'; stub "$T/sysd-fail" systemctl 'exit 1'
+new; CLAUDE_CONFIG_DIR=$C PATH="$T/sysd-fail:$P" bash "$ROOT/install.sh" --yes --proto-agent </dev/null >"$T/out" 2>&1; rc=$?
+check "unit: failing systemctl is a warning, exit 0, file kept" '[ $rc = 0 ] && grep -q "systemctl --user enable --now $UNIT failed" "$T/out" && [ -f "$AW_SYSTEMD_USER_DIR/$UNIT" ]'
+# Linux without systemd: a warning, nothing installed, recorded off
+new; CLAUDE_CONFIG_DIR=$C PATH="$T/linux:$P" bash "$ROOT/install.sh" --yes --proto-agent </dev/null >"$T/out" 2>&1; rc=$?
+check "no systemctl: exit 0, warned, no unit" '[ $rc = 0 ] && grep -q "needs systemd (no systemctl on PATH)" "$T/out" && [ ! -e "$AW_SYSTEMD_USER_DIR" ]'
+eq "no systemctl: recorded off" "$(setting WF_INSTALL_PROTO_AGENT)" 0
+# another platform: the warning names both supported ones
+stub "$T/other" uname 'echo SunOS'
+new; CLAUDE_CONFIG_DIR=$C PATH="$T/other:$P" bash "$ROOT/install.sh" --yes --proto-agent </dev/null >"$T/out" 2>&1
+check "other platform: warning names macOS and Linux" 'grep -q "macOS (LaunchAgent) and Linux (systemd --user) only" "$T/out"'
+# the interactive prompt offers the unit on Linux as it offers the LaunchAgent on macOS; not without systemctl
+new; : >"$SYSTEMCTL_LOG"; printf '\n\n\n\nn\ny\n' | CLAUDE_CONFIG_DIR=$C PATH="$T/sysd:$P" AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1
+check "interactive on Linux: asks for the systemd user unit" 'grep -q "Restart them at login with a systemd user unit? (y/n) \[n\]" "$T/out"'
+check "interactive on Linux: y installs it" '[ -f "$AW_SYSTEMD_USER_DIR/$UNIT" ] && [ "$(setting WF_INSTALL_PROTO_AGENT)" = 1 ]'
+new; printf '\n\n\n\nn\ny\n' | CLAUDE_CONFIG_DIR=$C PATH="$T/linux:$P" AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1
+check "interactive on Linux without systemctl: not asked" '! grep -q "Restart them at login" "$T/out" && [ "$(setting WF_INSTALL_PROTO_AGENT)" = 0 ]'
+stub "$T/mac" uname 'echo Darwin'
+new; printf '\n\n\n\nn\nn\n' | CLAUDE_CONFIG_DIR=$C PATH="$T/mac:$P" AW_INSTALL_INTERACTIVE=1 bash "$ROOT/install.sh" >"$T/out" 2>&1
+check "interactive on macOS: asks for the LaunchAgent as before" 'grep -q "Restart them at login with a LaunchAgent? (y/n) \[n\]" "$T/out"'
 
 # CLAUDE_CONFIG_DIR is not supported: a dir other than ~/.claude is warned about on install and with --check; the
 # standard dir (unset, or set to ~/.claude) is not. HOME is a throwaway dir, so the real ~/.claude is never touched.
@@ -203,6 +261,15 @@ for s in aw-build aw-specify aw-ui-design aw-coordinate; do
     check "$s hook $h resolves in ~/.claude" '[ -x "$H$h" ]'
   done
 done
+# a config dir under $HOME gets the portable import line (@~/...), once, and --no-global-rules takes it out again
+new; H="$T/home$n"; mkdir -p "$H/cfg"; echo '# mine' >"$H/cfg/CLAUDE.md"
+hrun() { HOME=$H CLAUDE_CONFIG_DIR="$H/cfg" PATH=$P bash "$ROOT/install.sh" "$@" </dev/null >"$T/out" 2>&1; }
+hrun --yes --global-rules; hrun --yes --global-rules
+eq "config dir under HOME: the import line starts with @~/" "$(grep -c -xF '@~/cfg/agent-workflow/global/CLAUDE.md' "$H/cfg/CLAUDE.md")" 1
+check "config dir under HOME: the line resolves to the linked rules" '[ -f "$H/cfg/agent-workflow/global/CLAUDE.md" ]'
+eq "config dir under HOME: recorded as import" "$(sed -n 's/^WF_INSTALL_GLOBAL_RULES=//p' "$H/cfg/agent-workflow-settings.sh")" import
+hrun --yes --no-global-rules
+eq "config dir under HOME: the import line is removed, the user's text stays" "$(cat "$H/cfg/CLAUDE.md")" "# mine"
 check "hook commands were found in the frontmatter" '[ -n "$(awk "/^---\$/{c++} c==1" "$ROOT/skills/aw-build/SKILL.md" | grep "agent-workflow/bin/guard.sh")" ]'
 
 # interactive answers: one per tier (default, strong, fast, heavy), then the global rules
@@ -247,6 +314,146 @@ check "check without lsof: optional, prototype preview servers, brew and apt hin
 mkdir -p "$T/lsof"; printf '#!/bin/sh\nexit 0\n' >"$T/lsof/lsof"; chmod +x "$T/lsof/lsof"
 new; CLAUDE_CONFIG_DIR=$C PATH="$P:$T/lsof" bash "$ROOT/install.sh" --check >"$T/out" 2>&1; eq "check with lsof: exit 0" "$?" 0
 check "check with lsof: ok" 'grep -q "ok       lsof" "$T/out"'
+
+# --check: bash is required, shellcheck optional
+check "check lists bash" 'grep -q "ok       bash" "$T/out"'
+check "check without shellcheck: optional" 'grep -q "missing  shellcheck (optional)" "$T/out"'
+# --check: gh older than GH_MIN and Orca older than ORCA_MIN are warnings that name both versions; the exit code stays 0
+GH_MIN=$(sed -n 's/^GH_MIN=//p' "$ROOT/bin/lib.sh"); ORCA_MIN=$(sed -n 's/^ORCA_MIN=//p' "$ROOT/bin/lib.sh")
+check "lib.sh holds GH_MIN and ORCA_MIN as plain lines" '[ -n "$GH_MIN" ] && [ -n "$ORCA_MIN" ]'
+vcheck() { stub "$T/v$n" gh "echo 'gh version $1 (2026-01-01)'"; stub "$T/v$n" orca "echo '$2'"; new; CLAUDE_CONFIG_DIR=$C PATH="$T/v$n:$P" bash "$ROOT/install.sh" --check >"$T/out" 2>&1; }
+vcheck 2.98.9 1.4.100; rc=$?
+eq "old gh and Orca: --check still exits 0" "$rc" 0
+check "old gh: warning names both versions and --attach" 'grep -q "warn     gh 2.98.9 is older than $GH_MIN: .*--attach" "$T/out"'
+check "old Orca: warning names both versions" 'grep -q "warn     Orca 1.4.100 is older than the supported minimum $ORCA_MIN" "$T/out"'
+vcheck "$GH_MIN" "$ORCA_MIN"
+check "gh and Orca at the minimum: no warning" '! grep -q "is older than" "$T/out"'
+vcheck 2.100.0 "orca 1.5.0"
+check "newer gh and Orca (two-digit minor, prefixed output): no warning" '! grep -q "is older than" "$T/out"'
+# --check: external skills are a found / not found note from skills/ and the plugin registry; never a failure
+new; mkdir -p "$C/skills/ui-canvas" "$C/plugins"; echo '{"version":2,"plugins":{"impeccable@impeccable":[{}]}}' >"$C/plugins/installed_plugins.json"
+CLAUDE_CONFIG_DIR=$C PATH=$P bash "$ROOT/install.sh" --check >"$T/out" 2>&1; rc=$?
+eq "external skills: exit 0" "$rc" 0
+check "external skills: ui-canvas found in skills/" 'grep -q "found      ui-canvas (skills/ui-canvas)" "$T/out"'
+check "external skills: impeccable found as a plugin" 'grep -q "found      impeccable (plugin)" "$T/out"'
+check "external skills: code-review not found, with what it is for" 'grep -q "not found  code-review: the review step" "$T/out"'
+
+# the retired hook path somewhere else in settings.json (a permission rule): no jq error, nothing removed, no dev mode
+new; jq -n --arg c "Bash($C/skills/$OLD_REVIEW/check.sh)" '{permissions: {allow: [$c]}}' >"$C/settings.json"; cp "$C/settings.json" "$T/before.json"
+run --yes; rc=$?
+eq "hook path outside SessionStart: exit 0" "$rc" 0
+check "hook path outside SessionStart: no error" '! grep -q -e "Cannot iterate" -e "could not update" "$T/out"'
+check "hook path outside SessionStart: settings.json untouched" 'cmp -s "$C/settings.json" "$T/before.json" && [ ! -e "$C/settings.json.bak" ]'
+eq "hook path outside SessionStart: dev is not inferred" "$(setting WF_INSTALL_DEV)" 0
+# one SessionStart group holding the retired hook and a hook of the user: only the retired one goes
+new; jq -n --arg c "bash \"$C/skills/$OLD_REVIEW/check.sh\"" '{hooks: {SessionStart: [{hooks: [{type: "command", command: $c}, {type: "command", command: "echo mine"}]}]}}' >"$C/settings.json"
+run --yes
+eq "shared group: the retired hook is gone" "$(hooks)" 0
+eq "shared group: the user's hook stays" "$(jq -r '.hooks.SessionStart[0].hooks[].command' "$C/settings.json")" "echo mine"
+
+# a full model ID on a tier that subagents use is warned about (it is still recorded); heavy takes one silently
+new; run --yes --model-strong claude-opus-5-5
+check "model ID on the strong tier: warned" 'grep -q "WF_MODEL_STRONG=claude-opus-5-5 is a full model ID" "$T/out"'
+check "model ID on the heavy tier (the shipped default): no warning" '! grep -q "WF_MODEL_HEAVY=.* is a full model ID" "$T/out"'
+
+# the installed revision is recorded on every install
+new; run --yes
+eq "install records the checkout's HEAD" "$(setting WF_INSTALLED_REV)" "$(git -C "$ROOT" rev-parse HEAD)"
+
+# --update, in throwaway repos: `origin` is a copy of this work tree (tracked and new files) with its own history, each
+# scenario clones it as the user's checkout and installs from the clone into a fresh config dir.
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.invalid GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.invalid
+# No background maintenance in the fixtures: a detached repack after a commit races with the next local clone, which
+# copies the object directory (seen as "unable to read tree" in the clone with git 2.54).
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0
+O="$T/origin"; mkdir -p "$O"
+(cd "$ROOT" && git ls-files -co --exclude-standard -z | while IFS= read -r -d '' f; do [ -e "$f" ] || continue; mkdir -p "$O/$(dirname "$f")"; cp -P "$f" "$O/$f"; done)
+git -C "$O" init -q -b main; git -C "$O" add -A; git -C "$O" commit -q -m "first"; git -C "$O" tag v1.0.0
+commit() { git -C "$O" add -A; git -C "$O" commit -q -m "$1"; } # commit <subject>: everything changed in origin
+clone() { new; K="$T/k$n"; git clone -q "$O" "$K"; CLAUDE_CONFIG_DIR=$C PATH=$P bash "$K/install.sh" --yes </dev/null >/dev/null 2>&1; } # the user's checkout, installed
+urun() { CLAUDE_CONFIG_DIR=$C PATH=$P bash "$K/install.sh" --update </dev/null >"$T/out" 2>&1; }
+head_of() { git -C "$1" rev-parse HEAD; }
+RESTART="Restart open Claude sessions and coordinators to load the new skills."
+
+clone; eq "update fixture: the install recorded the clone's HEAD" "$(setting WF_INSTALLED_REV)" "$(head_of "$K")"
+urun; rc=$?
+eq "no-op: exit 0" "$rc" 0
+check "no-op: says it is up to date, with the version" 'grep -q "Already up to date (v1.0.0)" "$T/out"'
+check "no-op: no rerun, no restart line" '! grep -q -e "agent-workflow installed" -e "Restart open" "$T/out"'
+
+# a commit that touches neither the skill list nor install.sh: pulled and listed, no install rerun
+echo "note" >>"$O/README.md"; commit "docs: a note"
+urun; rc=$?
+eq "clean: exit 0" "$rc" 0
+eq "clean: the checkout is at origin's HEAD" "$(head_of "$K")" "$(head_of "$O")"
+check "clean: lists the commit since the last update" 'grep -q "^1 commit(s) since the last update (after v1.0.0):" "$T/out" && grep -q "docs: a note" "$T/out"'
+check "clean: no install rerun" '! grep -q "agent-workflow installed" "$T/out" && grep -q "the links stay as they are" "$T/out"'
+eq "clean: ends with the restart line" "$(tail -1 "$T/out")" "$RESTART"
+eq "clean: records the new revision" "$(setting WF_INSTALLED_REV)" "$(head_of "$K")"
+check "clean: no Breaking block without a Breaking entry" '! grep -q "BREAKING" "$T/out"'
+
+# dirty: a changed tracked file refuses before anything is pulled; an untracked file alone does not
+echo "more" >>"$O/README.md"; commit "docs: more"
+before=$(head_of "$K"); echo "local" >>"$K/LICENSE"
+urun; rc=$?
+eq "dirty: exit 1" "$rc" 1
+check "dirty: says why and that nothing was pulled" 'grep -q "local changes to tracked files" "$T/out" && grep -q "Nothing was pulled" "$T/out"'
+eq "dirty: HEAD unchanged" "$(head_of "$K")" "$before"
+eq "dirty: recorded revision unchanged" "$(setting WF_INSTALLED_REV)" "$before"
+git -C "$K" checkout -q -- LICENSE; echo "mine" >"$K/my-notes.txt"
+urun; rc=$?
+check "untracked file only: the update runs" '[ $rc = 0 ] && [ "$(head_of "$K")" = "$(head_of "$O")" ] && [ -f "$K/my-notes.txt" ]'
+
+# a new skill, a new release tag and a Breaking entry: install rerun, version jump, the entry highlighted
+clone
+mkdir -p "$O/skills/aw-extra"; printf -- '---\nname: aw-extra\ndescription: test\n---\n' >"$O/skills/aw-extra/SKILL.md"
+python3 - "$O/CHANGELOG.md" <<'PYCL'
+import sys
+p = sys.argv[1]; s = open(p, encoding="utf-8").read()
+new = "## [1.1.0] - 2099-01-01\n\n### Breaking\n\n- `/aw-old` is gone: use `/aw-extra`,\n  which takes the same arguments.\n\n### Added\n\n- `/aw-extra`.\n\n"
+i = s.index("## [Unreleased]"); j = s.find("\n## ", i + 1)
+if j < 0:
+    s += "\n"; j = len(s) - 1
+open(p, "w", encoding="utf-8").write(s[:j + 1] + new + s[j + 1:])
+PYCL
+commit "feat: aw-extra"; git -C "$O" tag v1.1.0
+urun; rc=$?
+eq "new skill: exit 0" "$rc" 0
+check "new skill: the install was rerun" 'grep -q "rerunning the install" "$T/out" && grep -q "agent-workflow installed" "$T/out"'
+check "new skill: linked from the checkout" '[ "$(readlink "$C/skills/aw-extra")" = "$K/skills/aw-extra" ]'
+check "new skill: version jump" 'grep -qxF "Version: v1.0.0 → v1.1.0" "$T/out"'
+check "new skill: Breaking block with the new entry only, joined across its lines" '[ "$(grep -c "^  ! " "$T/out")" = 1 ] && grep -qF "  ! [1.1.0]: \`/aw-old\` is gone: use \`/aw-extra\`, which takes the same arguments." "$T/out"'
+check "new skill: the Breaking heading stands out" 'grep -q "^BREAKING CHANGES since your last update" "$T/out"'
+eq "new skill: ends with the restart line" "$(tail -1 "$T/out")" "$RESTART"
+eq "new skill: records the new revision" "$(setting WF_INSTALLED_REV)" "$(head_of "$K")"
+urun; check "new skill: a second update is a no-op" 'grep -q "Already up to date (v1.1.0)" "$T/out"'
+# commits after the tag: the jump names them
+clone; echo "x" >>"$O/README.md"; commit "docs: after the release"
+git -C "$K" reset -q --hard v1.0.0; CLAUDE_CONFIG_DIR=$C PATH=$P bash "$K/install.sh" --yes </dev/null >/dev/null 2>&1
+urun; check "past the tag: the jump counts the commits after it" 'grep -qxF "Version: v1.0.0 → v1.1.0 (+1 commits after it)" "$T/out"'
+
+# install.sh itself changed: rerun, by the pulled file
+clone; echo "# a later version" >>"$O/install.sh"; commit "chore: install.sh"
+urun; rc=$?
+check "install.sh changed: rerun by the new file" '[ $rc = 0 ] && grep -q "rerunning the install" "$T/out" && grep -q "agent-workflow installed" "$T/out" && tail -1 "$K/install.sh" | grep -q "a later version"'
+eq "install.sh changed: ends with the restart line" "$(tail -1 "$T/out")" "$RESTART"
+
+# a pull done by hand is still reported (and relinked) by the next --update: it counts from the recorded revision
+clone; mkdir -p "$O/skills/aw-more"; printf -- '---\nname: aw-more\ndescription: test\n---\n' >"$O/skills/aw-more/SKILL.md"; commit "feat: aw-more"
+git -C "$K" pull -q --ff-only
+urun; rc=$?
+check "after a manual pull: the commit is reported and the skill linked" '[ $rc = 0 ] && grep -q "feat: aw-more" "$T/out" && [ -L "$C/skills/aw-more" ]'
+
+# local commits that diverge: the pull fails, exit 1, nothing else changes
+clone; echo "y" >>"$O/README.md"; commit "docs: upstream"
+echo "z" >>"$K/LICENSE"; git -C "$K" commit -q -am "local"; before=$(head_of "$K")
+urun; rc=$?
+check "diverged: exit 1, said, HEAD unchanged" '[ $rc = 1 ] && grep -q "git pull --ff-only failed" "$T/out" && [ "$(head_of "$K")" = "$before" ]'
+
+# not a git checkout (a downloaded copy): refused
+new; mkdir -p "$T/copy$n"; cp -R "$O/install.sh" "$O/bin" "$O/reference" "$O/compat" "$T/copy$n/"
+CLAUDE_CONFIG_DIR=$C PATH=$P bash "$T/copy$n/install.sh" --update </dev/null >"$T/out" 2>&1; rc=$?
+check "no git checkout: exit 1 and said" '[ $rc = 1 ] && grep -q "is not a git checkout" "$T/out"'
 
 # uninstall: links and import line go, the settings file stays
 new; echo '{}' >"$C/settings.json"; echo '# mine' >"$C/CLAUDE.md"; run --yes --dev --global-rules; run --uninstall
