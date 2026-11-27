@@ -28,7 +28,8 @@
 
 ## Verification
 
-- gate command: `wf_verify` = every `skills/*/test-*.sh` and `.claude/test-*.sh`, first failure stops. Run the suites that touch your change while working, `wf_verify` before the PR.
+- gate command: `bash test.sh` = every `skills/*/test-*.sh` and `.claude/test-*.sh`, one summary naming the failed suites; `wf_verify` runs it with `--fail-fast`. Run the suites that touch your change while working, `bash test.sh` before the PR.
+- CI: `.github/workflows/test.yml` runs `test.sh` on `macos-latest` (bash 3.2) and `ubuntu-latest` on every PR and on pushes to `main`; a Linux-only failure is fixed in the PR that shows it.
 - shellcheck on touched scripts when installed (it was not on this machine).
 - extra greps: after renaming or removing a script, skill or section, `rg` the old name in `skills/`, `global/`, `README.md`, `reference/` (skills point to profile sections by name: "the profile's X").
 
@@ -44,8 +45,8 @@
 ## Orchestration
 
 - runner: Orca; max workers: the default 3 (`WF_MAX_WORKERS`)
-- executable facts: `.claude/issue-workflow.sh` (risk globs, verify, after-merge); no build, deploy check or PR-body check
-- merge gate: no pre-merge hook, no CI. `merge-pr.sh prep` runs `wf_verify`; `merge-pr.sh after` fast-forwards the main checkout and reruns `install.sh` when `skills/*` dirs or `install.sh` changed.
+- executable facts: `.claude/issue-workflow.sh` (risk globs, verify via `test.sh`, after-merge); no build, deploy check or PR-body check
+- merge gate: no pre-merge hook; CI as under "Verification". `merge-pr.sh prep` runs `wf_verify`; `merge-pr.sh after` fast-forwards the main checkout and reruns `install.sh` when `skills/*` dirs or `install.sh` changed.
 
 ## Retro
 

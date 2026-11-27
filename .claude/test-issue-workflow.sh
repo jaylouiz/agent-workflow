@@ -27,7 +27,9 @@ printf 'skills/build-gh-issue/SKILL.md\nREADME.md\n' >"$T/files"
 eq "no risk" "$(cd "$R" && bash "$DIR/../skills/orchestrate-gh-issues/merge-pr.sh" route --files "$T/files" | awk '{print $1}')" "lead:"
 
 # wf_verify: passes when all suites pass, names the failing one and stops there.
+# wf_verify calls the repo's test.sh (the one list of suites), so the throwaway repo carries a copy of it too.
 V="$T/verify"; mkdir -p "$V/skills/a" "$V/skills/b" "$V/skills/c"; git -C "$V" init -q; load "$V"
+cp "$DIR/../test.sh" "$V/test.sh"
 printf 'echo ok-a\n' >"$V/skills/a/test-a.sh"
 printf 'echo ran-c >>"$0.ran"\n' >"$V/skills/c/test-c.sh"
 run_verify() { (cd "$V" && . .claude/issue-workflow.sh && wf_verify 2>&1); }
@@ -36,9 +38,25 @@ rm -f "$V/skills/c/test-c.sh.ran"
 printf 'echo boom; exit 3\n' >"$V/skills/b/test-b.sh"
 out=$(run_verify); rc=$?
 eq "verify fails" "$rc" 1
-eq "verify names the suite" "$(printf '%s' "$out" | head -1)" "verify failed: skills/b/test-b.sh"
+eq "verify names the suite" "$(printf '%s' "$out" | sed -n '1,2p' | tr '\n' '|')" "verify failed:|FAIL  skills/b/test-b.sh|"
+eq "verify hides the passed suites" "$(printf '%s' "$out" | grep -c 'test-a.sh')" 0
 eq "verify shows its output" "$(printf '%s' "$out" | grep -c boom)" 1
 eq "verify stops at the first failure" "$([ -f "$V/skills/c/test-c.sh.ran" ] && echo ran || echo not-run)" "not-run"
+
+# test.sh: runs every suite (skills/*/ and .claude/), one summary with the failed names, exit 1; --fail-fast stops early.
+printf 'echo boom2; exit 1\n' >"$V/.claude/test-d.sh"
+out=$(cd "$T" && bash "$V/test.sh" 2>&1); rc=$?
+eq "test.sh: exit 1 on a failure" "$rc" 1
+eq "test.sh: runs past a failure" "$([ -f "$V/skills/c/test-c.sh.ran" ] && echo ran || echo not-run)" "ran"
+eq "test.sh: one line per suite" "$(printf '%s\n' "$out" | grep -E '^(ok   |FAIL ) ' | tr -s ' ' | tr '\n' '|')" "ok skills/a/test-a.sh|FAIL skills/b/test-b.sh|ok skills/c/test-c.sh|FAIL .claude/test-d.sh|"
+eq "test.sh: summary names the failed suites" "$(printf '%s\n' "$out" | tail -1)" "test.sh: 2 of 4 suites failed: skills/b/test-b.sh .claude/test-d.sh"
+rm -f "$V/skills/c/test-c.sh.ran"
+out=$(bash "$V/test.sh" --fail-fast 2>&1); rc=$?
+eq "test.sh --fail-fast: stops at the first failure" "$rc:$([ -f "$V/skills/c/test-c.sh.ran" ] && echo ran || echo not-run)" "1:not-run"
+rm -f "$V/skills/b/test-b.sh" "$V/.claude/test-d.sh"
+out=$(bash "$V/test.sh" 2>&1); rc=$?
+eq "test.sh: all green" "$rc:$(printf '%s\n' "$out" | tail -1)" "0:test.sh: 2/2 suites passed"
+bash "$V/test.sh" --frob >/dev/null 2>&1; eq "test.sh: unknown argument exits 64" "$?" 64
 
 # wf_after_merge: bare origin, main checkout, a second clone that pushes.
 O="$T/origin.git"; M="$T/main"; P="$T/pusher"

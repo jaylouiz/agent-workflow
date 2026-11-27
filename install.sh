@@ -87,6 +87,7 @@ requirements() {
   need gh required "brew install gh, then gh auth login"
   need claude required "https://claude.com/claude-code"
   need orca optional "only for /orchestrate-gh-issues: https://github.com/stablyai/orca"
+  need lsof optional "prototype preview servers: brew install lsof or sudo apt install lsof"
   if command -v gh >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then say "  warn     gh is not logged in: gh auth login"; fi
 }
 

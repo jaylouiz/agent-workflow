@@ -10,16 +10,13 @@ WF_RISK_GLOBS=(
   'install.sh'
 )
 
-# cwd: the PR's worktree. Runs every skill test suite plus this config's own test; stops at the first failure.
+# cwd: the PR's worktree. The suites and their order live in test.sh (CI runs the same file); quiet on a pass,
+# stops at the first failing suite and shows it.
 wf_verify() {
-  local f out
-  for f in skills/*/test-*.sh .claude/test-*.sh; do
-    [ -f "$f" ] || continue
-    if ! out=$(bash "$f" 2>&1); then
-      echo "verify failed: $f"; printf '%s\n' "$out" | tail -n 20
-      return 1
-    fi
-  done
+  local out
+  out=$(bash test.sh --fail-fast 2>&1) && return 0
+  echo "verify failed:"; printf '%s\n' "$out" | grep -v '^ok    '
+  return 1
 }
 
 # Reruns install.sh (relinks ~/.claude/skills and the global CLAUDE.md). Tests override it.

@@ -1,0 +1,50 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # macOS ships bash 3.2 as /bin/bash and that is what users run: keep a newer Homebrew bash off the front of PATH.
+      - name: Use the system bash 3.2 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$RUNNER_TEMP/sysbash"
+          ln -s /bin/bash "$RUNNER_TEMP/sysbash/bash"
+          echo "$RUNNER_TEMP/sysbash" >>"$GITHUB_PATH"
+
+      - name: Install the tools the suites need (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          missing=""
+          for t in jq lsof; do command -v "$t" >/dev/null 2>&1 || missing="$missing $t"; done
+          if [ -n "$missing" ]; then sudo apt-get update -q && sudo apt-get install -y -q $missing; fi
+
+      - name: Show the tools
+        run: |
+          bash --version | head -1
+          for t in git jq python3 gh lsof; do
+            command -v "$t" || { echo "missing: $t"; exit 1; }
+          done
+
+      - name: Run every suite
+        run: bash test.sh

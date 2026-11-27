@@ -148,7 +148,12 @@ new; CLAUDE_CONFIG_DIR=$C PATH="$T/bin" bash "$ROOT/install.sh" --check >"$T/out
 eq "check without jq: exit 1" "$rc" 1
 check "check names jq" 'grep -q "jq" "$T/out"'
 check "check changes nothing" '[ -z "$(ls -A "$C")" ]'
-new; CLAUDE_CONFIG_DIR=$C PATH=$P bash "$ROOT/install.sh" --check >/dev/null 2>&1; eq "check with all tools: exit 0" "$?" 0
+# lsof is optional: without it --check still passes and names it with a brew and an apt hint; with it, it is ok
+new; CLAUDE_CONFIG_DIR=$C PATH=$P bash "$ROOT/install.sh" --check >"$T/out" 2>&1; eq "check with all required tools: exit 0" "$?" 0
+check "check without lsof: optional, prototype preview servers, brew and apt hint" 'grep -q "missing  lsof (optional): prototype preview servers: .*brew install lsof.*apt install lsof" "$T/out"'
+mkdir -p "$T/lsof"; printf '#!/bin/sh\nexit 0\n' >"$T/lsof/lsof"; chmod +x "$T/lsof/lsof"
+new; CLAUDE_CONFIG_DIR=$C PATH="$P:$T/lsof" bash "$ROOT/install.sh" --check >"$T/out" 2>&1; eq "check with lsof: exit 0" "$?" 0
+check "check with lsof: ok" 'grep -q "ok       lsof" "$T/out"'
 
 # uninstall: links and import line go, the settings file stays
 new; echo '{}' >"$C/settings.json"; echo '# mine' >"$C/CLAUDE.md"; run --yes --dev --global-rules; run --uninstall
