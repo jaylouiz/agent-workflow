@@ -17,6 +17,7 @@
 # WF_DIGEST_CAP=2h            # the oldest unannounced decision request waits at most this long for the digest
 # WF_NO_WAIT_CI=0             # 1 = merge prep does not wait for pending checks (a failed check still blocks)
 # WF_PHASE_LABELS=on          # off = the skills stop writing phase:design / phase:build; GitHub's issue status carries the phase alone
+# WF_PR_ATTRIBUTION=on        # off = guard.sh no longer requires the "Generated with [Claude Code]" line in a PR body (gh pr create / gh pr edit)
 
 # --- Comments and logs ---
 # WF_COMMENT_CAP=1500         # visible characters per agent issue comment (decide.sh check, guard.sh)
