@@ -8,6 +8,10 @@ wf_root() { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || ROOT=$PWD; }
 WF_SETTINGS="WF_MODEL_DEFAULT WF_MODEL_STRONG WF_MODEL_FAST WF_MODEL_HEAVY WF_MAX_WORKERS WF_DIGEST_CAP WF_COMMENT_CAP WF_ISSUE_LOG_DIR WF_NO_WAIT_CI WF_PORTS WF_PROTO_PORTS WF_RISK_GLOBS WF_IGNORE_GLOBS WF_REVIEW_LINES WF_HOLD_LABELS WF_PHASE_LABELS WF_PR_ATTRIBUTION WF_REQUIRED_CHECKS WF_CHECKS_TSV WF_INSTALL_GLOBAL_RULES WF_INSTALL_DEV WF_INSTALL_PROTO_AGENT WF_INSTALLED_REV"
 WF_ENV_SETTINGS="WF_COMMENT_CAP WF_ISSUE_LOG_DIR WF_PORTS WF_PROTO_PORTS" # an exported value wins over both files (WF_REPO is read where used)
 
+# The hold label that stops everything: no stage starts (decide.sh resume prints `held`) and no merge (merge-pr.sh prep).
+# The other WF_HOLD_LABELS hold a merge only. A fixed name, not a setting: board clients write it (docs/contract.md).
+WF_STOP_LABEL=on-hold
+
 wf_global_settings() { # the global settings file (template: reference/global-settings.sh)
   echo "${WF_GLOBAL_SETTINGS:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-workflow-settings.sh}"
 }
@@ -27,7 +31,7 @@ wf_defaults() {
   WF_RISK_GLOBS=()
   WF_IGNORE_GLOBS=(package-lock.json)
   WF_REVIEW_LINES=400
-  WF_HOLD_LABELS="on-hold-after-spec do-not-merge"
+  WF_HOLD_LABELS="on-hold on-hold-after-spec do-not-merge"
   WF_PHASE_LABELS=on
   WF_PR_ATTRIBUTION=on
   WF_REQUIRED_CHECKS=""
@@ -65,6 +69,8 @@ wf_load() { # defaults, then the global settings file, then the project's config
   wf_source "$(wf_global_settings)"
   wf_source "$ROOT/.claude/issue-workflow.sh"
   [ -z "$saved" ] || eval "$saved"
+  # on-hold is a contract label (docs/contract.md): a board client sets it, so a config with its own list cannot drop it
+  case " $WF_HOLD_LABELS " in *" $WF_STOP_LABEL "*) ;; *) WF_HOLD_LABELS="$WF_STOP_LABEL${WF_HOLD_LABELS:+ $WF_HOLD_LABELS}" ;; esac
   return 0
 }
 

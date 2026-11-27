@@ -8,8 +8,8 @@ and reads an answer, so the three cannot drift.
                                                when it cannot be read (the caller then passes the text on as it is)
 
 A decision has questions `1`, `2`, … with options `A`, `B`, …; one option per question carries `★` (recommended),
-today's state is an ordinary option tagged `today`. Tandem (the user's board) reads these comments too: see
-"Tandem" in docs/decision-format.md before changing a line this file writes.
+today's state is an ordinary option tagged `today`. Board clients (Tandem is the reference client) read these comments
+too: see docs/contract.md before changing a line this file writes; its golden fixtures (test-decide.sh) pin them.
 """
 import re
 import sys

@@ -7,6 +7,8 @@
 #        build    Specify or Build starts:  status In progress, label phase:build
 #        review   Build opened the PR:      status In review (the PR itself is the rule clients read; no label)
 #        backlog  the Design handover:      status Backlog, label phase:design removed
+#        design and build also remove the fog label needs-direction: a stage that starts means the issue has a lane
+#   issue-status.sh fog <n>                 fog (the triage rule): add the label needs-direction; the lane label stays
 #   issue-status.sh set <n> <status name>   set the status by its name
 #   issue-status.sh get <n>                 print the status name (empty: none, or the repo has no statuses)
 #
@@ -22,7 +24,7 @@ DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$DIR/lib.sh"
 wf_load
 
-usage() { echo "usage: issue-status.sh phase <n> design|build|review|backlog | set <n> <status name> | get <n>" >&2; exit 64; }
+usage() { echo "usage: issue-status.sh phase <n> design|build|review|backlog | fog <n> | set <n> <status name> | get <n>" >&2; exit 64; }
 note() { echo "issue-status.sh: $*" >&2; }
 number() { case "${1:-}" in "" | *[!0-9]*) usage ;; esac; }
 
@@ -61,7 +63,21 @@ phase_label() { # phase_label <n> <label> <color> <description>: add the phase l
   gh issue edit "$1" --add-label "$2" >/dev/null 2>&1 || note "#$1: label $2 not added"
 }
 
+has_label() { gh issue view "$1" --json labels --jq '.labels[].name' 2>/dev/null | grep -qx "$2"; } # has_label <n> <label>
+
+FOG=needs-direction # the fog label (docs/contract.md): set by `fog`, gone once a stage starts
+clear_fog() { # clear_fog <n>: best effort
+  has_label "$1" "$FOG" || return 0
+  gh issue edit "$1" --remove-label "$FOG" >/dev/null 2>&1 || note "#$1: label $FOG not removed"
+}
+
 case "${1:-}" in
+  fog)
+    number "${2:-}"
+    repo
+    gh label create "$FOG" --force --color D4C5F9 --description "Direction open: the user sets it" >/dev/null 2>&1 || :
+    gh issue edit "$2" --add-label "$FOG" >/dev/null 2>&1 || note "#$2: label $FOG not added"
+    ;;
   phase)
     number "${2:-}"
     case "${3:-}" in
@@ -70,11 +86,13 @@ case "${1:-}" in
         phase_label "$2" phase:design 5319E7 "Phase UX Design: a design round is running or waits on feedback"
         # the lane too: status In progress reads as UX Design only in the lane needs-design (a redesign of a ready issue, a design batch member)
         gh issue edit "$2" --add-label needs-design >/dev/null 2>&1 || note "#$2: label needs-design not added"
+        clear_fog "$2"
         set_status "$2" "In progress"
         ;;
       build)
         repo
         phase_label "$2" phase:build 1D76DB "Phase Build: specify, build or review running, or PR open"
+        clear_fog "$2"
         set_status "$2" "In progress"
         ;;
       review)
@@ -84,7 +102,7 @@ case "${1:-}" in
       backlog)
         repo
         # removed whatever the switch says: a label written before the cut-over must not keep the issue in UX Design
-        if gh issue view "$2" --json labels --jq '.labels[].name' 2>/dev/null | grep -qx 'phase:design'; then
+        if has_label "$2" phase:design; then
           gh issue edit "$2" --remove-label phase:design >/dev/null 2>&1 || note "#$2: label phase:design not removed"
         fi
         set_status "$2" "Backlog"

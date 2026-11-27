@@ -1,0 +1,59 @@
+{
+  "marker": {
+    "kind": "request",
+    "id": "D1",
+    "note": null,
+    "round": null
+  },
+  "question": "Setup shell: 2 choices",
+  "preview": "https://preview.example/setup?variant=1A",
+  "overview": "https://github.com/acme/widgets/issues/7#issuecomment-1",
+  "options": [
+    "ok: take every ★ option"
+  ],
+  "recommendation": "ok (1B 2A)",
+  "questions": [
+    {
+      "n": 1,
+      "label": "Shell",
+      "options": [
+        {
+          "letter": "A",
+          "recommended": false,
+          "today": true,
+          "name": "back on top"
+        },
+        {
+          "letter": "B",
+          "recommended": true,
+          "today": false,
+          "name": "footer bar"
+        },
+        {
+          "letter": "C",
+          "recommended": false,
+          "today": false,
+          "name": "top stepper"
+        }
+      ]
+    },
+    {
+      "n": 2,
+      "label": "Heading",
+      "options": [
+        {
+          "letter": "A",
+          "recommended": true,
+          "today": false,
+          "name": "hidden"
+        },
+        {
+          "letter": "B",
+          "recommended": false,
+          "today": false,
+          "name": "small, visible"
+        }
+      ]
+    }
+  ]
+}

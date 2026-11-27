@@ -14,7 +14,7 @@ WF_PROTO_PORTS=3111-3119              # prototype previews that stay up while a 
 WF_RISK_GLOBS=()                      # quoted globs, e.g. ('store/**' 'server/**'): PRs touching them get a separate reviewer; ** = any depth
 WF_IGNORE_GLOBS=(package-lock.json)   # not counted for the diff-size route
 WF_REVIEW_LINES=400                   # changed lines above which the route is reviewer
-WF_HOLD_LABELS="on-hold-after-spec do-not-merge"   # PR or issue labels that hold a merge
+WF_HOLD_LABELS="on-hold on-hold-after-spec do-not-merge"   # PR or issue labels that hold a merge (on-hold always counts, and also stops every stage start)
 # WF_PHASE_LABELS=on                               # off = no phase:design / phase:build writes; GitHub's issue status carries the phase alone
 # WF_PR_ATTRIBUTION=on                             # off = guard.sh no longer requires the "Generated with [Claude Code]" line in a PR body; usually set globally
 WF_REQUIRED_CHECKS=""                 # GitHub checks prep waits for, comma-separated names as GitHub shows them (e.g. "CI / quality, build"); empty = every reported check must not fail
