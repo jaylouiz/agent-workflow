@@ -354,7 +354,7 @@ eq "--pr other unnumbered worktree intact" "$(exists chore/other-pr):$(branch ch
 # --- prototype servers: a sweep stops the server of an issue that no longer waits (proto-serve.sh prune), a dry run does not
 PS=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 mkdir -p "$T/ps-wt"
-WF_PROTO_CMD='python3 -m http.server "$PORT" --bind 127.0.0.1' bash "$DIR/proto-serve.sh" start 77 "$T/ps-wt" "$PS" >"$T/ps-start.out" 2>&1
+DUMMY_SERVER="$DIR/dummy-server.py" WF_PROTO_CMD='python3 "$DUMMY_SERVER" "$PORT"' bash "$DIR/proto-serve.sh" start 77 "$T/ps-wt" "$PS" >"$T/ps-start.out" 2>&1
 up() { PATH=$PATH:/usr/sbin lsof -nP -tiTCP:"$PS" -sTCP:LISTEN 2>/dev/null | head -1; }
 echo CLOSED >"$STUB/gh/issue-77"
 sweep --dry-run

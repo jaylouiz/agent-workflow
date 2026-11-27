@@ -46,31 +46,6 @@ jobs:
             command -v "$t" || { echo "missing: $t"; exit 1; }
           done
 
-      - name: DEBUG lsof (temporary)
-        if: runner.os == 'macOS'
-        run: |
-          set +e
-          cd "$RUNNER_TEMP"; export PYTHONFAULTHANDLER=1
-          fp() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
-          st() { netstat -anv -p tcp | grep "\.$1 " | awk '{print $6}' | tr '\n' ' '; }
-          try() { # try <label> <port> [delay]
-            sleep "${3:-0}"
-            python3 -m http.server "$2" --bind 127.0.0.1 >"$1.log" 2>&1 &
-            local pid=$!; sleep 2; echo "== $1 port $2: after 2s [$(st "$2")]"
-            if [ "$(st "$2")" != "LISTEN " ]; then
-              sleep 20; echo "   after 22s [$(st "$2")]"
-              kill -ABRT "$pid"; sleep 1; echo "--- traceback"; cat "$1.log"
-            fi
-            kill "$pid" 2>/dev/null
-          }
-          try fixed 49558
-          try freed "$(fp)"
-          try freed-wait3 "$(fp)" 3
-          try freed-again "$(fp)"
-          try fixed-low 8765
-          cat /etc/hosts; scutil --get HostName; hostname
-          exit 1
-
       - name: Run every suite
         run: bash test.sh
         env:

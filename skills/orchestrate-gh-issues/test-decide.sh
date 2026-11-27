@@ -139,7 +139,7 @@ eq "followup D2 targets the challenged record" "$(head -1 "$T/posted")" "<!-- de
 eq "answer D3 targets the named request" "$(head -1 "$T/posted")" "<!-- decision-answer D3 -->"
 # resolve stops the issue's prototype server (nothing registered: no-op)
 PS=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'); mkdir -p "$T/ps-wt"
-WF_PROTO_CMD='python3 -m http.server "$PORT" --bind 127.0.0.1' bash "$DIR/proto-serve.sh" start 7 "$T/ps-wt" "$PS" >/dev/null 2>&1
+DUMMY_SERVER="$DIR/dummy-server.py" WF_PROTO_CMD='python3 "$DUMMY_SERVER" "$PORT"' bash "$DIR/proto-serve.sh" start 7 "$T/ps-wt" "$PS" >/dev/null 2>&1
 eq "prototype server is up before resolve" "$([ -n "$(lsof -nP -tiTCP:"$PS" -sTCP:LISTEN 2>/dev/null)" ] && echo up)" up
 : >"$T/posted"; bash "$D" resolve 7 "go" D3 >/dev/null 2>&1
 eq "resolve stops the issue's prototype server" "$(lsof -nP -tiTCP:"$PS" -sTCP:LISTEN 2>/dev/null)" ""
