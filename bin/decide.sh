@@ -20,8 +20,9 @@
 #                                  line per unanswered request (exit 2, nothing written, also when another request
 #                                  of the issue is answered), or, answered, what `resolve` prints per request, then
 #                                  `log: <path>` and the last 20 coordination-log entries (exit 0). Idempotent: a
-#                                  second run prints `none`, followed by the same log lines when the log holds a
-#                                  `resumed` entry. The answer is passed on in full (up to 20000 chars, one line)
+#                                  second run prints `none`, followed by the same log lines while `resumed` is
+#                                  the log's last entry. The answer is passed on as one line, up to 20000 chars
+#                                  (the log keeps 1000); a cut is marked
 #   decide.sh followup <n> <m> [D<k>]     note that change request on #n became issue #m
 #                                  (answer/resolve/followup act on the newest decision unless D<k> is given: pass the
 #                                  id `status` printed, an older decision can be the one that was answered or challenged)
@@ -207,9 +208,12 @@ case "$cmd" in
       req=$(comments "$1" | jq -r --arg re "<!-- decision-request D$id -->" '[.[].body | select(test($re))] | last // ""')
       spelled=$(reads_as "$req" "$2"); with=$2; [ -z "$spelled" ] || with="$spelled (answer: $2)"
       printf '<!-- decision-resolved D%s -->\nResumed (D%s)%s\n' "$id" "$id" "${spelled:+ with: $spelled}." >"$tmp"
+      # the log first: `resume` finds a taken answer there when a later step of this one, or the run after it, fails.
+      # One screen of it is enough for the log (every later reader gets the entry); stdout carries the whole text.
+      short=$with; [ "${#with}" -le 1000 ] || short="${with:0:1000} … (cut: the full answer is the comment on the issue)"
+      "$0" log "$1" "resumed D$id with: $short" || echo "decide.sh: coordination log not written" >&2
       post "$1" "$tmp"; gh issue edit "$1" --remove-label needs-decision >/dev/null
       echo "resumed D$id with: $with"
-      "$0" log "$1" "resumed D$id with: $with" || echo "decide.sh: coordination log not written" >&2
       "$DIR/proto-serve.sh" stop "$1" >&2 || echo "decide.sh: prototype server not stopped (proto-serve.sh list)" >&2 # the preview need not outlive the wait
     fi
     rm -f "$tmp"
@@ -228,14 +232,18 @@ case "$cmd" in
     fi
     done_rows=$(printf '%s\n' "$all" | awk -F'\037' '$3 == "answered" || ($3 == "request" && $7 != "")')
     f="$(log_dir)/$1.md"
-    log_tail() { echo "log: $f"; grep '^- ' "$f" | tail -n 20 || true; }
+    log_tail() {
+      [ -f "$f" ] || { echo "log: $f (no log on this machine)"; return 0; }
+      echo "log: $f"; grep '^- ' "$f" | tail -n 20 || true
+    }
     if [ -z "$done_rows" ]; then
       echo "none"
-      # an answer taken earlier (by a coordinator, or by a run that ended right after) is in the log: show where it stands
-      if [ -f "$f" ] && grep -q '^- [^ ]* resumed D' "$f"; then log_tail; fi
+      # an answer was taken and nothing was logged since (the run that took it ended there): show it, so it is not lost
+      if [ -f "$f" ] && grep '^- ' "$f" | tail -n 1 | grep -q '^- [^ ]* resumed D'; then log_tail; fi
       exit 0
     fi
     while IFS=$'\x1f' read -r n _url _kind id _q _secs ans _prev _choices; do
+      [ "${#ans}" -lt 20000 ] || ans="$ans … (cut: the full answer is the comment on the issue)"
       "$0" resolve "$n" "$ans" "$id" </dev/null
     done <<<"$done_rows"
     log_tail
@@ -320,5 +328,5 @@ case "$cmd" in
     echo "Answer on the issue or here (\"385: ok\" takes the recommendations, \"385: 1B 2A\" picks). All: $repo/issues?q=is:open+label:needs-decision"
     echo "FYI $reviews issue(s) with agent decisions to review: $repo/issues?q=label:agent-decided"
     ;;
-  *) sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
+  *) sed -n '2,51p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
 esac

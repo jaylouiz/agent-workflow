@@ -25,7 +25,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 ## 1. Load and route
 
 1. `gh issue view $issue --json number,title,body,labels,comments`; `gh label create needs-spec --force --description "Rough idea, spec not written yet"` and `gh label create ready --force --description "Spec confirmed, ready to build"`.
-2. **Resume**: `~/.claude/agent-workflow/bin/decide.sh resume $issue` (the rules: `~/.claude/agent-workflow/reference/decisions.md`, "Resume"). `none`: go on (with log lines under it, an answer was taken earlier: treat it as `resumed`). `waiting` (exit 2): tell the user which decision waits and stop, changing nothing. `resumed`, for the request Specify parked on its options comment: the answer is the choice of step 6.1; continue there, skipping the steps before it. Any other request: as the rules say.
+2. **Resume**: `~/.claude/agent-workflow/bin/decide.sh resume $issue` (the rules: `~/.claude/agent-workflow/reference/decisions.md`, "Resume"). `none`: go on (with a `resumed` log line under it, an answer was taken and nothing was logged since: the rules say when to continue as for `resumed`). `waiting` (exit 2): tell the user which decision waits and stop, changing nothing. `resumed`, for the request Specify parked on its options comment: the answer is the choice of step 6.1; continue there, skipping the steps before it. Any other request: as the rules say.
 3. If the issue names a design backlog entry, read it as the profile's "Sources" describes.
 4. Already `ready`: say so and ask whether to re-specify.
 5. Classify: **UI** (visible interface, copy, layout, interaction) or **non-UI** (tech-only per the issue standard when nothing user-visible changes).

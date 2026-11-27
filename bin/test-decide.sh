@@ -319,9 +319,18 @@ eq "resume prints only the last 20 log entries" "$(printf '%s\n' "$out" | grep -
 thread "$T/needs.json" 'req D1' 'Decision D1: B' 'res D1'; resume
 eq "resume after a resolve: none, nothing written (idempotent; under Orca the coordinator resolved first)" "$code/$(printf '%s\n' "$out" | sed -n 1p)/$(wrote)" "0/none/0/0"
 eq "none after an answer was taken still shows the log, so a run that died after the resolve is not lost" "$(printf '%s\n' "$out" | sed -n 2p)/$(printf '%s\n' "$out" | grep -c '^- .* resumed D1 with: Decision D1: B')" "log: $T/logs/acme/widgets/7.md/1"
+bash "$D" log 7 "build goes on at step 4"; resume
+eq "none shows no log once a later entry follows the resumed one (a later stage is not sent back)" "$code/$out" "0/none"
 long=$(python3 -c 'print("B, and then: " + "word " * 500 + "the end")')
 jq -n --arg t "$now" --arg a "$long" '[{number: 7, url: "u", comments: [{body: "<!-- decision-request D1 -->\nPick D1?", createdAt: $t}, {body: $a, createdAt: $t}]}]' >"$T/needs.json"; resume
 eq "resume passes a long answer on in full (status shows 1000 chars of it)" "$(printf '%s\n' "$out" | sed -n 1p | grep -c 'the end$')/$(bash "$D" status | sed -n 1p | grep -c 'the end$')" "1/0"
+eq "the log keeps one screen of a long answer and marks the cut" "$(tail -1 "$T/logs/acme/widgets/7.md" | grep -c ' … (cut: the full answer is the comment on the issue)$')/$(tail -1 "$T/logs/acme/widgets/7.md" | wc -c | awk '{print ($1 < 1200) ? "short" : "long"}')" "1/short"
+jq -n --arg t "$now" --arg a "$(python3 -c 'print("x" * 20500)')" '[{number: 7, url: "u", comments: [{body: "<!-- decision-request D1 -->\nPick D1?", createdAt: $t}, {body: $a, createdAt: $t}]}]' >"$T/needs.json"; resume
+eq "an answer over 20000 chars is marked as cut" "$(printf '%s\n' "$out" | sed -n 1p | grep -c 'x … (cut: the full answer is the comment on the issue)$')" 1
+rm -rf "$T/logs"; mkdir -p "$T/logs/acme"; : >"$T/logs/acme/widgets" # the log cannot be written: a file sits where its directory goes
+thread "$T/needs.json" 'req D1' 'Decision D1: B'; : >"$T/posted"; : >"$T/edits"; out=$(bash "$D" resume 7 2>"$T/err"); code=$?
+eq "resume without a writable log still resolves and says there is no log" "$code/$(printf '%s\n' "$out" | tr '\n' '|')/$(grep -c 'No such file\|Not a directory' "$T/err" | tr -d ' ')" "0/resumed D1 with: Decision D1: B|log: $T/logs/acme/widgets/7.md (no log on this machine)|/0"
+rm -rf "$T/logs"
 thread "$T/needs.json" 'req D1' 'ans D1'; resume
 eq "resume takes an answer the coordinator posted" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "0/resumed D1 with: B"
 thread "$T/needs.json" 'rec D1' 'Decision D1: change it'; resume
