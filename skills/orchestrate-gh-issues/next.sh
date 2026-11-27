@@ -69,6 +69,8 @@ if [ "$cmd" = queue ]; then
   while [ $# -gt 0 ] && [ "$1" != -- ]; do spec+=("$1"); shift; done
   [ "${1:-}" = -- ] && shift
   start=("$@")
+  # the default before any "${start[@]}": bash 3.2 (macOS) fails an empty array under set -u as unbound
+  [ ${#start[@]} -gt 0 ] || start=(--agent claude)
   [ ${#spec[@]} -ge 2 ] || die "queue: spec.sh args need <stage> <issue>"
   for ((i = 0; i < ${#spec[@]}; i++)); do # a missing notes file now, not a silently note-less spec at the later start
     [ "${spec[i]}" = --extra ] && [ ! -r "${spec[i+1]:-}" ] && die "queue: --extra file not readable: ${spec[i+1]:-}"
@@ -80,7 +82,6 @@ if [ "$cmd" = queue ]; then
         die "queue: a ${spec[0]} never runs with --worktree current (that is the main checkout): use --worktree new-top-level --name <branch>"
     done ;;
   esac
-  [ ${#start[@]} -gt 0 ] || start=(--agent claude)
   mkdir -p "$ledger"
   # One queue line: title TAB spec args TAB start args; the args of a field are joined by US (0x1f), so they keep spaces.
   US=$'\x1f'; join() { local IFS=$US; printf '%s' "$*"; }

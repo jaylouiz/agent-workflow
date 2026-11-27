@@ -170,7 +170,8 @@ out=$(NEXT watch --dispatch ctx_aaa111 --interval 0 2>&1); rc=$?
 check "watch: already settled reports at once" '[ $rc = 0 ] && [ "$out" = "changed: ctx_aaa111 completed" ]'
 # a change between polls: the stub flips the status after the first call
 echo dispatched >"$T/state/dispatch_status"
-( sleep 1; echo failed >"$T/state/dispatch_status" ) &
+# (a rename, not a rewrite in place: the poll at the same second must never read the file truncated and empty)
+( sleep 1; echo failed >"$T/state/dispatch_status.new"; mv "$T/state/dispatch_status.new" "$T/state/dispatch_status" ) &
 out=$(NEXT watch --dispatch ctx_aaa111 --interval 1 --max-secs 20 2>&1); rc=$?; wait
 check "watch: a status change exits 0" '[ $rc = 0 ] && [ "$out" = "changed: ctx_aaa111 failed" ]'
 NEXT watch >/dev/null 2>&1; rc=$?; check "watch without --dispatch exits 64" '[ $rc = 64 ]'

@@ -26,7 +26,9 @@ esac
 EOF2
 printf '#!/usr/bin/env bash\nexit 1\n' >"$T/bin/gh"
 chmod +x "$T/bin/orca" "$T/bin/gh"
-/usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 1.4.300" "$T/Info.plist" >/dev/null 2>&1
+python3 -I -c 'import plistlib, sys
+with open(sys.argv[1], "wb") as f:
+    plistlib.dump({"CFBundleShortVersionString": "1.4.300"}, f)' "$T/Info.plist"
 export PATH="$T/bin:$PATH" HOME="$T/home" ORCA_PLIST="$T/Info.plist" ORCA_SNAPSHOT_DIR="$T/snap" ORCA_UPDATES_DIR="$T/updates"
 unset STUB_BROKEN ORCA_TOUCHPOINT_DIRS
 fail=0; n=0
@@ -144,7 +146,7 @@ baseline; before=$(sum)
 mv "$T/bin/orca" "$T/bin/orca.real"
 printf '#!/usr/bin/env bash\n[ "$*" = "orchestration send --help" ] && [ -f "%s/flaky" ] && { echo oops; exit 1; }\nexec "%s" "$@"\n' "$T" "$T/bin/orca.real" >"$T/bin/orca"; chmod +x "$T/bin/orca"
 # first call (touchpoints) must see Usage, a later one must not: flip the flag once the list is built
-sed -i '' 's|^cmds=\$(bash "\$DIR/touchpoints.sh" commands) .*|&; touch "$ORCA_FLAKY"|' "$S/snapshot.sh"
+sed -i.bak 's|^cmds=\$(bash "\$DIR/touchpoints.sh" commands) .*|&; touch "$ORCA_FLAKY"|' "$S/snapshot.sh"; rm -f "$S/snapshot.sh.bak"
 ORCA_FLAKY="$T/flaky" bash "$S/snapshot.sh" >/dev/null 2>"$T/err"; rc=$?
 check "help loses its Usage line after listing: snapshot refuses, baseline untouched" '[ $rc != 0 ] && grep -q "no Usage line" "$T/err" && [ "$(sum)" = "$before" ]'
 mv "$T/bin/orca.real" "$T/bin/orca"
@@ -154,7 +156,7 @@ for mode in error nothing; do
   baseline; rm -f "$T/updates/h.md"; rm -f "$T/flaky"
   cp "$DIR/prepare.sh" "$S/prepare.sh"
   # the command list is built first (healthy), then the flag flips so the per-command --help below it fails
-  sed -i '' 's|^cmds=\$(bash "\$DIR/touchpoints.sh" commands) .*|&; touch "$ORCA_FLAKY"|' "$S/prepare.sh"
+  sed -i.bak 's|^cmds=\$(bash "\$DIR/touchpoints.sh" commands) .*|&; touch "$ORCA_FLAKY"|' "$S/prepare.sh"; rm -f "$S/prepare.sh.bak"
   mv "$T/bin/orca" "$T/bin/orca.real"
   case $mode in error) body='echo "Error: connection refused"; exit 1' ;; nothing) body='exit 0' ;; esac
   printf '#!/usr/bin/env bash\n[ "$*" = "orchestration send --help" ] && [ -f "%s/flaky" ] && { %s; }\nexec "%s" "$@"\n' "$T" "$body" "$T/bin/orca.real" >"$T/bin/orca"; chmod +x "$T/bin/orca"

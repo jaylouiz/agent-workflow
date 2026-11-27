@@ -4,9 +4,11 @@ ORCA_PLIST=${ORCA_PLIST:-/Applications/Orca.app/Contents/Info.plist}
 SNAP=${ORCA_SNAPSHOT_DIR:-$DIR/snapshot}
 UPDATES_DIR=${ORCA_UPDATES_DIR:-$HOME/.claude/orca-updates}
 
-installed_version() {
+installed_version() { # python3's plistlib (XML and binary plists), not the macOS-only PlistBuddy: the same path on Linux
   [ -f "$ORCA_PLIST" ] || return 0
-  /usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$ORCA_PLIST" 2>/dev/null
+  python3 -I -c 'import plistlib, sys
+with open(sys.argv[1], "rb") as f:
+    print(plistlib.load(f)["CFBundleShortVersionString"])' "$ORCA_PLIST" 2>/dev/null
 }
 reviewed_version() { cat "$SNAP/version" 2>/dev/null || echo none; }
 # version_gt a b: a > b (numeric dotted versions)

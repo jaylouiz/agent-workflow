@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Tests for proto-serve.sh (start, adopt, ensure after a kill, stop, prune, registry cleanup) with a dummy
-# http.server instead of npm and a stubbed `gh`. Run: bash skills/orchestrate-gh-issues/test-proto-serve.sh
+# server (dummy-server.py) instead of npm and a stubbed `gh`. Run: bash skills/orchestrate-gh-issues/test-proto-serve.sh
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(cd "$(mktemp -d)" && pwd -P)
 export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
-export WF_PROTO_DIR="$T/state" WF_PROTO_CMD='python3 -m http.server "$PORT" --bind 127.0.0.1' WF_PROTO_WAIT=10
+export DUMMY_SERVER="$DIR/dummy-server.py" # not `python3 -m http.server`: see the fixture's docstring
+export WF_PROTO_DIR="$T/state" WF_PROTO_CMD='python3 "$DUMMY_SERVER" "$PORT"' WF_PROTO_WAIT=10
 export PATH="$T/bin:$PATH" STUB="$T/stub"
 mkdir -p "$T/bin" "$STUB" "$T/wt-a" "$T/wt-b"
 cd "$T" || exit 1
@@ -66,7 +67,7 @@ eq "refusals register nothing" "$(count)" 1
 bash "$P" start 5 "$T/wt-b" "$A" >/dev/null 2>&1; eq "port in use by another worktree refused" $? 64
 
 # adopt: a server already running on the port is registered, not restarted
-(cd "$T/wt-b" && exec python3 -m http.server "$B" --bind 127.0.0.1 >/dev/null 2>&1) &
+(cd "$T/wt-b" && exec python3 "$DUMMY_SERVER" "$B" >/dev/null 2>&1) &
 disown $!
 for _ in $(seq 1 50); do [ -n "$(up "$B")" ] && break; sleep 0.1; done
 bash "$P" start 202 "$T/wt-b" "$B" >"$T/out" 2>&1; eq "adopt exits 0" $? 0
@@ -107,7 +108,7 @@ eq "dead on start: nothing registered" "$(count)" 0
 
 # a stranger on the port is neither adopted nor killed; a stale pid that is not ours is left alone
 F=$(free_port); PORTS="$PORTS $F"; mkdir -p "$T/elsewhere"
-(cd "$T/elsewhere" && exec python3 -m http.server "$F" --bind 127.0.0.1 >/dev/null 2>&1) &
+(cd "$T/elsewhere" && exec python3 "$DUMMY_SERVER" "$F" >/dev/null 2>&1) &
 disown $!; for _ in $(seq 1 50); do [ -n "$(up "$F")" ] && break; sleep 0.1; done
 bash "$P" start 801 "$T/wt-a" "$F" >"$T/out" 2>&1; eq "start refuses a port used by another program" $? 1
 eq "refused start registers nothing" "$(count)" 0
@@ -134,7 +135,7 @@ bash "$P" start 901 "$T/wt-a" "$X" >/dev/null 2>&1; eq "start fills in a reserve
 [ -n "$(up "$X")" ]; eq "start on a reserved port serves it" $? 0
 eq "start on a reserved port keeps one line for it" "$(grep -c "	$X	" "$REG")" 1
 bash "$P" stop 902 >/dev/null 2>&1; eq "stop releases a reservation" "$(grep -c "	$((X + 1))	" "$REG")" 0
-(cd "$T/wt-b" && exec python3 -m http.server "$((X + 1))" --bind 127.0.0.1 >/dev/null 2>&1) &
+(cd "$T/wt-b" && exec python3 "$DUMMY_SERVER" "$((X + 1))" >/dev/null 2>&1) &
 disown $!; for _ in $(seq 1 50); do [ -n "$(up "$((X + 1))")" ] && break; sleep 0.1; done
 eq "port: a port someone listens on is skipped" "$(bash "$P" port 903)" "$((X + 2))"
 kill "$(up "$((X + 1))")"; PORTS="$PORTS $X"
