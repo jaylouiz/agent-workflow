@@ -496,6 +496,23 @@ check "via link: --update exit 0, no loop" '[ $rc = 0 ] && ! grep -q "too many l
 eq "via link: --update left the link alone" "$(readlink "$LNK")" "$K"
 check "via link: the update pulled" '[ "$(head_of "$K")" = "$(head_of "$O")" ]'
 
+# links an earlier install wrote under a logical path (the checkout reached through a symlinked dir) are still ours
+new; echo '{}' >"$C/settings.json"; mkdir -p "$T/via$n"; LG="$T/via$n/aw"; ln -s "$ROOT" "$LG"
+runl() { CLAUDE_CONFIG_DIR=$C PATH=$P bash "$LG/install.sh" "$@" </dev/null >"$T/out" 2>&1; }
+older() { ln -sfn "$LG/global/CLAUDE.md" "$C/CLAUDE.md"; ln -sfn "$LG/skills/aw-build" "$C/skills/aw-build"; ln -sfn "$LG" "$C/agent-workflow"; } # as an older run wrote them
+runl --yes --global-rules
+check "logical: installed through the symlinked dir, CLAUDE.md is a link" '[ -L "$C/CLAUDE.md" ]'
+older; runl --yes --global-rules
+check "logical: rerun does not call our link foreign" '! grep -q "is a link elsewhere" "$T/out"'
+runl --yes --no-global-rules
+check "logical: --no-global-rules removes the logical link" '[ ! -L "$C/CLAUDE.md" ] && [ ! -e "$C/CLAUDE.md" ]'
+older; runl --uninstall
+check "logical: --uninstall leaves no CLAUDE.md link" '[ ! -L "$C/CLAUDE.md" ]'
+check "logical: --uninstall leaves no skill or checkout link" '[ ! -L "$C/skills/aw-build" ] && [ ! -L "$C/agent-workflow" ]'
+new; ln -s /etc/hosts "$C/CLAUDE.md"; run --yes --global-rules
+check "foreign link is still foreign" 'grep -q "is a link elsewhere" "$T/out"'
+run --yes --no-global-rules; check "foreign link is left by --no-global-rules" '[ "$(readlink "$C/CLAUDE.md")" = /etc/hosts ]'
+
 run --frob; eq "unknown flag: exit 2" "$?" 2
 
 echo "$((n - fail))/$n passed"

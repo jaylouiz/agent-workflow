@@ -131,6 +131,17 @@ external() { # external <name> <what for>: found / not found in the config dir's
 }
 
 # --- links ---
+phys_target() { # phys_target <link>: where the link points, fully resolved physically (cd -P; no realpath on macOS)
+  local t d n=0; t=$(readlink "$1" 2>/dev/null) || return 0
+  case "$t" in /*) ;; *) t="$(dirname "$1")/$t" ;; esac
+  while :; do
+    d=$(cd -P "$(dirname "$t")" 2>/dev/null && pwd -P) || break # a dangling target keeps its spelling
+    t="${d%/}/$(basename "$t")"
+    [ -L "$t" ] && [ $((n += 1)) -lt 20 ] || break # the last part may be a link itself (a checkout path through a symlink)
+    d=$(readlink "$t"); case "$d" in /*) t=$d ;; *) t="$(dirname "$t")/$d" ;; esac
+  done
+  printf '%s\n' "$t"
+}
 link() { # link <target> <path>: create or repoint a symlink
   local target=$1 path=$2
   if [ -L "$path" ]; then
@@ -142,7 +153,7 @@ link() { # link <target> <path>: create or repoint a symlink
   fi
 }
 unlink_ours() { # unlink_ours <path>: remove a symlink into this checkout
-  case "$(readlink "$1" 2>/dev/null)" in "$ROOT" | "$ROOT"/*) rm "$1"; changed "removed $1" ;; esac
+  case "$(phys_target "$1")" in "$ROOT" | "$ROOT"/*) rm "$1"; changed "removed $1" ;; esac
 }
 
 # --- recorded choices in the global settings file ---
@@ -208,7 +219,7 @@ remove_hook() {
 
 # --- global rules ---
 rules_state() { # link | import | off, from what is on disk
-  case "$(readlink "$CLAUDE_MD" 2>/dev/null)" in "$ROOT"/*) echo link; return ;; esac
+  case "$(phys_target "$CLAUDE_MD")" in "$ROOT"/*) echo link; return ;; esac
   if [ -f "$CLAUDE_MD" ] && grep -qxF "$IMPORT" "$CLAUDE_MD"; then echo import; else echo off; fi
 }
 backup_md() { cp "$CLAUDE_MD" "$CLAUDE_MD.bak.$(date +%Y%m%d-%H%M%S)"; }
@@ -475,13 +486,13 @@ done
 for dir in "$ROOT"/compat/*/; do
   [ -d "$dir" ] || continue
   dir=${dir%/}; path="$CLAUDE_DIR/skills/$(basename "$dir")"
-  case "$(readlink "$path" 2>/dev/null)" in "$ROOT"/skills/*) RENAMED=1 ;; esac # the old skill's link becomes the compat link
+  case "$(phys_target "$path")" in "$ROOT"/skills/*) RENAMED=1 ;; esac # the old skill's link becomes the compat link
   link "$dir" "$path"
 done
 # Drop links to skills that were removed or renamed here.
 for path in "$CLAUDE_DIR"/skills/*; do
   [ -L "$path" ] || continue
-  case "$(readlink "$path")" in "$ROOT"/skills/*)
+  case "$(phys_target "$path")" in "$ROOT"/skills/*)
     [ -e "$path" ] || { rm "$path"; changed "removed stale $path"; ! is_old_name "$(basename "$path")" || RENAMED=1; } ;;
   esac
 done
