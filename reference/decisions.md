@@ -27,6 +27,7 @@ Each stage skill starts with it, right after it loads the issue and before any o
 
 | Output | Exit | Meaning | Then |
 |---|---|---|---|
+| `held  #<n>: label on-hold` | 2 | the issue is on hold; nothing was changed, whatever its requests say | say that the issue is on hold and stop: no stage starts, no label or comment is written |
 | `none` | 0 | no open request (never parked, or already resolved: a coordinator resolves before it starts a fresh worker) | go on with the skill as usual. With `log:` and log entries under it, the log's last entry is a `resumed` one: an answer was taken and nothing was logged since. If it answers a request of this stage and its result is not there yet (no new round, no spec, no further commit), the run that took it ended early: continue as for `resumed`. Otherwise go on as usual |
 | `waiting  #<n> D<k> (<age>): <question>` | 2 | a request has no answer yet; nothing was changed | tell the user which decision waits and stop; change nothing on the issue |
 | `resumed D<k> with: <answer>`, then `log: <path>` and the last log entries | 0 | the answer was read, the request resolved ("Resumed" comment, `needs-decision` removed, a served prototype stopped) | continue from the parked step with that answer |
@@ -37,6 +38,10 @@ Each stage skill starts with it, right after it loads the issue and before any o
 - The parked step is in the log entries `resume` printed (`parked at <stage> step <k> …`, written before the request; the script's own `parked D<k>: <question>` only repeats the question); read the whole log (`log: <path>`) only when they do not name it. The log lives on the machine that parked (`no log on this machine`): without entries, the request, its overview comment and the lane tell where the issue stands. Then check what already exists (the branch and worktree, the round or options comment, an open PR) and skip it: resume, never duplicate.
 - A request belongs to the stage that parked it (the `parked at <stage>` entry names it; else the lane and the request's question do). When the running skill is another stage (Build started on an issue Specify parked), the answer is taken all the same: tell the user to run that stage's skill and give them the `resumed` line to pass on, then stop.
 - Running it again is safe: after an answer was taken, the next run prints `none`.
+
+## Hold
+
+The label `on-hold` (set by the user, on GitHub or on their board) stops an issue: no stage starts on it (`resume` prints `held`) and its pull request is not merged (`merge-pr.sh prep` refuses). It holds in every repo, also one that sets its own `WF_HOLD_LABELS`; the other labels of that list hold the merge only. A stage that already runs is not interrupted. An orchestrated worker says so in its `worker_done` (succeeded: nothing was started); the hold ends when the user removes the label.
 
 ## Without a coordinator
 

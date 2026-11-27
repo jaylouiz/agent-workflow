@@ -14,14 +14,16 @@ cd "$T/repo" || exit 1
 echo 'WF_HOLD_LABELS="on-hold-after-spec do-not-merge"' >.claude/issue-workflow.sh
 
 bash "$DIR/labels.sh"; eq "exit 0" "$?" 0
-eq "eleven labels" "$(grep -c '^label create' "$T/calls")" 11
-eq "every call forces" "$(grep -c -- '--force' "$T/calls")" 11
+eq "thirteen labels (on-hold is added to a config list that leaves it out)" "$(grep -c '^label create' "$T/calls")" 13
+eq "every call forces" "$(grep -c -- '--force' "$T/calls")" 13
 check "phase:build colour" 'grep -q "^label create phase:build --force --color 1D76DB" "$T/calls"'
 check "hold label from the config" 'grep -q "^label create do-not-merge " "$T/calls"'
+check "on-hold although the config's list leaves it out" 'grep -q "^label create on-hold --force --color B60205" "$T/calls"'
+check "the fog label" 'grep -q "^label create needs-direction --force --color D4C5F9 --description Direction open: the user sets it" "$T/calls"'
 rm -f "$T/calls"
 out=$(bash "$DIR/labels.sh" --dry-run)
 check "dry run calls nothing" '[ ! -f "$T/calls" ]'
-eq "dry run prints eleven commands" "$(printf '%s\n' "$out" | grep -c '^gh label create')" 11
+eq "dry run prints thirteen commands" "$(printf '%s\n' "$out" | grep -c '^gh label create')" 13
 printf '#!/bin/sh\nexit 1\n' >"$T/bin/gh"
 bash "$DIR/labels.sh" 2>"$T/err"; eq "gh failure: exit 1" "$?" 1
 check "gh failure names the label" 'grep -q "could not create needs-design" "$T/err"'

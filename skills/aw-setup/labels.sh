@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Create the agent-workflow labels in the current repo (gh label create --force: creates or updates name, colour and
 # description). The lane, phase and marker labels match what the skills create on first use; the hold labels come
-# from the repo's WF_HOLD_LABELS (.claude/issue-workflow.sh).
+# from the repo's WF_HOLD_LABELS (.claude/issue-workflow.sh; on-hold is always one of them).
 #
 #   labels.sh [--dry-run]    --dry-run prints the gh commands instead of running them
 set -uo pipefail
@@ -20,9 +20,13 @@ phase:build|1D76DB|Phase Build: specify, build or review running, or PR open
 ux-impact|C5DEF5|Changes what the user sees: Look after Done
 needs-decision|D93F0B|Parked: waits for a user decision
 agent-decided|FBCA04|Has agent decisions the user has not reviewed
-inbox|EDEDED|Unsorted out-of-scope finding, needs triage"
-for h in $WF_HOLD_LABELS; do LABELS="$LABELS
-$h|B60205|Hold: stops the pipeline (issue-workflow config)"; done
+inbox|EDEDED|Unsorted out-of-scope finding, needs triage
+needs-direction|D4C5F9|Direction open: the user sets it"
+for h in $WF_HOLD_LABELS; do
+  d="Hold: stops the pipeline (issue-workflow config)"; [ "$h" != "$WF_STOP_LABEL" ] || d="On hold: no stage starts, no merge; the user removes it"
+  LABELS="$LABELS
+$h|B60205|$d"
+done
 
 fail=0
 while IFS='|' read -r name color desc; do
