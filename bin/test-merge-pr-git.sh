@@ -42,7 +42,9 @@ cat >"$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
   "pr view 7 --json state,headRefName,baseRefName,labels,body")
-    printf '{"state":"OPEN","headRefName":"feat/7-x","baseRefName":"main","labels":[],"body":"Closes #70\\n## Review\\nroute: lead · effort: low · by: sonnet\\nlows: 0\\n"}' ;;
+    # $T/prlabels (a JSON array of {name}) and $T/prbody (the text above `## Review`) override the defaults
+    jq -nc --argjson l "$(cat "$T/prlabels" 2>/dev/null || echo '[]')" --arg b "$(cat "$T/prbody" 2>/dev/null || echo 'Closes #70')" \
+      '{state: "OPEN", headRefName: "feat/7-x", baseRefName: "main", labels: $l, body: ($b + "\n## Review\nroute: lead · effort: low · by: sonnet\nlows: 0\n")}' ;;
   "pr checks 7 --json name")
     if [ -f "$T/lenseq" ]; then l=$(head -1 "$T/lenseq"); tail -n +2 "$T/lenseq" >"$T/lenseq.t"; mv "$T/lenseq.t" "$T/lenseq"
     elif [ -f "$T/checks" ]; then l=$(jq length "$T/checks"); else exit 1; fi
@@ -55,7 +57,7 @@ case "$*" in
   "pr list --state all --head feat/7-x"*) [ ! -f "$T/ghfail" ] || exit 1; printf '[{"number":7,"state":"MERGED","headRefOid":"%s"}]' "$(cat "$OIDFILE")" ;;
   "pr list --state open --base"*) : ;;
   "pr view 7 --json body"*) printf 'Closes #70\n' ;;
-  "issue view 70 --json labels"*) : ;;
+  "issue view 70 --json labels"*) cat "$T/ilabels" 2>/dev/null || : ;;
   *) echo "gh stub: $*" >&2; exit 1 ;;
 esac
 EOF
@@ -189,6 +191,33 @@ eq "after warns when its cwd was removed, exit unchanged" "$rc:$(printf '%s' "$o
 # the sweep subcommand: dry run changes nothing
 eq "sweep rejects other flags" "$(bash "$DIR/merge-pr.sh" sweep --nope >/dev/null 2>&1; echo $?)" 64
 eq "sweep --dry-run via merge-pr.sh" "$(cd "$R/main" && bash "$DIR/merge-pr.sh" sweep --dry-run 2>&1 | grep -c 'dry run')" 1
+
+# holds (docs/contract.md): on-hold on the PR or on an issue it closes refuses the merge, with the default list and with
+# a config that sets its own list without it (a board client sets the label, the repo's config cannot drop it)
+prep() { (cd "$R/main" && bash "$DIR/merge-pr.sh" prep 7 2>&1); }
+held() { rm -f "$T/prlabels" "$T/ilabels" "$T/prbody"; "$@"; out=$(prep); rc=$?; rm -f "$T/prlabels" "$T/ilabels" "$T/prbody"; }
+held eval 'echo "[{\"name\":\"on-hold\"}]" >"$T/prlabels"'
+eq "prep refuses a PR labelled on-hold" "$rc:$(printf '%s' "$out" | grep -c '^hold: PR label on-hold$')" "1:1"
+held eval 'echo on-hold >"$T/ilabels"'
+eq "prep refuses when the closed issue is on-hold" "$rc:$(printf '%s' "$out" | grep -c '^hold: issue #70 label on-hold$')" "1:1"
+echo 'WF_HOLD_LABELS="do-not-merge"' >>"$R/main/.claude/issue-workflow.sh"
+held eval 'echo on-hold >"$T/ilabels"'
+eq "on-hold holds also when the config's own list leaves it out" "$rc:$(printf '%s' "$out" | grep -c '^hold: issue #70 label on-hold$')" "1:1"
+held eval 'echo do-not-merge >"$T/ilabels"'
+eq "the config's own hold label still holds" "$rc:$(printf '%s' "$out" | grep -c '^hold: issue #70 label do-not-merge$')" "1:1"
+held eval 'echo ready >"$T/ilabels"'
+eq "no hold label: prep goes past the refusals" "$(printf '%s' "$out" | grep -c 'NOT READY')" 0
+# a PR that closes no issue: `No-issue: <reason>` or a line-leading `Part of #<n>` opts out; anywhere else it does not
+body() { printf '%b' "$1" >"$T/prbody"; }
+noclose() { held body "$1"; printf '%s' "$out" | grep -c "no line-leading 'Closes"; }
+eq "no Closes line is refused" "$(noclose 'Just a change.\n')" 1
+eq "Part of #<n> at the start of a line is accepted" "$(noclose 'Summary.\nPart of #29\n')" 0
+eq "Part of owner/repo#<n> is accepted" "$(noclose 'Part of acme/widgets#29 (slice 2)\n')" 0
+eq "Part of in the middle of a line is refused" "$(noclose 'This is Part of #29.\n')" 1
+eq "an indented or quoted Part of is refused" "$(noclose '  Part of #29\n> Part of #29\n')" 1
+eq "Part of without an issue number is refused" "$(noclose 'Part of the epic\nPart of #x\n')" 1
+eq "No-issue: <reason> is accepted" "$(noclose 'No-issue: an own PR of the user\n')" 0
+eq "No-issue: without a reason is refused" "$(noclose 'No-issue: \n')" 1
 
 echo "merge-pr-git: $((n - fail))/$n passed"
 [ $fail = 0 ]

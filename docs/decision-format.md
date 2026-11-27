@@ -127,32 +127,20 @@ open; the prefix is not part of the answer. A design round's `R1:` reaction is r
 The resume text spells the choices out: `1 Shell: C (top stepper), note: but calmer · 2 Heading: A (hidden)`.
 A request without `<!-- choices -->` lines (posted before this format) is never parsed: its answer is free text.
 
-## Tandem
+## Board clients
 
-Tandem (the user's board) reads these comments with its own parser (`src/core/contract.ts`). What it depends on,
-and how the format keeps it:
-
-| Tandem reads | Kept by |
-|---|---|
-| markers `decision-request D<k>`, `-answer`, `-resolved`, `-record`, `-followup`, `-note round R<k>` / `options` / `look` | unchanged; the `choices` comments use another prefix |
-| request: the first visible line that is no `###` heading is the question | the question stays a plain line; the heading carries only the id |
-| request: `Preview:` line | unchanged |
-| request: every `-`, `*` or `1.` list line before the first `---` is an option tile; the text before `:` is what an answer names (`Decision D1: B`) | one question: one `- A: …` line per option. Several: the legend uses `+` bullets (no tiles) and the one tile is `- ok: …`. `decide.sh request` refuses list lines in the file's body |
-| request: the first line containing "recommend" is the recommendation; its first word marks the recommended tile | one `Recommendation:` line (`B (footer bar)`, or `ok (1B 2A)`); the answer template sits below the `---`, where Tandem stops reading |
-| round: `Variants:` keys are the things to pick, written back as `R1:` / `- pick: 1B, 2A` / `- reject: 1C` | `Variants:` lists the short forms; the answer reader takes picks and ignores rejects |
-| round: `### <key>: <name>` headings are also listed, the next line is the summary; images group by alt `R<k> · <key> · <desktop\|mobile>` | question headings `### 1. Shell: …` with a blank line under them; alt `R1 · 1. Shell · …` puts the image under its question |
-| request: the hidden `<!-- choices … -->` lines are its questions (one step each), answered in one comment | `decide.sh request` writes one per question line; a request without them is one question from its list lines |
-| round: the `### <n>. <label>: …` sections, their option tables and `★ Why` lines describe the questions; the image under a section is that question's screenshot | `decide.sh check` enforces the shape |
-| answers it writes, all starting `Decision D<k>: `: `ok` · `ok. 1A 3B` · `1B 2A` (a question without ★) · `1 Shell: C (top stepper) but calmer` with one line per further question (as soon as one carries a note) · `B` / `B. note` (one question) · a PR verdict or a challenge to an agent decision | the prefix names the decision (`scan`); `read` strips it and takes `ok`, the short form, the block or the letter, see above |
-| issue body: `^## UX decision` | unchanged |
-
-`test-decide.sh` pins these lines with a copy of Tandem's request rules (`tandem()`).
+A board client (Tandem is the reference client) reads these comments with its own parser and writes the user's replies.
+What it depends on, string by string, is the [board client contract](contract.md): markers, the request rules, round and
+look shapes, the replies it writes, labels, statuses, the coordination log, push and launch. `test-decide.sh` pins it with
+the golden fixtures in `docs/contract-fixtures/` and a reference reader (`bin/contract_reader.py`). The example under
+"Overview" above is the round fixture: changing it changes `round.md` there.
 
 ## Where it lives
 
 | File | What |
 |---|---|
 | `bin/decision_format.py` | builds the request, checks the overview, reads answers |
+| `docs/contract.md`, `docs/contract-fixtures/`, `bin/contract_reader.py` | what a board client reads and writes, the golden fixtures and the reference reader |
 | `bin/decide.sh` | `request` (builds from question lines), `check` (cap plus overview shape), `status` (`reads as`), `resolve` (resume text), `resume` (a stage's Resume step: `none`, `waiting` or the resume text), `digest` (answer hint) |
 | `reference/decisions.md` | one-way or two-way, how to write a request and a record, parking and the Resume step |
 | `skills/aw-coordinate/SKILL.md` section 5, `task-template.md` | the coordinator's sweep and digest, what to quote to the resumed worker |

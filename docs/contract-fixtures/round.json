@@ -1,0 +1,92 @@
+{
+  "marker": {
+    "kind": "note",
+    "id": null,
+    "note": "round",
+    "round": 1
+  },
+  "title": "Design round 1: Setup shell",
+  "preview": "https://preview.example/setup?variant=1A",
+  "variants": [
+    "1A",
+    "1B",
+    "1C",
+    "2A",
+    "2B"
+  ],
+  "questions": [
+    {
+      "n": 1,
+      "label": "Shell",
+      "about": "where back and next sit",
+      "options": [
+        {
+          "letter": "A",
+          "recommended": false,
+          "today": true,
+          "name": "Rail, back on top",
+          "short": "back above, one button below"
+        },
+        {
+          "letter": "B",
+          "recommended": true,
+          "today": false,
+          "name": "Rail, footer bar",
+          "short": "Zurück left, Weiter right"
+        },
+        {
+          "letter": "C",
+          "recommended": false,
+          "today": false,
+          "name": "Top stepper",
+          "short": "no rail, same form at every width"
+        }
+      ],
+      "why": "back and main action sit together, like in dialogs.",
+      "shots": [
+        0
+      ]
+    },
+    {
+      "n": 2,
+      "label": "Heading",
+      "about": "the step heading in the pane",
+      "options": [
+        {
+          "letter": "A",
+          "recommended": true,
+          "today": false,
+          "name": "Hidden",
+          "short": "the rail names the step"
+        },
+        {
+          "letter": "B",
+          "recommended": false,
+          "today": false,
+          "name": "Small, visible",
+          "short": "heading with the step's action"
+        }
+      ],
+      "why": "say it once.",
+      "shots": [
+        1
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "alt": "R1 · 1. Shell · A, B, C at 1280 and 390",
+      "src": "shell.png",
+      "variant": "1. Shell",
+      "viewport": null,
+      "state": null
+    },
+    {
+      "alt": "R1 · 2. Heading · A, B at 1280 and 390",
+      "src": "heading.png",
+      "variant": "2. Heading",
+      "viewport": null,
+      "state": null
+    }
+  ]
+}

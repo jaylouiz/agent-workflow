@@ -72,17 +72,7 @@ The model tiers are written by `install.sh`; a repo may override one in its `.cl
 
 "Design" always means UX design here. Tech design is part of Specify.
 
-**Lanes** are labels that say where an issue waits: `needs-design` → `needs-spec` → `ready`. Hold labels (e.g. `on-hold-after-spec`) stop the pipeline after a stage. A lane names the **next step**; the **phase** says whether work on it has started. Clients such as [Tandem](https://github.com/jaylouiz/tandem) group issues by phase, read in this order (first match wins):
-
-| Phase | Rule | Set by |
-|---|---|---|
-| Done | issue closed | the merge (`Closes #n`) |
-| Inbox | `inbox`, or open with no lane label (fog included) | filing, `/gh-inbox-dispatcher` |
-| UX Design | status In progress with the lane `needs-design`, else `phase:design` | `/aw-ui-design` at its start (it also sets the lane `needs-design`); at the handover the status goes back to Backlog and the label is removed |
-| Build | status In progress (any other lane) or In review, else `phase:build`, or an open PR with `Closes #n` | `/aw-specify` or `/aw-build` at its start (In progress), Build after `gh pr create` (In review); kept until close |
-| Backlog | a lane label, no started status and no `phase:*` | triage, the Design handover |
-
-The **status** is GitHub's native issue status (Backlog, Todo, In progress, In review, Done, …), written by `bin/issue-status.sh` next to the phase label, best effort: a repo without statuses, or a call that fails, leaves the label as the only signal, and a status of Backlog, Todo or none says nothing about the phase. Todo means "handed to an agent, not started yet" and is written by the client that hands over (Tandem), never here. `WF_PHASE_LABELS=off` stops the `phase:*` label writes once every client reads the status (the cut-over); the labels already on issues stay until then.
+**Lanes** are labels that say where an issue waits: `needs-design` → `needs-spec` → `ready`. Hold labels (e.g. `on-hold-after-spec`) stop the pipeline after a stage; `on-hold` stops every stage start and the merge. A lane names the **next step**; the **phase** says whether work on it has started. <a id="phases"></a>Clients such as [Tandem](https://github.com/jaylouiz/tandem) group issues by phase: the table of phases, and how GitHub's native issue status and the `phase:*` labels carry them, moved to the board client contract, [docs/contract.md "Phases and statuses"](docs/contract.md#phases).
 
 `ux-impact` marks an issue whose result the user should look at after Done (set in Design's handover and by Build for UI changes); its **Look comment** says where.
 
@@ -104,9 +94,9 @@ The **status** is GitHub's native issue status (Backlog, Todo, In progress, In r
 | Ledger | One line per friction, written the moment it happens (`aw-retro/ledger.sh`, global CLAUDE.md); outside the work tree, archived by the retro (`ledger.sh close`). |
 | Retro | `/aw-retro` at the end of a run or session: ledgers → causes → the cheapest fix, plus a convergence pass when the instructions grow. |
 | One-way / two-way decision | One-way: costly to undo or the user's call by definition (Design round, held merge, the profile's "Decisions" list); only these reach the user. Two-way: everything else; the agent decides, records it and continues. |
-| Coordination log | Per-issue Markdown file for agent-to-agent progress (stage starts, milestones, PR link, fix rounds, resume text): `decide.sh log`, at `~/.claude/issue-logs/<owner>/<repo>/<n>.md`, outside the work tree; deleted by `merge-pr.sh after`. The issue thread keeps only what the user reads. |
+| Coordination log | Per-issue Markdown file for agent-to-agent progress (stage starts, milestones, PR link, fix rounds, resume text): `decide.sh log`, at `~/.claude/issue-logs/<owner>/<repo>/<n>.md`, outside the work tree; deleted by `merge-pr.sh after`. The issue thread keeps only what the user reads. Path and line format: [docs/contract.md](docs/contract.md#coordination-log). |
 | Look comment | Build's marked comment (`<!-- decision-note look -->`) on a `ux-impact` issue: preview URL seeded to show the change, `Path:` for production, final screenshots, what to check. |
-| Comment markers | Every agent comment starts with `<!-- decision-<kind> … -->` so it never reads as the user's. A comment without a marker is the user's and belongs to the decision it names (a first line `Decision D<k>:`, which is what Tandem writes, or `D<k>:`, with a request or record `D<k>` earlier in the thread), else to the nearest earlier marked comment (a note included: a reply to a note belongs to no decision and is ignored, in Tandem and in `decide.sh` alike). Request and record footers tell the user to start a reply with `D<k>:` to reach an older decision. Decision kinds carry an id (`request D<k>`, `record`, `answer`, `resolved`, `followup`); note kinds are typed for clients: `note round R<k>` (design round; screenshot alt `R<k> · <variant> · <desktop\|mobile>`), `note options` (Specify approaches), `note look`, plain `note` (summary). |
+| <a id="comment-markers"></a>Comment markers | Every agent comment starts with `<!-- decision-<kind> … -->` so it never reads as the user's; a comment without a marker is the user's. The kinds, and which decision a reply belongs to, moved to the board client contract: [docs/contract.md "Comment markers"](docs/contract.md#comment-markers). |
 | Comment cap | Every agent comment stays scannable: at most 1500 visible characters, no line over 400; detail goes into `<details>` (`decide.sh check`, enforced by the guard hook). |
 | Decision request | A one-way question as a marked issue comment (`decide.sh request`) plus label `needs-decision`: numbered questions, lettered options (`★` = recommended), a link to the overview that explains them and a prefilled answer to copy. The user answers in a comment, any time: `ok`, the copied block, `1B 2A` or free text. Format: [docs/decision-format.md](docs/decision-format.md). |
 | Parked | An issue waiting on a decision request. Its worker has ended; a fresh one resumes after the answer. |

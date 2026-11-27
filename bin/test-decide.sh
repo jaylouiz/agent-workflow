@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Tests for decide.sh check, log, digest, reply attribution (status/digest) and the decision format (request, overview check, answers) (offline, gh stubbed). Run: bash bin/test-decide.sh
+# The golden fixtures of the board client contract (docs/contract-fixtures/, docs/contract.md) come from this suite:
+#   bash bin/test-decide.sh --write-fixtures    write them from the real writers (the default run fails when one differs)
 set -u
+WRITE=0; [ "${1:-}" != --write-fixtures ] || WRITE=1
+unset WF_REPO GH_REPO # a caller's repo pin must not reach the stubbed gh
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
@@ -164,25 +168,15 @@ printf 'Pick?\n- A: x\n- B: y\n' >"$T/q.md"
 eq "record footer names the prefix of its own id" "$(grep -c 'starting with `Decision D2:`' "$T/posted")" 1
 
 # ---- decision format (docs/decision-format.md) ----
-# request: built from the question lines. tandem() mirrors what Tandem reads from a request (tandem src/core/contract.ts
-# parseRequestBody, src/core/answer.ts optionKey, Feedback.tsx recommended): visible lines without `###` headings, cut at the
-# first `---`; question = first line, Preview: line, options = `-`/`*`/`1.` list lines, recommendation = first line with "recommend".
+# request: built from the question lines. tandem() prints what a board client reads from a request, through the reference
+# reader (contract_reader.py, the rules of docs/contract.md): visible lines without `###` headings, cut at the first `---`;
+# question = first line, Preview: line, options = `-`/`*`/`1.` list lines, recommendation = first line with "recommend".
 tandem() {
-  python3 -I -c '
-import re, sys
-b = open(sys.argv[1], encoding="utf-8").read()
-b = re.sub(r"(?is)<details>[\s\S]*?</details>", "", b); b = re.sub(r"<!--[\s\S]*?-->", "", b)
-lines = [l.rstrip() for l in b.split("\n") if not re.match(r"###\s", l)]
-if "---" in [l.strip() for l in lines]: lines = lines[:[l.strip() for l in lines].index("---")]
-own = [l for l in lines if l.strip()]
-preview = next((l[8:].strip() for l in own if l.startswith("Preview:")), "")
-content = [l for l in own if not l.startswith("Preview:")]
-item = r"^\s*(?:[-*]|\d+\.)\s+"
-options = [re.sub(item, "", l).strip() for l in content[1:] if re.match(item, l)]
-rec = next((re.sub(r"(?i)^\**recommend(?:ation|ed)?:?\**:?\s*", "", l).strip() for l in content if re.search(r"(?i)recommend", l)), "")
-keys = [o.split(":")[0].strip() for o in options]
-print("question=" + content[0]); print("preview=" + preview); print("keys=" + ",".join(keys)); print("options=" + " | ".join(options))
-print("recommended=" + ",".join(k for k in keys if rec and k.lower() == re.split(r"[\s(]", rec)[0].lower()))' "$1"
+  python3 -I "$DIR/contract_reader.py" "$1" | jq -r '
+    ([.options[] | split(":")[0] | gsub("^\\s+|\\s+$"; "")]) as $keys
+    | ((.recommendation // "") | (split(" ")[0] // "") | (split("(")[0] // "") | ascii_downcase) as $rec
+    | "question=\(.question)", "preview=\(.preview // "")", "keys=\($keys | join(","))", "options=\(.options | join(" | "))",
+      "recommended=\([$keys[] | select($rec != "" and ascii_downcase == $rec)] | join(","))"'
 }
 thread "$T/needs.json" 'plain comment'
 cat >"$T/multi.md" <<'REQ'
@@ -344,6 +338,109 @@ rm -rf "$T/logs"; thread "$T/needs.json" 'plain comment'; bash "$D" request 7 "$
 eq "request logs where the issue parked" "$(sed 's/^- [^ ]* //' "$T/logs/acme/widgets/7.md" | tail -1)" "parked D1: $(sed -n 1p "$T/single.md")"
 eq "the usage lists resume" "$(bash "$D" | grep -c 'decide.sh resume  <n>')" 1
 eq "the usage ends with the header's last line" "$(bash "$D" | tail -1 | cut -c1-28)" "GitHub's label filter lags a"
+
+# hold (docs/contract.md, reference/decisions.md "Hold"): an issue labelled on-hold starts no stage, whatever its requests say
+hold() { jq '.[0].labels = [{name: "needs-spec"}, {name: "on-hold"}]' "$T/needs.json" >"$T/n2" && mv "$T/n2" "$T/needs.json"; }
+rm -rf "$T/logs"; thread "$T/needs.json" 'plain comment'; hold; resume
+eq "resume on an on-hold issue: held, exit 2" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "2/held  #7: label on-hold"
+eq "held says how to go on" "$(printf '%s\n' "$out" | sed -n 2p)" "Remove the label to go on, then run the stage again. Nothing was changed."
+thread "$T/needs.json" 'req D1' 'Decision D1: B'; hold; resume
+eq "held wins over an answered request: nothing resolved, nothing written" "$code/$(printf '%s\n' "$out" | sed -n 1p)/$(wrote)/$(ls "$T/logs" 2>/dev/null | wc -l | tr -d ' ')" "2/held  #7: label on-hold/0/0/0"
+thread "$T/needs.json" 'req D1'; hold; resume
+eq "held wins over a waiting request" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "2/held  #7: label on-hold"
+thread "$T/needs.json" 'req D1' 'Decision D1: B'; jq '.[0].labels = [{name: "on-hold-after-spec"}, {name: "do-not-merge"}]' "$T/needs.json" >"$T/n2" && mv "$T/n2" "$T/needs.json"; resume
+eq "the merge-only hold labels do not stop a stage" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "0/resumed D1 with: Decision D1: B"
+eq "the usage lists held" "$(bash "$D" | grep -c 'held  #<n>: label on-hold')" 1
+
+# ---- golden fixtures of the board client contract (docs/contract.md, docs/contract-fixtures/) ----
+# Each <name>.md is a comment exactly as its writer posts it (decide.sh with the stubbed gh), or an exemplar in the documented
+# shape (round: the Overview example of docs/decision-format.md; look: the Build skill's template); <name>.json is what a
+# client reads from it (contract_reader.py). Regenerate with --write-fixtures; a client vendors the directory.
+ROOT=$(cd "$DIR/.." && pwd); FIX="$ROOT/docs/contract-fixtures"; G="$T/golden"; mkdir -p "$G"; rm -rf "$T/logs"
+posts() { name=$1; shift; : >"$T/posted"; "$@" >/dev/null 2>&1; cp "$T/posted" "$G/$name.md"; } # posts <name> <command...>
+writers=""; fixture() { writers="$writers$1"$'\t'"$2"$'\n'; } # fixture <name> <writer>
+cat >"$T/f-multi.md" <<'REQ'
+Setup shell: 2 choices
+Preview: https://preview.example/setup?variant=1A
+Overview: https://github.com/acme/widgets/issues/7#issuecomment-1
+1 Shell: A (back on top, today) · B ★ (footer bar) · C (top stepper)
+2 Heading: A ★ (hidden) · B (small, visible)
+REQ
+printf 'Hold the merge of the setup shell?\n1 Merge: A ★ (merge now) · B (hold, today)\n' >"$T/f-single.md"
+printf 'What should the export file be called?\nOpen question: a file name\n' >"$T/f-open.md"
+printf 'Storage for the export\nChosen: a file in the data folder\nAlternatives: a database table\nWhy: no migration\nCost to switch: low\n' >"$T/f-record.md"
+thread "$T/needs.json" 'plain comment'
+posts request-multi bash "$D" request 7 "$T/f-multi.md"; fixture request-multi "decide.sh request (several questions)"
+posts request-single bash "$D" request 7 "$T/f-single.md"; fixture request-single "decide.sh request (one question)"
+posts request-open bash "$D" request 7 "$T/f-open.md"; fixture request-open "decide.sh request (Open question)"
+posts record bash "$D" record 7 "$T/f-record.md"; fixture record "decide.sh record"
+jq -n --arg t "$now" --rawfile b "$G/request-multi.md" '[{number: 7, url: "u", comments: [{body: $b, createdAt: $t}]}]' >"$T/needs.json"
+posts answer bash "$D" answer 7 "1A 2B" D1; fixture answer "decide.sh answer"
+posts resolved bash "$D" resolve 7 "1A 2B" D1; fixture resolved "decide.sh resolve"
+thread "$T/needs.json" 'rec D1' 'Decision D1: change it'
+posts followup bash "$D" followup 7 9 D1; fixture followup "decide.sh followup"
+# the coordination log: two lines written by `decide.sh log`, with a fixed clock (a date stub for these two calls only)
+mkdir -p "$T/clock"; printf '#!/bin/sh\ncat "%s/clock/now"\n' "$T" >"$T/clock/date"; chmod +x "$T/clock/date"; rm -rf "$T/logs"
+echo 2026-01-05T09:30Z >"$T/clock/now"; PATH="$T/clock:$PATH" bash "$D" log 7 "Build started on feat/7-setup-shell"
+echo 2026-01-05T10:12Z >"$T/clock/now"; PATH="$T/clock:$PATH" bash "$D" log 7 "PR: https://github.com/acme/widgets/pull/8"
+cp "$T/logs/acme/widgets/7.md" "$G/coordination-log.md"; fixture coordination-log "decide.sh log"; rm -rf "$T/logs"
+# exemplars: the documented shapes an agent fills in
+awk '/^```markdown$/ {on = 1; next} on && /^```$/ {exit} on' "$ROOT/docs/decision-format.md" >"$G/round.md"; fixture round "the Overview example of docs/decision-format.md"
+eq "the round exemplar passes the overview check" "$(rc bash "$D" check "$G/round.md")" 0
+cp "$FIX/look.md" "$G/look.md" 2>/dev/null || : >"$G/look.md"; fixture look "the Look template of skills/aw-build/SKILL.md (kept by hand)"
+eq "the look exemplar passes the comment check" "$(rc bash "$D" check "$G/look.md")" 0
+# its lines start the way the template's lines do, in the template's order (the text before each <placeholder>)
+tpl=$(awk '/^   <!-- decision-note look -->$/ {on = 1} on && /^   ```$/ {exit} on' "$ROOT/skills/aw-build/SKILL.md" | sed 's/^   //; s/<[^!].*$//')
+follows() { # follows <file>; stdin: the template's line starts. Prints each line of <file> that starts otherwise
+  local i=0 want got
+  while IFS= read -r want; do
+    i=$((i + 1)); got=$(sed -n "${i}p" "$1")
+    case "$got" in "$want"*) ;; *) echo "line $i: want '$want…' got '$got'" ;; esac
+  done
+}
+eq "the look exemplar follows the Build skill's template" "$(printf '%s\n' "$tpl" | follows "$G/look.md")/$(printf '%s\n' "$tpl" | wc -l | tr -d ' ')" "/6"
+for f in "$G"/*.md; do python3 -I "$DIR/contract_reader.py" "$f" >"${f%.md}.json"; done
+# answers.json: the replies a client writes (picks and notes are what the user chose in the client; null = typed by hand),
+# and how decide.sh reads each one against its request (`reads_as` null = passed on as free text)
+: >"$T/answers.jsonl"
+ans() { # ans <form> <request fixture> <text> <picks json> <notes json> [<more fields json>]
+  local more=${6:-}; [ -n "$more" ] || more='{}'
+  jq -nc --arg f "$1" --arg r "$2" --arg t "$3" --argjson p "$4" --argjson n "$5" --argjson x "$more" \
+    --arg ra "$(python3 -I "$DIR/decision_format.py" read "$(cat "$G/$2.md")" "$3" 2>/dev/null)" \
+    '{form: $f, request: $r, text: $t, picks: $p, notes: $n, reads_as: (if $ra == "" then null else $ra end)} + $x' >>"$T/answers.jsonl"
+}
+ans ok request-multi 'Decision D1: ok' '{}' '{}'
+ans ok-with-changes request-multi 'Decision D1: ok. 1A' '{"1": "A"}' '{}'
+ans ok-with-changes request-multi 'Decision D1: ok. 1C 2B' '{"1": "C", "2": "B"}' '{}'
+ans lines request-multi $'Decision D1: 1 Shell: C (top stepper) but calmer\n2 Heading: A (hidden)' '{"1": "C"}' '{"1": "but calmer"}'
+ans letter request-single 'Decision D1: A' '{}' '{}'
+ans letter request-single 'Decision D1: B. wait for the review' '{"1": "B"}' '{"1": "wait for the review"}'
+ans typed request-multi 'ok' null null
+ans typed request-multi '1B 2A' null null
+ans typed request-multi $'Decision D1:\n1 Shell: B (footer bar)\n2 Heading: B (small, visible)' null null
+ans typed request-single 'B' null null
+ans free-text request-open 'Decision D1: export-2026.csv' null null
+ans verdict request-single 'Decision D1: Approve: merge' null null '{"verdict": "approve", "note": ""}'
+ans verdict request-single 'Decision D1: Hold' null null '{"verdict": "hold", "note": ""}'
+ans verdict request-single 'Decision D1: Send back. the header is cut off on a phone' null null '{"verdict": "send-back", "note": "the header is cut off on a phone"}'
+ans round-reaction request-multi $'R1:\n- pick: 1C, 2B\n- reject: 1A\n\ncalmer please' null null '{"round": 1, "round_picks": ["1C", "2B"], "round_rejects": ["1A"], "comment": "calmer please"}'
+jq -s '{contract: 1, answers: .}' "$T/answers.jsonl" >"$G/answers.json"
+eq "answers.json: every form a client builds from picks reads as choices" "$(jq -r '[.answers[] | select(.picks != null and .reads_as == null)] | length' "$G/answers.json")" 0
+eq "answers.json: a PR verdict is passed on as free text, never read as a letter" "$(jq -r '[.answers[] | select(.form == "verdict") | .reads_as] | unique | tojson' "$G/answers.json")" "[null]"
+eq "answers.json: a note and a changed pick are read" "$(jq -r '.answers[3].reads_as' "$G/answers.json")" "1 Shell: C (top stepper), note: but calmer · 2 Heading: A (hidden)"
+printf '%s' "$writers" | jq -Rn '{contract: 1, doc: "docs/contract.md", fixtures: [inputs | split("\t") | {name: .[0], body: "\(.[0]).md", expect: "\(.[0]).json", writer: .[1]}], answers: "answers.json"}' >"$G/manifest.json"
+eq "the manifest's contract version is the one in the title of docs/contract.md" "$(sed -n 1p "$ROOT/docs/contract.md")" "# Board client contract v$(jq -r .contract "$G/manifest.json")"
+# what the reference reader gets from the exemplars and the log (the request cases are pinned by tandem() above)
+eq "reader: the round's variants, questions and the shot under each" "$(jq -c '[.marker.round, .variants, [.questions[] | [.n, .label, ([.options[] | select(.recommended) | .letter] | join("")), .shots]]]' "$G/round.json")" '[1,["1A","1B","1C","2A","2B"],[[1,"Shell","B",[0]],[2,"Heading","A",[1]]]]'
+eq "reader: the look's fields" "$(jq -c '[.headline, .path, (.checks | length), [.screenshots[] | .viewport + "/" + .state]]' "$G/look.json")" '["the setup sheet keeps back and next in one footer bar","/setup?seed=demo",3,["desktop/step 2","mobile/step 2"]]'
+eq "reader: the log's lines" "$(jq -c '[.lines[] | .at]' "$G/coordination-log.json")" '["2026-01-05T09:30Z","2026-01-05T10:12Z"]'
+eq "reader: the answer without its prefix, a record's title" "$(jq -r .answer "$G/answer.json")/$(jq -r .title "$G/record.json")" "1A 2B/Storage for the export"
+if [ "$WRITE" = 1 ]; then
+  mkdir -p "$FIX"; cp "$G"/* "$FIX"/; echo "wrote $(ls "$G" | wc -l | tr -d ' ') files to docs/contract-fixtures/"
+fi
+drift=""; for f in "$G"/*; do cmp -s "$f" "$FIX/$(basename "$f")" || drift="$drift $(basename "$f")"; done
+for f in "$FIX"/*; do [ -e "$G/$(basename "$f")" ] || drift="$drift $(basename "$f")(not generated: delete it)"; done
+eq "docs/contract-fixtures/ is what the writers and the reader produce (bash bin/test-decide.sh --write-fixtures)" "$drift" ""
 
 # repo resolution: WF_REPO first, else the checkout's origin, else loud failure before anything is written
 rm -rf "$T/logs"; mkdir -p "$T/scratch"; : >"$T/posted"; : >"$T/gh-env"

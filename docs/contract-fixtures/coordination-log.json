@@ -1,0 +1,13 @@
+{
+  "marker": null,
+  "lines": [
+    {
+      "at": "2026-01-05T09:30Z",
+      "text": "Build started on feat/7-setup-shell"
+    },
+    {
+      "at": "2026-01-05T10:12Z",
+      "text": "PR: https://github.com/acme/widgets/pull/8"
+    }
+  ]
+}

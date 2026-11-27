@@ -8,7 +8,7 @@
 #                                  or options comment>`, then one line per question:
 #                                  `1 Shell: A (back on top, today) · B ★ (footer bar) · C (top stepper)`
 #                                  (1 to 3 keywords in brackets, ★ = recommended). The legend, the answer template
-#                                  and the lines Tandem reads are written from these. No options to pick from: a
+#                                  and the lines a board client reads (docs/contract.md) are written from these. No options to pick from: a
 #                                  line `Open question: <what kind of answer>` instead. Format: docs/decision-format.md
 #   decide.sh record  <n> <file>   post a decision the agent made (chosen, alternatives, why, cost to switch)
 #   decide.sh answer  <n> <text> [D<k>]   post an answer the user gave elsewhere (chat) as the issue's answer
@@ -16,7 +16,8 @@
 #                                  (proto-serve.sh stop; its message goes to stderr); prints `<text>` spelled out
 #                                  (`1 Shell: B (footer bar) · …`) when it reads as `ok`, the answer block or `1B 2A`
 #   decide.sh resume  <n>          a stage's Resume step (reference/decisions.md): reads the one issue and prints
-#                                  `none` (no open request; exit 0, nothing written), or a `waiting  #<n> D<k> …`
+#                                  `held  #<n>: label on-hold` (the issue is on hold: exit 2, nothing written, whatever
+#                                  its requests say), or `none` (no open request; exit 0, nothing written), or a `waiting  #<n> D<k> …`
 #                                  line per unanswered request (exit 2, nothing written, also when another request
 #                                  of the issue is answered), or, answered, what `resolve` prints per request, then
 #                                  `log: <path>` and the last 20 coordination-log entries (exit 0). Idempotent: a
@@ -140,7 +141,7 @@ scan() { # <label|""> <state>
   gh issue list "${f[@]}" --state "$2" --limit 100 --json number,url,comments | rows
 }
 # <issue>: the same rows for one issue, the answer in full (a stage acts on it; `status` and `digest` only show it)
-scan_one() { gh issue view "$1" --json number,url,comments | jq -s . | rows 20000; }
+scan_one() { printf '%s' "$2" | jq -s . | rows 20000; } # <issue> <its JSON: number, url, comments>
 rows() { # [<answer cap, chars>]; stdin: a JSON array of issues (number, url, comments)
   jq -r --argjson cap "${1:-1000}" '
     def owner($cs; $e):
@@ -221,7 +222,14 @@ case "$cmd" in
   resume)
     [ $# -eq 1 ] || die "usage: resume <issue>"
     case "$1" in *[!0-9]* | "") die "usage: resume <issue>" ;; esac
-    all=$(scan_one "$1")
+    issue=$(gh issue view "$1" --json number,url,comments,labels) # one read: the labels and the thread
+    # on hold (docs/contract.md, reference/decisions.md "Hold"): no stage starts, and an answer is not taken while it holds
+    if printf '%s' "$issue" | jq -e --arg l "$WF_STOP_LABEL" 'any(.labels[]?; .name == $l)' >/dev/null; then
+      echo "held  #$1: label $WF_STOP_LABEL"
+      echo "Remove the label to go on, then run the stage again. Nothing was changed."
+      exit 2
+    fi
+    all=$(scan_one "$1" "$issue")
     open=$(printf '%s\n' "$all" | awk -F'\037' '$3 == "request" && $7 == ""')
     if [ -n "$open" ]; then # a waiting request keeps the issue parked: resolving another one would drop its label
       while IFS=$'\x1f' read -r n url kind id q secs _ans _prev _choices; do
@@ -328,5 +336,5 @@ case "$cmd" in
     echo "Answer on the issue or here (\"385: ok\" takes the recommendations, \"385: 1B 2A\" picks). All: $repo/issues?q=is:open+label:needs-decision"
     echo "FYI $reviews issue(s) with agent decisions to review: $repo/issues?q=label:agent-decided"
     ;;
-  *) sed -n '2,51p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
+  *) sed -n '2,52p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
 esac

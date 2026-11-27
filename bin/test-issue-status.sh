@@ -60,6 +60,29 @@ check "design label colour" 'grep -q "^label create phase:design --force --color
 check "design sets In progress" 'grep -q "In progress" "$T/calls" && [ "$(calls setIssueStatus)" = 1 ]'
 check "design puts the issue in the lane needs-design (a redesign of a ready issue reads as UX Design, not Build)" 'grep -qx "issue edit 7 --add-label needs-design" "$T/calls"'
 
+reset; printf 'needs-spec\nneeds-direction\n' >"$T/labels"
+run phase 7 build >/dev/null
+check "a stage start removes the fog label (the issue has a lane now)" 'grep -qx "issue edit 7 --remove-label needs-direction" "$T/calls"'
+run phase 7 design >/dev/null
+check "design removes the fog label too" 'grep -qx "issue edit 7 --remove-label needs-direction" "$T/calls"'
+reset; printf 'needs-spec\n' >"$T/labels"
+run phase 7 build >/dev/null
+eq "no fog label: nothing removed" "$(calls "remove-label")" 0
+reset; printf 'needs-direction\n' >"$T/labels"; echo 'WF_PHASE_LABELS=off' >"$T/repo/.claude/issue-workflow.sh"
+run phase 7 build >/dev/null
+check "the fog label goes also with the phase labels off" 'grep -qx "issue edit 7 --remove-label needs-direction" "$T/calls"'
+
+# --- fog: the label the triage rule sets (docs/contract.md) ---
+reset
+eq "fog exits 0" "$(run fog 7)" 0
+check "fog creates the label with its description" 'grep -q "^label create needs-direction --force --color D4C5F9 --description Direction open: the user sets it" "$T/calls"'
+check "fog adds the label" 'grep -qx "issue edit 7 --add-label needs-direction" "$T/calls"'
+eq "fog writes no status and removes no lane" "$(calls "setIssueStatus\|remove-label")" 0
+reset; touch "$T/fail-edit"
+eq "fog with a failing write still exits 0" "$(run fog 7)" 0
+check "and says so" 'grep -q "label needs-direction not added" "$T/err"'
+eq "fog without a number is a usage error" "$(run fog)" 64
+
 reset
 eq "phase review exits 0" "$(run phase 7 review)" 0
 check "review sets In review" 'grep -q "In review" "$T/calls" && [ "$(calls setIssueStatus)" = 1 ]'

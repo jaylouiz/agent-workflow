@@ -7,8 +7,8 @@
 
 ## Labels
 
-- lanes: needs-design → needs-spec → ready; phase:design, phase:build; hold: on-hold-after-spec, do-not-merge
-- also used: inbox (out-of-scope finds, global CLAUDE.md), agent-decided, needs-decision, ux-impact (never set here: no UI)
+- lanes: needs-design → needs-spec → ready; phase:design, phase:build; hold: on-hold (no stage, no merge), on-hold-after-spec, do-not-merge
+- also used: needs-direction (fog), inbox (out-of-scope finds, global CLAUDE.md), agent-decided, needs-decision, ux-impact (never set here: no UI)
 
 ## Sources
 

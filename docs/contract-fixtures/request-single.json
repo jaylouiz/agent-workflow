@@ -1,0 +1,36 @@
+{
+  "marker": {
+    "kind": "request",
+    "id": "D1",
+    "note": null,
+    "round": null
+  },
+  "question": "Hold the merge of the setup shell?",
+  "preview": null,
+  "overview": null,
+  "options": [
+    "A: merge now ★",
+    "B: hold (today)"
+  ],
+  "recommendation": "A (merge now)",
+  "questions": [
+    {
+      "n": 1,
+      "label": "Merge",
+      "options": [
+        {
+          "letter": "A",
+          "recommended": true,
+          "today": false,
+          "name": "merge now"
+        },
+        {
+          "letter": "B",
+          "recommended": false,
+          "today": true,
+          "name": "hold"
+        }
+      ]
+    }
+  ]
+}

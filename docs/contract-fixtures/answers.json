@@ -1,0 +1,153 @@
+{
+  "contract": 1,
+  "answers": [
+    {
+      "form": "ok",
+      "request": "request-multi",
+      "text": "Decision D1: ok",
+      "picks": {},
+      "notes": {},
+      "reads_as": "1 Shell: B (footer bar) · 2 Heading: A (hidden)"
+    },
+    {
+      "form": "ok-with-changes",
+      "request": "request-multi",
+      "text": "Decision D1: ok. 1A",
+      "picks": {
+        "1": "A"
+      },
+      "notes": {},
+      "reads_as": "1 Shell: A (back on top, today) · 2 Heading: A (hidden)"
+    },
+    {
+      "form": "ok-with-changes",
+      "request": "request-multi",
+      "text": "Decision D1: ok. 1C 2B",
+      "picks": {
+        "1": "C",
+        "2": "B"
+      },
+      "notes": {},
+      "reads_as": "1 Shell: C (top stepper) · 2 Heading: B (small, visible)"
+    },
+    {
+      "form": "lines",
+      "request": "request-multi",
+      "text": "Decision D1: 1 Shell: C (top stepper) but calmer\n2 Heading: A (hidden)",
+      "picks": {
+        "1": "C"
+      },
+      "notes": {
+        "1": "but calmer"
+      },
+      "reads_as": "1 Shell: C (top stepper), note: but calmer · 2 Heading: A (hidden)"
+    },
+    {
+      "form": "letter",
+      "request": "request-single",
+      "text": "Decision D1: A",
+      "picks": {},
+      "notes": {},
+      "reads_as": "1 Merge: A (merge now)"
+    },
+    {
+      "form": "letter",
+      "request": "request-single",
+      "text": "Decision D1: B. wait for the review",
+      "picks": {
+        "1": "B"
+      },
+      "notes": {
+        "1": "wait for the review"
+      },
+      "reads_as": "1 Merge: B (hold, today)"
+    },
+    {
+      "form": "typed",
+      "request": "request-multi",
+      "text": "ok",
+      "picks": null,
+      "notes": null,
+      "reads_as": "1 Shell: B (footer bar) · 2 Heading: A (hidden)"
+    },
+    {
+      "form": "typed",
+      "request": "request-multi",
+      "text": "1B 2A",
+      "picks": null,
+      "notes": null,
+      "reads_as": "1 Shell: B (footer bar) · 2 Heading: A (hidden)"
+    },
+    {
+      "form": "typed",
+      "request": "request-multi",
+      "text": "Decision D1:\n1 Shell: B (footer bar)\n2 Heading: B (small, visible)",
+      "picks": null,
+      "notes": null,
+      "reads_as": "1 Shell: B (footer bar) · 2 Heading: B (small, visible)"
+    },
+    {
+      "form": "typed",
+      "request": "request-single",
+      "text": "B",
+      "picks": null,
+      "notes": null,
+      "reads_as": "1 Merge: B (hold, today)"
+    },
+    {
+      "form": "free-text",
+      "request": "request-open",
+      "text": "Decision D1: export-2026.csv",
+      "picks": null,
+      "notes": null,
+      "reads_as": null
+    },
+    {
+      "form": "verdict",
+      "request": "request-single",
+      "text": "Decision D1: Approve: merge",
+      "picks": null,
+      "notes": null,
+      "reads_as": null,
+      "verdict": "approve",
+      "note": ""
+    },
+    {
+      "form": "verdict",
+      "request": "request-single",
+      "text": "Decision D1: Hold",
+      "picks": null,
+      "notes": null,
+      "reads_as": null,
+      "verdict": "hold",
+      "note": ""
+    },
+    {
+      "form": "verdict",
+      "request": "request-single",
+      "text": "Decision D1: Send back. the header is cut off on a phone",
+      "picks": null,
+      "notes": null,
+      "reads_as": null,
+      "verdict": "send-back",
+      "note": "the header is cut off on a phone"
+    },
+    {
+      "form": "round-reaction",
+      "request": "request-multi",
+      "text": "R1:\n- pick: 1C, 2B\n- reject: 1A\n\ncalmer please",
+      "picks": null,
+      "notes": null,
+      "reads_as": "1 Shell: C (top stepper) · 2 Heading: B (small, visible)",
+      "round": 1,
+      "round_picks": [
+        "1C",
+        "2B"
+      ],
+      "round_rejects": [
+        "1A"
+      ],
+      "comment": "calmer please"
+    }
+  ]
+}

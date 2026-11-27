@@ -25,12 +25,12 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 ## 1. Load and route
 
 1. `gh issue view $issue --json number,title,body,labels,comments`; `gh label create needs-spec --force --description "Rough idea, spec not written yet"` and `gh label create ready --force --description "Spec confirmed, ready to build"`.
-2. **Resume**: `~/.claude/agent-workflow/bin/decide.sh resume $issue` (the rules: `~/.claude/agent-workflow/reference/decisions.md`, "Resume"). `none`: go on (with a `resumed` log line under it, an answer was taken and nothing was logged since: the rules say when to continue as for `resumed`). `waiting` (exit 2): tell the user which decision waits and stop, changing nothing. `resumed`, for the request Specify parked on its options comment: the answer is the choice of step 6.1; continue there, skipping the steps before it. Any other request: as the rules say.
+2. **Resume**: `~/.claude/agent-workflow/bin/decide.sh resume $issue` (the rules: `~/.claude/agent-workflow/reference/decisions.md`, "Resume"). `none`: go on (with a `resumed` log line under it, an answer was taken and nothing was logged since: the rules say when to continue as for `resumed`). `held` (exit 2): the issue is on hold, say so and stop. `waiting` (exit 2): tell the user which decision waits and stop, changing nothing. `resumed`, for the request Specify parked on its options comment: the answer is the choice of step 6.1; continue there, skipping the steps before it. Any other request: as the rules say.
 3. If the issue names a design backlog entry, read it as the profile's "Sources" describes.
 4. Already `ready`: say so and ask whether to re-specify.
 5. Classify: **UI** (visible interface, copy, layout, interaction) or **non-UI** (tech-only per the issue standard when nothing user-visible changes).
 6. **Route by the triage rule** (rarely triggers):
-   - **Fog**: comment what is unclear, keep `needs-spec`, ask the user to set the direction; stop.
+   - **Fog**: comment what is unclear, keep `needs-spec`, set `needs-direction` (`~/.claude/agent-workflow/bin/issue-status.sh fog $issue`), ask the user to set the direction; stop.
    - **Open direction** (UI without a `## UX decision`): relabel `needs-design` with a one-line comment and suggest `/aw-ui-design $issue`. Stop.
    - Otherwise continue, in Phase Build: `~/.claude/agent-workflow/bin/issue-status.sh phase $issue build` (sets GitHub's issue status In progress and the label `phase:build`). A `## UX decision` in the body is **input**: do not reopen its choices; a real conflict with code or invariants goes to the user as a question. The same holds for Design's stories and UACs.
    - **Issue standard**: no `## Problem`, `Job:` or `## Solution` in the body yet: infer them per the issue rules ("Infer, then record") before anything else; the request's own idea goes to Solution, never into Problem. If not even the problem can be named from context, it is fog (above).

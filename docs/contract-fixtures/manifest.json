@@ -1,0 +1,67 @@
+{
+  "contract": 1,
+  "doc": "docs/contract.md",
+  "fixtures": [
+    {
+      "name": "request-multi",
+      "body": "request-multi.md",
+      "expect": "request-multi.json",
+      "writer": "decide.sh request (several questions)"
+    },
+    {
+      "name": "request-single",
+      "body": "request-single.md",
+      "expect": "request-single.json",
+      "writer": "decide.sh request (one question)"
+    },
+    {
+      "name": "request-open",
+      "body": "request-open.md",
+      "expect": "request-open.json",
+      "writer": "decide.sh request (Open question)"
+    },
+    {
+      "name": "record",
+      "body": "record.md",
+      "expect": "record.json",
+      "writer": "decide.sh record"
+    },
+    {
+      "name": "answer",
+      "body": "answer.md",
+      "expect": "answer.json",
+      "writer": "decide.sh answer"
+    },
+    {
+      "name": "resolved",
+      "body": "resolved.md",
+      "expect": "resolved.json",
+      "writer": "decide.sh resolve"
+    },
+    {
+      "name": "followup",
+      "body": "followup.md",
+      "expect": "followup.json",
+      "writer": "decide.sh followup"
+    },
+    {
+      "name": "coordination-log",
+      "body": "coordination-log.md",
+      "expect": "coordination-log.json",
+      "writer": "decide.sh log"
+    },
+    {
+      "name": "round",
+      "body": "round.md",
+      "expect": "round.json",
+      "writer": "the Overview example of docs/decision-format.md"
+    },
+    {
+      "name": "look",
+      "body": "look.md",
+      "expect": "look.json",
+      "writer": "the Look template of skills/aw-build/SKILL.md (kept by hand)"
+    }
+  ],
+  "answers": "answers.json"
+}

@@ -1,0 +1,32 @@
+{
+  "marker": {
+    "kind": "note",
+    "id": null,
+    "note": "look",
+    "round": null
+  },
+  "headline": "the setup sheet keeps back and next in one footer bar",
+  "preview": "https://preview.example/setup?seed=demo",
+  "path": "/setup?seed=demo",
+  "checks": [
+    "Back sits left and Next right, at every step",
+    "The rail names the step; the pane has no heading of its own",
+    "On a phone the footer bar stays above the keyboard"
+  ],
+  "screenshots": [
+    {
+      "alt": "look · desktop · step 2",
+      "src": "https://preview.example/shots/look-desktop.png",
+      "variant": null,
+      "viewport": "desktop",
+      "state": "step 2"
+    },
+    {
+      "alt": "look · mobile · step 2",
+      "src": "https://preview.example/shots/look-mobile.png",
+      "variant": null,
+      "viewport": "mobile",
+      "state": "step 2"
+    }
+  ]
+}

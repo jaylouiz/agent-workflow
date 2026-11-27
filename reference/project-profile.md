@@ -18,7 +18,7 @@
 ## Labels
 
 - lanes: needs-design → needs-spec → ready
-- hold: <e.g. on-hold-after-spec = stop after Specify>
+- hold: <e.g. on-hold-after-spec = stop after Specify>; `on-hold` always stops every stage start and the merge
 - context labels triage may add: <e.g. new-feature, polish, a11y>
 
 ## Sources
