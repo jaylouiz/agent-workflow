@@ -25,7 +25,7 @@ An issue body has two main parts: **`## Problem`** (why: stays solution-free) an
 Applied by `/gh-inbox-dispatcher`, orchestrator screening, each skill's guard, or the user.
 
 - **Before routing an `inbox` finding**: check its premise with one `rg` (the entry point, the claimed behaviour); a wrong premise is closed, not laned (#345 built a fix for a surface a phone cannot open).
-- **Fog** (the problem or outcome is unclear even with full context, many directions, more than one session): no lane. Comment and tell the user to run `/wayfinder <n>`. Agents never start it.
+- **Fog** (the problem or outcome is unclear even with full context, many directions, more than one session): no lane. Comment what is unclear (the open questions about problem, outcome or direction) and ask the user to set the direction. How they chart it (on their own, in a conversation, or with a tool of their choice) is their call; agents never decide the direction themselves.
 - **`needs-design`** (open direction): the how for the user is unclear and getting it wrong is expensive: a new surface, a new interaction, a changed flow, several plausible layouts. Pure visual polish is not Design; it is a look choice inside Build.
 - **`needs-spec`** (open build or incomplete issue): UX is clear (or the issue is not UI), but the build has open tech choices, touches the profile's risk areas, or the issue standard is not complete yet (Specify's Complete track fills it).
 - **`ready`**: the outcome is clear, the build is a standard pattern, and the body already meets the issue standard. Triage never writes it into shape. Build stops and asks when something important turns out unclear.

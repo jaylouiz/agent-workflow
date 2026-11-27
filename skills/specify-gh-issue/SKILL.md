@@ -29,7 +29,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 3. Already `ready`: say so and ask whether to re-specify.
 4. Classify: **UI** (visible interface, copy, layout, interaction) or **non-UI** (tech-only per the issue standard when nothing user-visible changes).
 5. **Route by the triage rule** (rarely triggers):
-   - **Fog**: comment why, keep `needs-spec`, point the user to `/wayfinder $issue`; stop.
+   - **Fog**: comment what is unclear, keep `needs-spec`, ask the user to set the direction; stop.
    - **Open direction** (UI without a `## UX decision`): relabel `needs-design` with a one-line comment and suggest `/design-gh-issue $issue`. Stop.
    - Otherwise continue, in Phase Build: `~/.claude/skills/orchestrate-gh-issues/issue-status.sh phase $issue build` (sets GitHub's issue status In progress and the label `phase:build`). A `## UX decision` in the body is **input**: do not reopen its choices; a real conflict with code or invariants goes to the user as a question. The same holds for Design's stories and UACs.
    - **Issue standard**: no `## Problem`, `Job:` or `## Solution` in the body yet: infer them per the issue rules ("Infer, then record") before anything else; the request's own idea goes to Solution, never into Problem. If not even the problem can be named from context, it is fog (above).

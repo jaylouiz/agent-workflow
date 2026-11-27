@@ -24,7 +24,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 ## 1. Load and guard
 
 1. `gh issue view $issue --json number,title,body,labels,comments`. Read the profile, then the product and design-system docs its "Sources" names.
-2. **Fog** (triage rule): comment why, keep the label, point the user to `/wayfinder $issue`; stop.
+2. **Fog** (triage rule): comment what is unclear, keep the label, ask the user to set the direction; stop.
 3. Already `needs-spec` or `ready`, or a `## UX decision` exists: ask whether to redesign before continuing.
 4. Not actually an open direction (one obvious layout, or pure look polish): say so, relabel per the triage rule (`needs-spec` or `ready`) with a one-line comment, stop. Look-only questions belong to the profile's "element look" tool in Build.
 5. **Issue standard**: no `## Problem`, `Job:` or `## Solution` in the body yet: infer them per the issue rules ("Infer, then record") and write them in before the brief; the request's own idea goes to Solution, never into Problem.

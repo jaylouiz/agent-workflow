@@ -18,14 +18,14 @@ cd <your repo> && claude             # then: /init-issue-workflow
 
 - [Claude Code](https://claude.com/claude-code), [`gh`](https://cli.github.com) logged in, `git`, `bash` (3.2 is enough), `jq`, `python3`. macOS is the tested platform. `install.sh --check` checks them and changes nothing.
 - [Orca](https://github.com/stablyai/orca) and its `orca` CLI for `/orchestrate-gh-issues` (workers, messages). The single-issue skills (`/design-gh-issue`, `/specify-gh-issue`, `/build-gh-issue`) run without it.
-- Skills and plugins the skills call but this repo does not ship: `/code-review` (Claude Code), and optionally `/wayfinder`, `/gh-inbox-dispatcher`, `/ui-canvas`, `harvesting-session-knowledge` and the Impeccable plugin. A step whose tool is missing is skipped or reported, not guessed.
+- Skills and plugins the skills call but this repo does not ship: `/code-review` (Claude Code), and optionally `/gh-inbox-dispatcher`, `/ui-canvas`, `harvesting-session-knowledge` and the Impeccable plugin. A step whose tool is missing is skipped or reported, not guessed.
 
 ## Install
 
 `install.sh` links every `skills/*` into `~/.claude/skills/` (or `$CLAUDE_CONFIG_DIR/skills/`) and this checkout to `~/.claude/agent-workflow` (the skills read `reference/` through it). In a terminal it asks two things and records the answers in `~/.claude/agent-workflow-settings.sh`:
 
 - **Models**: one per tier, default / strong / fast / heavy (what each runs: [Settings](#settings)), each a Claude Code alias or a full model ID; Enter keeps the value shown (the one you set before, else the shipped `sonnet` / `opus` / `haiku` / `claude-fable-5-2`). No Fable access: answer `opus` for heavy. Without prompts: `--models balanced` (the shipped values), `quality` (opus / opus / sonnet / claude-fable-5-2) or `budget` (sonnet / sonnet / haiku / opus), and `--model-default|strong|fast|heavy <id>` per tier over the preset.
-- **Global rules**: the author's [global/CLAUDE.md](global/CLAUDE.md) (inbox issues for side findings, `/wayfinder` for vague goals, the friction ledger and retro, screening several issues first, committing without asking). Off by default. On: linked as `~/.claude/CLAUDE.md`, or, when you have your own, one import line `@~/.claude/agent-workflow/global/CLAUDE.md` appended to it (a timestamped backup is kept).
+- **Global rules**: the author's [global/CLAUDE.md](global/CLAUDE.md) (inbox issues for side findings, the user's direction first for vague goals, the friction ledger and retro, screening several issues first, committing without asking). Off by default. On: linked as `~/.claude/CLAUDE.md`, or, when you have your own, one import line `@~/.claude/agent-workflow/global/CLAUDE.md` appended to it (a timestamped backup is kept).
 
 Rerun it after `git pull` or after adding, renaming or removing a skill: without a terminal (or with `--yes`) it keeps every recorded choice. It never overwrites a real file where a link belongs. A rerun never changes a tier you set unless you answer or flag a new value. Flags: `--yes`, `--models <preset>`, `--model-<tier> <id>`, `--global-rules` / `--no-global-rules`, `--check`, `--uninstall` (removes the links and the global rules, keeps the settings file). Edit skills in this repo only.
 
@@ -63,7 +63,7 @@ The model tiers are written by `install.sh`; a repo may override one in its `.cl
 
 | Stage | Track | Question | Skill | Output |
 |---|---|---|---|---|
-| Chart | Discovery | Which problem, which outcome? Too big for one session. | `/wayfinder` (user-run only) | map of decision tickets |
+| Chart | Discovery | Which problem, which outcome? Too big for one session. | the user, by any method (no skill here) | a direction the stages can take |
 | Design | Discovery | How should it look and behave for the user? | `/design-gh-issue` | UX decision, user stories, UACs |
 | Specify | Delivery | How do we build it, how do we know it is done? | `/specify-gh-issue` | Spec (approach, technical ACs, verification) |
 | Build | Delivery | | `/build-gh-issue` | PR |
@@ -120,7 +120,7 @@ What an issue holds at each stage (`## Problem` solution-free, `## Solution` sha
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/lanes-dark.png">
-  <img src="docs/diagrams/lanes.png" width="960" alt="Issue lanes: triage routes an issue to needs-design (open UX), needs-spec (open build) or ready (issue standard met). /design-gh-issue leads to needs-spec, or to ready when the standard is met; /specify-gh-issue leads to ready; /build-gh-issue opens a PR, which is reviewed and merged. Fog at any point gets no lane: the user charts it with /wayfinder.">
+  <img src="docs/diagrams/lanes.png" width="960" alt="Issue lanes: triage routes an issue to needs-design (open UX), needs-spec (open build) or ready (issue standard met). /design-gh-issue leads to needs-spec, or to ready when the standard is met; /specify-gh-issue leads to ready; /build-gh-issue opens a PR, which is reviewed and merged. Fog at any point gets no lane: the user sets the direction.">
 </picture>
 
 <picture>

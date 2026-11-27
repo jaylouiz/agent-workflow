@@ -12,9 +12,9 @@ Worthwhile things noticed outside the current task (bugs, design debt, refactors
 - Inbox issues are never picked up by `/orchestrate-gh-issues`, `/design-gh-issue`, `/specify-gh-issue` or `/build-gh-issue` until relabelled by the user or by `/gh-inbox-dispatcher` (which the user invokes or allows). Mention the filed issues in one line in the final report.
 - Formal audit deliverables that a project already stores in docs (e.g. `docs/design/backlog.md`) stay there; `inbox` is for side-findings outside the task.
 
-## Unspecific, large goals -> `/wayfinder` (only when needed)
+## Unspecific, large goals -> the user's direction first (only when needed)
 
-If an issue or idea has a vague destination, many possible directions, and is too big for one session, recommend `/wayfinder` to chart it as decision tickets first. Otherwise (the normal case) use the project's lanes (Design, Specify, Build; `~/.claude/agent-workflow/README.md`). `/wayfinder` is user-invoked and human-in-the-loop: agents and unattended workers never start it; they stop and hand the issue back to the user.
+If an issue or idea has a vague destination, many possible directions, and is too big for one session, say what is unclear and ask the user to set the direction first, on their own or with a tool they choose. Otherwise (the normal case) use the project's lanes (Design, Specify, Build; `~/.claude/agent-workflow/README.md`). Agents and unattended workers never decide the direction themselves: they stop and hand the issue back to the user.
 
 ## Self-improvement: friction ledger and retro (standing practice)
 

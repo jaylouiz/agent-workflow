@@ -174,7 +174,7 @@ def lanes(c):
     a.append(oval(c, 852, 308, 84, 48, "Merge", end=True))
     # fog callout (top-right margin)
     a.append(f'        <text x="936" y="84" fill="{c["ink"]}" font-size="15" font-style="italic" font-family="{SERIF}" text-anchor="end">Fog at any point: no lane.</text>')
-    a.append(f'        <text x="936" y="104" fill="{c["ink"]}" font-size="15" font-style="italic" font-family="{SERIF}" text-anchor="end">The user charts it with /wayfinder.</text>')
+    a.append(f'        <text x="936" y="104" fill="{c["ink"]}" font-size="15" font-style="italic" font-family="{SERIF}" text-anchor="end">The user sets the direction.</text>')
     # legend
     sw_oval = lambda x, y: f'        <rect x="{x}" y="{y}" width="22" height="12" rx="6" fill="{c["node"]}" stroke="{c["ink"]}" stroke-width="0.8"/>'
     sw_dia = lambda x, y: f'        <polygon points="{x + 3},{y + 6} {x + 11},{y} {x + 19},{y + 6} {x + 11},{y + 12}" fill="{c["node"]}" stroke="{c["ink"]}" stroke-width="0.8"/>'
@@ -188,7 +188,7 @@ def lanes(c):
     ]))
     desc = ("Flow of a GitHub issue through the lanes: triage routes it to needs-design, needs-spec, "
             "or ready when the issue standard is met; design leads to needs-spec or to ready, specify leads "
-            "to ready, and build opens a pull request that is reviewed and merged. Fog goes to the user's /wayfinder.")
+            "to ready, and build opens a pull request that is reviewed and merged. Fog goes back to the user for direction.")
     return W, H, desc, "\n".join(a)
 
 
