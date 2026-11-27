@@ -18,7 +18,7 @@ cat >"$T/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 T=$(dirname "$(dirname "$0")")
 case "$1 $2" in
-  "issue list") case "$*" in *agent-decided*comments*) cat "$T/agent.json" ;; *--label*needs-decision*) [ -e "$T/nolabel" ] && echo '[]' || cat "$T/needs.json" ;; *comments*) cat "$T/needs.json" ;; *--jq*) echo 0 ;; *) echo '[]' ;; esac ;;
+  "issue list") case "$*" in *--label*on-hold*) [ ! -f "$T/held" ] || cat "$T/held" ;; *agent-decided*comments*) cat "$T/agent.json" ;; *--label*needs-decision*) [ -e "$T/nolabel" ] && echo '[]' || cat "$T/needs.json" ;; *comments*) cat "$T/needs.json" ;; *--jq*) echo 0 ;; *) echo '[]' ;; esac ;;
   "issue view") case "$*" in *"--json comments"*) jq '.[0].comments' "$T/needs.json" ;; *"--json number,url,comments"*) [ ! -e "$T/viewfail" ] || { echo "gh: could not read the issue" >&2; exit 1; }; jq '.[0]' "$T/needs.json" ;; *) cat "$T/state-$3" 2>/dev/null || echo OPEN ;; esac ;;
   "issue comment") while [ $# -gt 0 ]; do [ "$1" = --body-file ] && cat "$2" >>"$T/posted"; shift; done ;;
   "issue edit") echo "$*" >>"$T/edits" ;;
@@ -350,7 +350,13 @@ thread "$T/needs.json" 'req D1'; hold; resume
 eq "held wins over a waiting request" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "2/held  #7: label on-hold"
 thread "$T/needs.json" 'req D1' 'Decision D1: B'; jq '.[0].labels = [{name: "on-hold-after-spec"}, {name: "do-not-merge"}]' "$T/needs.json" >"$T/n2" && mv "$T/n2" "$T/needs.json"; resume
 eq "the merge-only hold labels do not stop a stage" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "0/resumed D1 with: Decision D1: B"
-eq "the usage lists held" "$(bash "$D" | grep -c 'held  #<n>: label on-hold')" 1
+# resolve and status honour the hold too: the coordinator's sweep must not take an answer on a held issue
+thread "$T/needs.json" 'req D1' 'Decision D1: B'; hold; : >"$T/posted"; : >"$T/edits"; echo 7 >"$T/held"
+out=$(bash "$D" resolve 7 B D1 2>/dev/null); code=$?
+eq "resolve on an on-hold issue: held, exit 2, nothing written" "$code/$(printf '%s\n' "$out" | sed -n 1p)/$(wrote)" "2/held  #7: label on-hold/0/0"
+eq "status shows a held issue as held, not answered" "$(bash "$D" status 2>/dev/null | head -1)" "held     #7 D1: label on-hold (an answer is not taken while it holds)"
+rm -f "$T/held"
+eq "the usage lists held" "$(bash "$D" | grep -c 'held  #<n>: label on-hold. (the issue')" 1
 
 # ---- golden fixtures of the board client contract (docs/contract.md, docs/contract-fixtures/) ----
 # Each <name>.md is a comment exactly as its writer posts it (decide.sh with the stubbed gh), or an exemplar in the documented
@@ -436,6 +442,7 @@ eq "reader: the look's fields" "$(jq -c '[.headline, .path, (.checks | length), 
 eq "reader: the log's lines" "$(jq -c '[.lines[] | .at]' "$G/coordination-log.json")" '["2026-01-05T09:30Z","2026-01-05T10:12Z"]'
 eq "reader: the answer without its prefix, a record's title" "$(jq -r .answer "$G/answer.json")/$(jq -r .title "$G/record.json")" "1A 2B/Storage for the export"
 if [ "$WRITE" = 1 ]; then
+  for f in "$G"/*; do [ -s "$f" ] || { echo "FAIL: writer produced an empty $(basename "$f"); fixtures not written"; exit 1; }; done
   mkdir -p "$FIX"; cp "$G"/* "$FIX"/; echo "wrote $(ls "$G" | wc -l | tr -d ' ') files to docs/contract-fixtures/"
 fi
 drift=""; for f in "$G"/*; do cmp -s "$f" "$FIX/$(basename "$f")" || drift="$drift $(basename "$f")"; done

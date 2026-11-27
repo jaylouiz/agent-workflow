@@ -206,6 +206,7 @@ eq "on-hold holds also when the config's own list leaves it out" "$rc:$(printf '
 held eval 'echo do-not-merge >"$T/ilabels"'
 eq "the config's own hold label still holds" "$rc:$(printf '%s' "$out" | grep -c '^hold: issue #70 label do-not-merge$')" "1:1"
 held eval 'echo ready >"$T/ilabels"'
+sed -i.bak '/^WF_HOLD_LABELS="do-not-merge"$/d' "$R/main/.claude/issue-workflow.sh"; rm -f "$R/main/.claude/issue-workflow.sh.bak"
 eq "no hold label: prep goes past the refusals" "$(printf '%s' "$out" | grep -c 'NOT READY')" 0
 # a PR that closes no issue: `No-issue: <reason>` or a line-leading `Part of #<n>` opts out; anywhere else it does not
 body() { printf '%b' "$1" >"$T/prbody"; }

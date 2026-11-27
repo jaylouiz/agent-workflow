@@ -22,8 +22,11 @@ needs-decision|D93F0B|Parked: waits for a user decision
 agent-decided|FBCA04|Has agent decisions the user has not reviewed
 inbox|EDEDED|Unsorted out-of-scope finding, needs triage
 needs-direction|D4C5F9|Direction open: the user sets it"
-for h in $WF_HOLD_LABELS; do LABELS="$LABELS
-$h|B60205|Hold: stops the pipeline (issue-workflow config)"; done
+for h in $WF_HOLD_LABELS; do
+  d="Hold: stops the pipeline (issue-workflow config)"; [ "$h" != "$WF_STOP_LABEL" ] || d="On hold: no stage starts, no merge; the user removes it"
+  LABELS="$LABELS
+$h|B60205|$d"
+done
 
 fail=0
 while IFS='|' read -r name color desc; do
