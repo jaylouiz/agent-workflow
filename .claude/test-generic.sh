@@ -15,6 +15,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # name<TAB>extended regex; one per line.
 PATTERNS=$(cat <<'EOF'
 issue-number	(^|[^&])#[0-9]{3,}([^[:alnum:]]|$)
+pr-number	(^|[^[:alnum:]])PRs? ?[0-9]{2,}([^[:alnum:]]|$)
 kan-do	kan-do
 vue-file	\.vue
 nuxt	[Nn]uxt
@@ -92,6 +93,9 @@ fixture; out=$(scan "$T/r"); rc=$?
 check "clean fixture passes (2-digit issue, hex colour, entity)" '[ "$rc" = 0 ] && [ -z "$out" ]'
 hit "3-digit issue" issue-number skills/a/SKILL.md "It cost a day (#481)."
 hit "issue at line start" issue-number skills/a/SKILL.md "#1234 again"
+hit "PR number" pr-number skills/a/SKILL.md "that is how PR 475 escaped"
+hit "PR number, plural" pr-number skills/a/SKILL.md "PRs 12 and 13"
+clean "PR without a number" skills/a/x.md "open a PR 2 times"
 hit "project name" kan-do skills/a/SKILL.md "As seen in kan-do."
 hit "project issue reference" issue-number skills/a/SKILL.md "see kan-do#899"
 hit "vue file" vue-file skills/a/SKILL.md "setup/Foo.vue renders empty"
