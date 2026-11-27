@@ -30,6 +30,7 @@
 
 - gate command: `bash test.sh` = every `skills/*/test-*.sh` and `.claude/test-*.sh`, one summary naming the failed suites; `wf_verify` runs it with `--fail-fast`. Run the suites that touch your change while working, `bash test.sh` before the PR.
 - CI: `.github/workflows/test.yml` runs `test.sh` on `macos-latest` (bash 3.2) and `ubuntu-latest` on every PR and on pushes to `main`; a Linux-only failure is fixed in the PR that shows it.
+- leak lint: `.claude/test-generic.sh` (in the suite) fails when `skills/**/*.md` or `reference/*.md` names a stack, a file layout or a 3+-digit issue; a deliberate exception is one line with its reason in `.claude/generic-allowlist.txt`.
 - shellcheck on touched scripts when installed (it was not on this machine).
 - extra greps: after renaming or removing a script, skill or section, `rg` the old name in `skills/`, `global/`, `README.md`, `reference/` (skills point to profile sections by name: "the profile's X").
 

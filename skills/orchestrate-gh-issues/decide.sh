@@ -160,7 +160,7 @@ scan() { # <label|""> <state>
 }
 
 # Unresolved requests: labeled issues first, then recently updated ones, so a request whose `needs-decision` label was
-# dropped by hand (or lags) still shows up (kan-do#68 D1); one row per issue and decision.
+# dropped by hand (or lags) still shows up; one row per issue and decision.
 pending() { { scan needs-decision open; scan "" open; } | awk -F'\037' '!seen[$1, $4]++'; }
 
 age() { local s=$1; if [ "$s" -ge 3600 ]; then echo "$((s / 3600))h"; else echo "$((s / 60))m"; fi; }

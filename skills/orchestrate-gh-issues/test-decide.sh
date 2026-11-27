@@ -118,7 +118,7 @@ eq "resolved request stays resolved (no row, later chatter is not a change)" "$(
 eq "record then followup is not a change" "$(status 'rec D1' 'D1: x' 'fol D1')" ""
 
 eq "a later comment after followup is a change again" "$(status 'rec D1' 'D1: x' 'fol D1' 'D1: also y')" "change   #7 D1: D1: also y"
-touch "$T/nolabel" # the needs-decision label can be gone (dropped by hand, lag: kan-do#68 D1): status and digest scan by comments, not by label
+touch "$T/nolabel" # the needs-decision label can be gone (dropped by hand, lag): status and digest scan by comments, not by label
 eq "answered request is listed although the label is gone" "$(status 'req D1' 'D1: B')" "answered #7 D1: D1: B"
 eq "waiting request is listed although the label is gone" "$(status 'req D1')" "waiting  #7 D1 (0m): Pick D1?"
 eq "digest lists a request although the label is gone" "$(thread "$T/needs.json" 'req D1'; bash "$D" digest | sed -n 1p)" "1 decision(s) need you:"

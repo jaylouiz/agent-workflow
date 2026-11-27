@@ -169,7 +169,7 @@ case "$cmd" in
     r=$(route_pr "$pr") && [ -n "$r" ] || die "route for PR #$pr failed"
     echo "route $r"
     msg=$(review_check "$bodyf" "${r%%:*}") || stop="$stop\n$msg"
-    # Orca's setup `npm install` rewrites package-lock.json; committed without a package.json change it breaks `npm ci` in CI (#676)
+    # Orca's setup `npm install` rewrites package-lock.json; committed without a package.json change it breaks `npm ci` in CI
     files=$(gh pr diff "$pr" --name-only 2>/dev/null || true)
     if grep -qx package-lock.json <<<"$files" && ! grep -qx package.json <<<"$files"; then
       stop="$stop\npackage-lock.json is in the diff without package.json: restore it (git checkout origin/$base -- package-lock.json), commit, push"
@@ -258,7 +258,7 @@ case "$cmd" in
     bodyf=$(mktemp); gh pr view "$pr" --json body -q .body >"$bodyf" || die "gh pr view $pr failed"
     for n in $(issues_of "$bodyf" || true); do
       "$DIR/decide.sh" note "$n" "$summary" && echo "summary posted on #$n"
-      # GitHub sometimes leaves a `Closes` issue open after the merge (W83: #621 #629 #625, #670)
+      # GitHub sometimes leaves a `Closes` issue open after the merge
       if [ "$(gh issue view "$n" --json state -q .state 2>/dev/null)" = OPEN ]; then
         gh issue close "$n" --reason completed >/dev/null 2>&1 && echo "closed #$n (GitHub left it open after merging #$pr)" \
           || { rc=1; echo "WARN: #$n is still open after merging #$pr"; }

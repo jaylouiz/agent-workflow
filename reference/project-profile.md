@@ -35,7 +35,7 @@
 
 - gate command: <e.g. npm run verify>
 - tests: <unit, E2E rules, visual baselines, ports>
-- repeat-run flags: <worker count for `--repeat-each` runs; default 4, `--workers=1` when workers share a server or fixture>
+- repeat-run command: <how to run one timing or flake test `<n>` times without retries, e.g. `npx playwright test <spec> --repeat-each=<n> --retries=0 --workers=4`; the skills ask for 10 runs for a new timing test, 30 for a flake proof>
 - extra greps: <checks that caught real misses before>
 
 ## Pull requests
