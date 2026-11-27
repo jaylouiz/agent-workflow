@@ -5,14 +5,15 @@
 #   bash test.sh               run all suites, then one summary naming the failed ones
 #   bash test.sh --fail-fast   stop at the first failing suite
 #
-# Each suite runs with the `bash` on PATH from the repo root; a failed suite shows the last 20 lines of its output.
+# Each suite runs with the `bash` on PATH from the repo root; a failed suite shows the last 20 lines of its output
+# (TEST_TAIL=<n> for more: CI sets it).
 # Exit: 0 all passed, 1 a suite failed (or none found), 64 usage.
 set -u
 fail_fast=0
 for a in "$@"; do
   case "$a" in
     --fail-fast) fail_fast=1 ;;
-    -h | --help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h | --help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "test.sh: unknown argument: $a" >&2; exit 64 ;;
   esac
 done
@@ -25,7 +26,7 @@ for f in skills/*/test-*.sh .claude/test-*.sh; do
   if out=$(bash "$f" 2>&1); then
     echo "ok    $f"
   else
-    echo "FAIL  $f"; printf '%s\n' "$out" | tail -n 20 | sed 's/^/      /'
+    echo "FAIL  $f"; printf '%s\n' "$out" | tail -n "${TEST_TAIL:-20}" | sed 's/^/      /'
     failed="$failed $f"
     [ "$fail_fast" = 0 ] || break
   fi

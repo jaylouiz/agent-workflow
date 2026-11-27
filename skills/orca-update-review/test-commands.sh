@@ -26,7 +26,9 @@ esac
 EOF2
 printf '#!/usr/bin/env bash\nexit 1\n' >"$T/bin/gh"
 chmod +x "$T/bin/orca" "$T/bin/gh"
-/usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 1.4.300" "$T/Info.plist" >/dev/null 2>&1
+python3 -I -c 'import plistlib, sys
+with open(sys.argv[1], "wb") as f:
+    plistlib.dump({"CFBundleShortVersionString": "1.4.300"}, f)' "$T/Info.plist"
 export PATH="$T/bin:$PATH" HOME="$T/home" ORCA_PLIST="$T/Info.plist" ORCA_SNAPSHOT_DIR="$T/snap" ORCA_UPDATES_DIR="$T/updates"
 unset STUB_BROKEN ORCA_TOUCHPOINT_DIRS
 fail=0; n=0

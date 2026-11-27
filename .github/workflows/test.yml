@@ -22,7 +22,7 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # macOS ships bash 3.2 as /bin/bash and that is what users run: keep a newer Homebrew bash off the front of PATH.
       - name: Use the system bash 3.2 (macOS)
@@ -48,3 +48,5 @@ jobs:
 
       - name: Run every suite
         run: bash test.sh
+        env:
+          TEST_TAIL: 200
