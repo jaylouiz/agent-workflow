@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Leak lint: the skills, their templates and reference/ are read by every project, so they name no stack, no file
 # layout and no issue of the project a lesson came from (such a fact belongs to that project's profile or
-# .claude/rules/: workflow-retro step 5 "Routing"). Run: bash .claude/test-generic.sh
+# .claude/rules/: aw-retro step 5 "Routing"). Run: bash .claude/test-generic.sh
 #
 #   bash .claude/test-generic.sh                       self-test on fixtures, then lint this repo
 #   bash .claude/test-generic.sh --scan <root> [<allowlist>]   lint <root>/skills/**/*.md and <root>/reference/*.md only
@@ -147,7 +147,7 @@ if [ "$rc" != 0 ]; then
   fail=$((fail + 1))
   echo "FAIL [skills/**/*.md and reference/*.md carry no project fact]"
   printf '%s\n' "$out" | sed 's/^/  /'
-  echo "  A stack, file layout or project issue belongs to that project's profile or .claude/rules/ (workflow-retro step 5"
+  echo "  A stack, file layout or project issue belongs to that project's profile or .claude/rules/ (aw-retro step 5"
   echo "  \"Routing\"); keep the generic sentence here. A deliberate exception: one line in .claude/generic-allowlist.txt."
 fi
 

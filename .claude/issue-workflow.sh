@@ -1,11 +1,11 @@
 # shellcheck shell=bash
-# issue-workflow config for agent-workflow (sourced by the orchestrate-gh-issues scripts; template: reference/project-config.sh).
+# issue-workflow config for agent-workflow (sourced by the bin/ scripts; template: reference/project-config.sh).
 # Shell scripts only: no dev server (default WF_PORTS stay unused), no build, no deploy, no PR-body check.
 
 # Hooks and always-loaded files every session runs: a bug there breaks all sessions, so these PRs get a separate reviewer.
 WF_RISK_GLOBS=(
-  'skills/orchestrate-gh-issues/guard.sh'
-  'skills/orchestrate-gh-issues/worker-done-stop.sh'
+  'bin/guard.sh'
+  'bin/worker-done-stop.sh'
   'global/CLAUDE.md'
   'install.sh'
 )

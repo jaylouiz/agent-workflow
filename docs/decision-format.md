@@ -1,7 +1,7 @@
 # Decision format
 
 How an agent asks the user to decide on a GitHub issue, and how the answer is read. Built and enforced by
-`skills/orchestrate-gh-issues/decide.sh` (logic in `decision_format.py`, tests in `test-decide.sh`).
+`bin/decide.sh` (logic in `decision_format.py`, tests in `test-decide.sh`).
 
 - A decision has **questions** numbered `1`, `2`, … Each has **options** lettered `A`, `B`, `C` …
 - The same letters are used in the text, on the images and in the prototype's switcher.
@@ -152,8 +152,8 @@ and how the format keeps it:
 
 | File | What |
 |---|---|
-| `skills/orchestrate-gh-issues/decision_format.py` | builds the request, checks the overview, reads answers |
-| `skills/orchestrate-gh-issues/decide.sh` | `request` (builds from question lines), `check` (cap plus overview shape), `status` (`reads as`), `resolve` (resume text), `digest` (answer hint) |
-| `skills/orchestrate-gh-issues/SKILL.md` section 5, `task-template.md` | how to write a request, what to quote to the resumed worker |
-| `skills/design-gh-issue/SKILL.md` sections 1, 3, 7 | round comment template: questions instead of variants and axes |
-| `skills/specify-gh-issue/SKILL.md` section 5 | options comment uses the overview shape |
+| `bin/decision_format.py` | builds the request, checks the overview, reads answers |
+| `bin/decide.sh` | `request` (builds from question lines), `check` (cap plus overview shape), `status` (`reads as`), `resolve` (resume text), `digest` (answer hint) |
+| `skills/aw-orchestrate/SKILL.md` section 5, `task-template.md` | how to write a request, what to quote to the resumed worker |
+| `skills/aw-ui-design/SKILL.md` sections 1, 3, 7 | round comment template: questions instead of variants and axes |
+| `skills/aw-specify/SKILL.md` section 5 | options comment uses the overview shape |

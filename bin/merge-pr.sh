@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+# Merge-queue steps for the aw-orchestrate coordinator (and the lead's review routing).
+# `gh pr merge` is NOT in here: it stays the coordinator's own call between prep and after, so the project's
+# pre-merge gate hook (PreToolUse on that command) still fires.
+#
+#   merge-pr.sh route <pr> | --files <file> [--lines <n>]
+#        "lead: <reason>" or "reviewer: <reason>". reviewer when a changed file matches WF_RISK_GLOBS or the
+#        changed lines (WF_IGNORE_GLOBS not counted; they never mask a risk file) exceed WF_REVIEW_LINES.
+#   merge-pr.sh review-check <body file> [--route lead|reviewer]
+#        exit 0 when the PR body's `## Review` is complete: reviewed (`by:`), no finding `-> open`, and not
+#        `route: lead` where the route says reviewer. Else exit 1 with the reasons.
+#   merge-pr.sh prep <pr>
+#        refuse on a hold label, an open needs-decision, no `Closes #<n>` (opt-out: `No-issue: <reason>`) or a
+#        failing review-check; then, in the PR's worktree (wf_install first when the base brought a package.json change),
+#        fast-forward to a remote head that moved ahead (gh pr update-branch; diverged = exit 64, nothing pushed),
+#        merge the base branch in when behind (no rebase, no force-push), wf_verify (+ wf_build when
+#        wf_build_needed), push, wait until GitHub reports the pushed commit as the PR head and (10 min after a push)
+#        as many checks as the old head had (else exit 2 WAIT); then
+#        reads the checks of the head it leaves (WF_REQUIRED_CHECKS): failed or cancelled = NOT READY (exit 1; a failed check of
+#        a head prep replaced is not read), pending or a required check not
+#        reported yet = "WAIT #<pr>: CI pending: <names>" (exit 2, rerun prep later). Prints "ready: gh pr merge <pr> --merge".
+#        Warns when the cwd is inside the PR's worktree (cleanup after the merge removes it).
+#   merge-pr.sh after <pr> "<summary>"
+#        PR must be merged: print its gate row (WF_CHECKS_TSV), wf_after_merge, wf_deploy_check, and post the
+#        summary on the closed issue via decide.sh note, then delete its coordination log, then sweep.sh --pr <pr>:
+#        remove the PR's worktree and branches (and every other finished one). A failing sweep never fails `after`.
+#        The hooks run with WF_KEEP_CWD = the caller's directory; WARN when it is gone afterwards.
+#   merge-pr.sh sweep [--dry-run]
+#        remove the worktrees and branches of finished work (sweep.sh has the rules): a <type>/<n>-* (or Orca's
+#        <gitUsername>/<type>-<n>-*) branch whose PR is merged or closed, a
+#        proto/<n>-* branch whose issue is closed (after: also the merged PR's own branch, whatever its name); it also
+#        runs `proto-serve.sh prune` (prototype servers of issues that are closed or no longer wait). Keeps, with
+#        the reason printed, the main checkout, the current directory, uncommitted or unpushed work and worktrees an
+#        Orca worker still uses.
+# Project facts: <repo>/.claude/issue-workflow.sh (template: agent-workflow reference/project-config.sh).
+set -uo pipefail
+DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=lib.sh
+. "$DIR/lib.sh"
+die() { echo "merge-pr.sh: $*" >&2; exit 64; }
+
+route_files() { # route_files <file list> <changed lines or empty>
+  local list=$1 lines=${2:-0} f risk=""
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ ${#WF_RISK_GLOBS[@]} -gt 0 ] && wf_match "$f" "${WF_RISK_GLOBS[@]}"; then risk="$risk $f"; fi
+  done <"$list"
+  if [ -n "$risk" ]; then echo "reviewer: risk area:$(echo "$risk" | tr ' ' '\n' | head -3 | tr '\n' ' ')"
+  elif [ "$lines" -gt "$WF_REVIEW_LINES" ]; then echo "reviewer: $lines changed lines > $WF_REVIEW_LINES"
+  else echo "lead: no risk area, $lines changed lines"; fi
+}
+
+route_pr() { # route_pr <pr>: file list and line count (without ignored files) from GitHub
+  local pr=$1 tmp lines=0 path add del
+  tmp=$(mktemp)
+  gh pr view "$pr" --json files -q '.files[] | "\(.path)\t\(.additions)\t\(.deletions)"' >"$tmp.tsv" || die "gh pr view $pr failed"
+  cut -f1 "$tmp.tsv" >"$tmp"
+  while IFS=$'\t' read -r path add del; do
+    wf_match "$path" "${WF_IGNORE_GLOBS[@]+"${WF_IGNORE_GLOBS[@]}"}" || lines=$((lines + add + del))
+  done <"$tmp.tsv"
+  route_files "$tmp" "$lines"; rm -f "$tmp" "$tmp.tsv"
+}
+
+review_check() { # review_check <body file> [route]
+  local body=$1 want=${2:-} sec problems=""
+  sec=$(awk '/^## Review[[:space:]]*$/{on=1; next} on && /^## /{exit} on' "$body")
+  if ! grep -q '^## Review[[:space:]]*$' "$body"; then
+    echo "review: '## Review' section missing in the PR body"; return 1
+  fi
+  printf '%s\n' "$sec" | grep -Eq '^route: .*by: ' || problems="$problems\nreview: not reviewed yet (no 'by:' on the route line)"
+  local open; open=$(printf '%s\n' "$sec" | grep -E '^- \[(medium|high|critical)\].*-> *open[[:space:]]*$' || true)
+  [ -z "$open" ] || problems="$problems\nreview: open finding(s):\n$open"
+  # the last route line counts: a late reviewer's line wins over the lead's
+  if [ "$want" = reviewer ] && [ "$(printf '%s\n' "$sec" | grep -E '^route:' | tail -1 | grep -Ec '^route: *lead')" = 1 ]; then
+    problems="$problems\nreview: route says reviewer but the lead reviewed: start a reviewer worker (spec.sh review)"
+  fi
+  [ -z "$problems" ] && return 0
+  printf '%b\n' "${problems#\\n}"; return 1
+}
+
+issues_of() { # issues_of <body file>: every issue a line-leading Closes/Fixes/Resolves reference closes
+  grep -Eio '^[[:space:]-]*(closes|fixes|resolves) +([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+' "$1" | grep -Eo '[0-9]+$'
+}
+
+ci_state() { # ci_state <pr>: "pass" | "fail: <names>" | "pending: <names>"; fails closed (returns 1) on unreadable output
+  local pr=$1 out err rows failed pending reported n name
+  err=$(mktemp)
+  out=$(gh pr checks "$pr" --json name,bucket 2>"$err")
+  if ! printf '%s' "$out" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    if grep -qi 'no checks reported' "$err"; then out='[]'
+    else echo "gh pr checks $pr unreadable: $(head -c 200 "$err")" >&2; rm -f "$err"; return 1; fi
+  fi
+  rm -f "$err"
+  rows=$(jq -r '.[] | "\(.name)\t\(.bucket)"' <<<"$out")
+  failed=""; pending=""
+  if [ -n "${WF_REQUIRED_CHECKS:-}" ]; then
+    local IFS=,
+    set -f # comma-separated names; no globbing: "build [linux]" stays literal
+    for n in $WF_REQUIRED_CHECKS; do
+      n=$(printf '%s' "$n" | sed 's/^ *//; s/ *$//'); [ -n "$n" ] || continue
+      name=$(printf '%s\n' "$rows" | CK=$n awk -F'\t' '$1==ENVIRON["CK"]{print $2}' | sort -u | tr '\n' ' ')
+      case " $name" in
+        *" fail "*|*" cancel "*) failed="$failed $n" ;;
+        *" pending "*) pending="$pending $n" ;;
+        " ") pending="$pending $n(not reported)" ;;
+      esac
+    done
+    set +f
+  else
+    failed=$(printf '%s\n' "$rows" | awk -F'\t' '$2=="fail"||$2=="cancel"{printf " %s", $1}')
+    pending=$(printf '%s\n' "$rows" | awk -F'\t' '$2=="pending"{printf " %s", $1}')
+  fi
+  if [ -n "$failed" ]; then echo "fail:$failed"; elif [ -n "$pending" ]; then echo "pending:$pending"; else echo pass; fi
+}
+
+check_count() { # check_count <pr>: how many checks GitHub reports on the PR head (0 on any failure; gh may exit non-zero on pending/failed with valid JSON)
+  local out c
+  out=$(gh pr checks "$1" --json name 2>/dev/null); c=$(jq -r 'if type == "array" then length else 0 end' <<<"$out" 2>/dev/null)
+  echo "${c:-0}"
+}
+
+worktree_of() { # worktree path that has <branch> checked out
+  git worktree list --porcelain | awk -v b="refs/heads/$1" '/^worktree /{p=substr($0,10)} $0=="branch " b {print p; exit}'
+}
+
+cmd=${1:-}; shift || true
+wf_load
+case "$cmd" in
+  route)
+    if [ "${1:-}" = --files ]; then
+      [ -f "${2:-}" ] || die "route --files <file>"
+      lines=0; [ "${3:-}" = --lines ] && lines=${4:?}
+      route_files "$2" "$lines"
+    else
+      [ -n "${1:-}" ] || die "route <pr>"
+      route_pr "$1"
+    fi ;;
+  issues-of)
+    [ -f "${1:-}" ] || die "issues-of <body file>"
+    issues_of "$1" ;;
+  review-check)
+    [ -f "${1:-}" ] || die "review-check <body file> [--route lead|reviewer]"
+    want=""; [ "${2:-}" = --route ] && want=${3:-}
+    review_check "$1" "$want" ;;
+  prep)
+    pr=${1:?usage: prep <pr>}
+    info=$(gh pr view "$pr" --json state,headRefName,baseRefName,labels,body) || die "gh pr view $pr failed"
+    [ "$(jq -r .state <<<"$info")" = OPEN ] || die "PR #$pr is not open"
+    head=$(jq -r .headRefName <<<"$info"); base=$(jq -r .baseRefName <<<"$info")
+    stop=""
+    for l in $(jq -r '.labels[].name' <<<"$info"); do
+      for h in $WF_HOLD_LABELS; do [ "$l" = "$h" ] && stop="$stop\nhold: PR label $l"; done
+    done
+    bodyf=$(mktemp); jq -r .body <<<"$info" >"$bodyf"
+    issues=$(issues_of "$bodyf" || true)
+    # A PR without an issue (e.g. the user's own PR added to a run) opts out with a line-leading `No-issue: <reason>`
+    [ -n "$issues" ] || grep -Eq '^No-issue: [^[:space:]]' "$bodyf" ||
+      stop="$stop\nPR body has no line-leading 'Closes #<n>' (or 'No-issue: <reason>')"
+    for n in $issues; do # every closed issue (a batch PR closes several); a failed lookup holds (fail closed)
+      ilabels=$(gh issue view "$n" --json labels -q '.labels[].name') || die "gh issue view $n failed: cannot check holds"
+      for l in $ilabels; do
+        [ "$l" = needs-decision ] && stop="$stop\nhold: issue #$n has an open needs-decision"
+        for h in $WF_HOLD_LABELS; do [ "$l" = "$h" ] && stop="$stop\nhold: issue #$n label $l"; done
+      done
+    done
+    # Only a fail-closed read here: a failed check of a head prep is about to replace (base merged in, commits pushed)
+    # is no refusal; the checks of the head prep leaves behind decide (below).
+    ci_state "$pr" >/dev/null || die "cannot read CI checks of PR #$pr (nothing merged or pushed)"
+    r=$(route_pr "$pr") && [ -n "$r" ] || die "route for PR #$pr failed"
+    echo "route $r"
+    msg=$(review_check "$bodyf" "${r%%:*}") || stop="$stop\n$msg"
+    # Orca's setup `npm install` rewrites package-lock.json; committed without a package.json change it breaks `npm ci` in CI
+    files=$(gh pr diff "$pr" --name-only 2>/dev/null || true)
+    if grep -qx package-lock.json <<<"$files" && ! grep -qx package.json <<<"$files"; then
+      stop="$stop\npackage-lock.json is in the diff without package.json: restore it (git checkout origin/$base -- package-lock.json), commit, push"
+    fi
+    rm -f "$bodyf"
+    if [ -n "$stop" ]; then printf 'NOT READY #%s:%b\n' "$pr" "$stop"; exit 1; fi
+    wt=$(worktree_of "$head")
+    [ -n "$wt" ] || die "no local worktree has $head checked out; check it out (git worktree add) and rerun"
+    git -C "$wt" fetch -q origin "$base" "$head" || die "fetch failed in $wt"
+    case "$(pwd -P)/" in "$wt"/*) echo "WARN: cwd is the PR's worktree: cd to the main checkout before gh pr merge and after (cleanup removes the worktree)" ;; esac
+    # remote head ahead of the local one (someone ran `gh pr update-branch`): fast-forward, never push over it
+    if ! git -C "$wt" merge-base --is-ancestor "origin/$head" HEAD && git -C "$wt" merge-base --is-ancestor HEAD "origin/$head"; then
+      git -C "$wt" merge -q --ff-only "origin/$head" || die "cannot fast-forward $wt to origin/$head (local changes?)"
+    fi
+    git -C "$wt" merge-base --is-ancestor HEAD "origin/$head" || git -C "$wt" merge-base --is-ancestor "origin/$head" HEAD ||
+      die "$wt and origin/$head have diverged (local $(git -C "$wt" rev-parse --short HEAD), remote $(git -C "$wt" rev-parse --short "origin/$head")): nothing pushed; route to a fix worker (merge origin/$head, resolve, push)"
+    behind=0; git -C "$wt" merge-base --is-ancestor "origin/$base" HEAD || behind=1
+    unpushed=0; [ "$(git -C "$wt" rev-parse HEAD)" = "$(git -C "$wt" rev-parse "origin/$head")" ] || unpushed=1
+    if [ $behind = 1 ]; then
+      echo "behind origin/$base: merging it in ($wt)"
+      premerge=$(git -C "$wt" rev-parse HEAD)
+      if ! git -C "$wt" merge -q --no-edit "origin/$base"; then
+        git -C "$wt" merge --abort
+        die "merge conflict with origin/$base in $wt (merge aborted): route to a fix worker (spec.sh fix --extra: merge origin/$base, resolve, verify, push)"
+      fi
+    fi
+    # a worktree with its own node_modules misses dependencies the merge brought in (verify: command not found)
+    if [ $behind = 1 ] && wf_has wf_install && git -C "$wt" diff --name-only "$premerge" HEAD | grep -qxE 'package(-lock)?\.json'; then
+      (cd "$wt" && wf_run wf_install) || die "dependency install failed in $wt (nothing pushed)"
+    fi
+    if [ $behind = 1 ] || [ $unpushed = 1 ]; then # the head GitHub merges must be the verified one
+      (cd "$wt" && wf_run wf_verify) || die "verify failed on the combined head in $wt (nothing pushed)"
+      if wf_has wf_build_needed && (cd "$wt" && wf_build_needed "origin/$base"); then
+        (cd "$wt" && wf_run wf_build) || die "build failed on the combined head in $wt (nothing pushed)"
+      fi
+      pre_n=$(check_count "$pr")
+      git -C "$wt" push -q origin "HEAD:$head" || die "push failed in $wt"
+      # remembered for a rerun after a WAIT: "<sha> <checks the old head had> <epoch>"
+      printf '%s %s %s\n' "$(git -C "$wt" rev-parse HEAD)" "$pre_n" "$(date +%s)" >"$(cd "$wt" && git rev-parse --absolute-git-dir)/prep-expect"
+    else
+      echo "up to date with origin/$base, nothing to push"
+    fi
+    # optional profile check on every prep, also when nothing was pushed (a lead's or fixer's own run can be scoped, e.g. vitest --changed)
+    if wf_has wf_prep_check; then (cd "$wt" && wf_run wf_prep_check "origin/$base") || die "wf_prep_check failed in $wt (nothing merged): route to a fix worker"; fi
+    # gh pr checks reads the PR's head: until GitHub reports this commit as the head it shows the old head's checks
+    # (also on a rerun after a WAIT, hence not only after a push)
+    mine=$(git -C "$wt" rev-parse HEAD); i=0
+    until [ "$(gh pr view "$pr" --json headRefOid -q .headRefOid 2>/dev/null)" = "$mine" ]; do
+      i=$((i + 1))
+      if [ $i -ge "${MERGE_PR_HEAD_POLLS:-15}" ]; then
+        printf 'WAIT #%s: GitHub has not reported the pushed head yet (rerun prep)\n' "$pr"; exit 2
+      fi
+      sleep "${MERGE_PR_POLL_SECS:-2}"
+    done
+    # a pushed head whose CI has not registered yet shows no or fewer checks, which reads as a pass: for 10 minutes after
+    # the push, fewer checks than the old head had is a WAIT (a rerun included; a deliberately removed check passes then; not with WF_NO_WAIT_CI=1, which waits for no CI)
+    exp=$(awk -v s="$mine" -v now="$(date +%s)" '$1 == s && now - $3 < 600 {print $2}' "$(cd "$wt" && git rev-parse --absolute-git-dir)/prep-expect" 2>/dev/null)
+    if [ "${WF_NO_WAIT_CI:-0}" != 1 ] && [ "${exp:-0}" -gt 0 ] && [ "$(check_count "$pr")" -lt "$exp" ]; then
+      printf 'WAIT #%s: CI has not registered all %s checks on the pushed head yet (rerun prep)\n' "$pr" "$exp"; exit 2
+    fi
+    ci=$(ci_state "$pr") || die "cannot read CI checks of PR #$pr after the push"
+    case "$ci" in
+      fail:*) printf 'NOT READY #%s:\nCI: failed check(s):%s\n' "$pr" "${ci#fail:}"; exit 1 ;;
+      pending:*) if [ "${WF_NO_WAIT_CI:-0}" = 1 ]; then printf 'note: CI pending:%s, not waited for (WF_NO_WAIT_CI=1)\n' "${ci#pending:}"
+                 else printf 'WAIT #%s: CI pending:%s (rerun prep when it is done)\n' "$pr" "${ci#pending:}"; exit 2; fi ;;
+    esac
+    echo "ready: gh pr merge $pr --merge" ;;
+  after)
+    pr=${1:?usage: after <pr> "<summary>"}; summary=${2:?usage: after <pr> "<summary>"}
+    info=$(gh pr view "$pr" --json state,headRefOid) || die "gh pr view $pr failed"
+    [ "$(jq -r .state <<<"$info")" = MERGED ] || die "PR #$pr is not merged"
+    sha=$(jq -r .headRefOid <<<"$info")
+    if [ -n "$WF_CHECKS_TSV" ] && [ -f "$WF_CHECKS_TSV" ]; then
+      row=$(grep -F "$sha" "$WF_CHECKS_TSV" | tail -1)
+      echo "gate: ${row:-no row for $sha (a stamped pass writes none)}"
+    fi
+    main=$(wf_main_root); [ -n "$main" ] || die "cannot find the main checkout"
+    origcwd=$PWD
+    cd "$main" || die "cd $main failed"
+    wf_load # the main checkout's config, not a worktree's copy
+    rc=0
+    # the coordinator's own directory: a project cleanup hook must keep it (config template: WF_KEEP_CWD)
+    WF_KEEP_CWD=$(cd "$origcwd" 2>/dev/null && pwd -P) || WF_KEEP_CWD=$origcwd; export WF_KEEP_CWD
+    wf_run wf_after_merge || { rc=1; echo "WARN: wf_after_merge failed in $main"; }
+    wf_run wf_deploy_check || rc=1
+    bodyf=$(mktemp); gh pr view "$pr" --json body -q .body >"$bodyf" || die "gh pr view $pr failed"
+    for n in $(issues_of "$bodyf" || true); do
+      "$DIR/decide.sh" note "$n" "$summary" && echo "summary posted on #$n"
+      # GitHub sometimes leaves a `Closes` issue open after the merge
+      if [ "$(gh issue view "$n" --json state -q .state 2>/dev/null)" = OPEN ]; then
+        gh issue close "$n" --reason completed >/dev/null 2>&1 && echo "closed #$n (GitHub left it open after merging #$pr)" \
+          || { rc=1; echo "WARN: #$n is still open after merging #$pr"; }
+      fi
+      "$DIR/decide.sh" log --rm "$n" # the coordination log ends with the issue
+    done
+    rm -f "$bodyf"
+    "$DIR/sweep.sh" --pr "$pr" --cwd "$origcwd" || echo "WARN: sweep did not finish cleanly (see above); after is not affected"
+    [ -d "$origcwd" ] || { echo "WARN: your working directory $origcwd was removed during after: cd $main before the next command"; }
+    exit $rc ;;
+  sweep)
+    for a in "$@"; do [ "$a" = --dry-run ] || die "sweep [--dry-run]"; done
+    exec "$DIR/sweep.sh" "$@" ;;
+  *) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
+esac

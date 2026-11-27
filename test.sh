@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run every test suite of this repo: skills/*/test-*.sh and .claude/test-*.sh. The one list of suites: CI
+# Run every test suite of this repo: bin/test-*.sh, skills/*/test-*.sh and .claude/test-*.sh. The one list of suites: CI
 # (.github/workflows/test.yml) and the merge gate (wf_verify in .claude/issue-workflow.sh) both call this.
 #
 #   bash test.sh               run all suites, then one summary naming the failed ones
@@ -20,7 +20,7 @@ done
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 
 n=0; failed=""
-for f in skills/*/test-*.sh .claude/test-*.sh; do
+for f in bin/test-*.sh skills/*/test-*.sh .claude/test-*.sh; do
   [ -f "$f" ] || continue
   n=$((n + 1))
   if out=$(bash "$f" 2>&1); then

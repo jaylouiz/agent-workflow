@@ -3,7 +3,7 @@
 # Run: bash .claude/test-issue-workflow.sh
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-LIB="$DIR/../skills/orchestrate-gh-issues/lib.sh"
+LIB="$DIR/../bin/lib.sh"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
 fail=0; n=0
@@ -19,12 +19,12 @@ load() { # load <repo>
 
 # Risk globs route the live hooks to a reviewer and a plain skill doc to the lead.
 R="$T/risk"; mkdir -p "$R"; git -C "$R" init -q; load "$R" || exit 1
-for f in skills/orchestrate-gh-issues/guard.sh skills/orchestrate-gh-issues/worker-done-stop.sh global/CLAUDE.md install.sh; do
+for f in bin/guard.sh bin/worker-done-stop.sh global/CLAUDE.md install.sh; do
   printf '%s\n' "$f" >"$T/files"
-  eq "risk $f" "$(cd "$R" && bash "$DIR/../skills/orchestrate-gh-issues/merge-pr.sh" route --files "$T/files" | awk '{print $1}')" "reviewer:"
+  eq "risk $f" "$(cd "$R" && bash "$DIR/../bin/merge-pr.sh" route --files "$T/files" | awk '{print $1}')" "reviewer:"
 done
-printf 'skills/build-gh-issue/SKILL.md\nREADME.md\n' >"$T/files"
-eq "no risk" "$(cd "$R" && bash "$DIR/../skills/orchestrate-gh-issues/merge-pr.sh" route --files "$T/files" | awk '{print $1}')" "lead:"
+printf 'skills/aw-build/SKILL.md\nREADME.md\n' >"$T/files"
+eq "no risk" "$(cd "$R" && bash "$DIR/../bin/merge-pr.sh" route --files "$T/files" | awk '{print $1}')" "lead:"
 
 # wf_verify: passes when all suites pass, names the failing one and stops there.
 # wf_verify calls the repo's test.sh (the one list of suites), so the throwaway repo carries a copy of it too.

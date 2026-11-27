@@ -1,7 +1,7 @@
 Third-party material
 ====================
 
-skills/orca-update-review/snapshot/ holds the orchestration guide and CLI help texts of Orca
+skills/aw-orca-review/snapshot/ holds the orchestration guide and CLI help texts of Orca
 (https://github.com/stablyai/orca), captured to detect changes between Orca versions. They are
 used under Orca's license:
 

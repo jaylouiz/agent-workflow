@@ -1,0 +1,1 @@
+../../bin/proto-serve.sh
