@@ -3,7 +3,7 @@ name: aw-specify
 description: "Specify stage for a GitHub issue (label `needs-spec`): turn a UX decision or a clear request into a ready-to-build spec (acceptance criteria, implementation notes, verification), choosing between technical approaches where the build is open. Rewrites the issue body and marks it `ready`. Never edits code and does not redesign the UX."
 argument-hint: <issue-number>
 arguments: [issue]
-allowed-tools: Bash(gh issue view *) Bash(gh issue comment *) Bash(gh issue edit *) Bash(gh label create *) Bash(gh label list *) Bash(~/.claude/agent-workflow/bin/issue-status.sh *)
+allowed-tools: Bash(gh issue view *) Bash(gh issue comment *) Bash(gh issue edit *) Bash(gh label create *) Bash(gh label list *) Bash(~/.claude/agent-workflow/bin/issue-status.sh *) Bash(~/.claude/agent-workflow/bin/decide.sh *)
 hooks:
   PreToolUse:
     - matcher: Bash
@@ -25,7 +25,7 @@ Lanes, triage rule and issue standard: `~/.claude/agent-workflow/reference/issue
 ## 1. Load and route
 
 1. `gh issue view $issue --json number,title,body,labels,comments`; `gh label create needs-spec --force --description "Rough idea, spec not written yet"` and `gh label create ready --force --description "Spec confirmed, ready to build"`.
-2. **Resume**: `~/.claude/agent-workflow/bin/decide.sh resume $issue` (the rules: `~/.claude/agent-workflow/reference/decisions.md`, "Resume"). `none`: go on. `waiting` (exit 2): tell the user which decision waits and stop, changing nothing. `resumed`: the answer is the choice of step 6.1; continue there (the options comment exists already), skipping the steps before it.
+2. **Resume**: `~/.claude/agent-workflow/bin/decide.sh resume $issue` (the rules: `~/.claude/agent-workflow/reference/decisions.md`, "Resume"). `none`: go on (with log lines under it, an answer was taken earlier: treat it as `resumed`). `waiting` (exit 2): tell the user which decision waits and stop, changing nothing. `resumed`, for the request Specify parked on its options comment: the answer is the choice of step 6.1; continue there, skipping the steps before it. Any other request: as the rules say.
 3. If the issue names a design backlog entry, read it as the profile's "Sources" describes.
 4. Already `ready`: say so and ask whether to re-specify.
 5. Classify: **UI** (visible interface, copy, layout, interaction) or **non-UI** (tech-only per the issue standard when nothing user-visible changes).

@@ -20,7 +20,8 @@
 #                                  line per unanswered request (exit 2, nothing written, also when another request
 #                                  of the issue is answered), or, answered, what `resolve` prints per request, then
 #                                  `log: <path>` and the last 20 coordination-log entries (exit 0). Idempotent: a
-#                                  second run after an answer prints `none`
+#                                  second run prints `none`, followed by the same log lines when the log holds a
+#                                  `resumed` entry. The answer is passed on in full (up to 20000 chars, one line)
 #   decide.sh followup <n> <m> [D<k>]     note that change request on #n became issue #m
 #                                  (answer/resolve/followup act on the newest decision unless D<k> is given: pass the
 #                                  id `status` printed, an older decision can be the one that was answered or challenged)
@@ -137,9 +138,10 @@ scan() { # <label|""> <state>
   local f=(--label "$1"); [ -n "$1" ] || f=(--search "sort:updated-desc")
   gh issue list "${f[@]}" --state "$2" --limit 100 --json number,url,comments | rows
 }
-scan_one() { gh issue view "$1" --json number,url,comments | jq -s . | rows; } # <issue>: the same rows for one issue
-rows() { # stdin: a JSON array of issues (number, url, comments)
-  jq -r '
+# <issue>: the same rows for one issue, the answer in full (a stage acts on it; `status` and `digest` only show it)
+scan_one() { gh issue view "$1" --json number,url,comments | jq -s . | rows 20000; }
+rows() { # [<answer cap, chars>]; stdin: a JSON array of issues (number, url, comments)
+  jq -r --argjson cap "${1:-1000}" '
     def owner($cs; $e):
       ($e.pre) as $p
       | if $p != null and ([$cs[] | select(.key < $e.key and .c != null and (.c.kind == "request" or .c.kind == "record") and .c.id == $p)] | length) > 0
@@ -163,7 +165,7 @@ rows() { # stdin: a JSON array of issues (number, url, comments)
        ($q.v.body | split("\n") | map(select(test("^(<!--|###|$)") | not)) | first // "-" | .[0:120]),
        (now - ($q.v.createdAt | fromdateiso8601) | floor),
        ((if $m.c.kind == "answer" then [$m.v.body | split("\n")[1:] | join(" ") | sub("^Answer from the user \\(via the coordinator\\): "; "")] else [] end) + $after
-        | join(" / ") | gsub("\\s+"; " ") | .[0:1000]),
+        | join(" / ") | gsub("\\s+"; " ") | .[0:$cap]),
        ($q.v.body | split("\n") | map(select(test("^Preview: "))) | first // "" | sub("^Preview: "; "")),
        ([$q.v.body | scan("<!-- choices (.*?) -->") | .[0]] | join("\u001e"))]
     | map(tostring | gsub("\u001f"; " ")) | join("\u001f")'
@@ -225,12 +227,18 @@ case "$cmd" in
       exit 2
     fi
     done_rows=$(printf '%s\n' "$all" | awk -F'\037' '$3 == "answered" || ($3 == "request" && $7 != "")')
-    [ -n "$done_rows" ] || { echo "none"; exit 0; }
+    f="$(log_dir)/$1.md"
+    log_tail() { echo "log: $f"; grep '^- ' "$f" | tail -n 20 || true; }
+    if [ -z "$done_rows" ]; then
+      echo "none"
+      # an answer taken earlier (by a coordinator, or by a run that ended right after) is in the log: show where it stands
+      if [ -f "$f" ] && grep -q '^- [^ ]* resumed D' "$f"; then log_tail; fi
+      exit 0
+    fi
     while IFS=$'\x1f' read -r n _url _kind id _q _secs ans _prev _choices; do
       "$0" resolve "$n" "$ans" "$id" </dev/null
     done <<<"$done_rows"
-    f="$(log_dir)/$1.md"; echo "log: $f"
-    [ ! -f "$f" ] || { grep '^- ' "$f" | tail -n 20; } || true
+    log_tail
     ;;
   note)
     [ $# -eq 2 ] || die "usage: note <issue> <text>"
@@ -312,5 +320,5 @@ case "$cmd" in
     echo "Answer on the issue or here (\"385: ok\" takes the recommendations, \"385: 1B 2A\" picks). All: $repo/issues?q=is:open+label:needs-decision"
     echo "FYI $reviews issue(s) with agent decisions to review: $repo/issues?q=label:agent-decided"
     ;;
-  *) sed -n '2,49p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
+  *) sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
 esac

@@ -317,11 +317,15 @@ for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23; do bash "$
 resume
 eq "resume prints only the last 20 log entries" "$(printf '%s\n' "$out" | grep -c '^- ')/$(printf '%s\n' "$out" | tail -1 | sed 's/^- [^ ]* //')" "20/resumed D1 with: Decision D1: B"
 thread "$T/needs.json" 'req D1' 'Decision D1: B' 'res D1'; resume
-eq "resume after a resolve: none, nothing written (idempotent; under Orca the coordinator resolved first)" "$code/$out/$(wrote)" "0/none/0/0"
+eq "resume after a resolve: none, nothing written (idempotent; under Orca the coordinator resolved first)" "$code/$(printf '%s\n' "$out" | sed -n 1p)/$(wrote)" "0/none/0/0"
+eq "none after an answer was taken still shows the log, so a run that died after the resolve is not lost" "$(printf '%s\n' "$out" | sed -n 2p)/$(printf '%s\n' "$out" | grep -c '^- .* resumed D1 with: Decision D1: B')" "log: $T/logs/acme/widgets/7.md/1"
+long=$(python3 -c 'print("B, and then: " + "word " * 500 + "the end")')
+jq -n --arg t "$now" --arg a "$long" '[{number: 7, url: "u", comments: [{body: "<!-- decision-request D1 -->\nPick D1?", createdAt: $t}, {body: $a, createdAt: $t}]}]' >"$T/needs.json"; resume
+eq "resume passes a long answer on in full (status shows 1000 chars of it)" "$(printf '%s\n' "$out" | sed -n 1p | grep -c 'the end$')/$(bash "$D" status | sed -n 1p | grep -c 'the end$')" "1/0"
 thread "$T/needs.json" 'req D1' 'ans D1'; resume
 eq "resume takes an answer the coordinator posted" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "0/resumed D1 with: B"
 thread "$T/needs.json" 'rec D1' 'Decision D1: change it'; resume
-eq "resume leaves a change request on a record alone" "$code/$out/$(wrote)" "0/none/0/0"
+eq "resume leaves a change request on a record alone" "$code/$(printf '%s\n' "$out" | sed -n 1p)/$(wrote)" "0/none/0/0"
 jq -n --arg t "$now" --rawfile b "$T/req-multi.md" '[{number: 7, url: "u", comments: [{body: $b, createdAt: $t}, {body: "ok", createdAt: $t}]}]' >"$T/needs.json"; resume
 eq "resume spells an ok out against the request's choices" "$(printf '%s\n' "$out" | sed -n 1p)" "resumed D1 with: 1 Shell: B (footer bar) · 2 Heading: A (hidden) (answer: ok)"
 touch "$T/viewfail"; thread "$T/needs.json" 'req D1' 'Decision D1: B'; resume; rm -f "$T/viewfail"
