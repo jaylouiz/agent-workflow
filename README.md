@@ -2,7 +2,7 @@
 
 Claude Code skills that take a GitHub issue from rough idea to merged PR, with UX design and tech specification as separate, optional stages. The skills hold the method; each project fills in its facts in a tracked **profile** file.
 
-For any developer who works with [Claude Code](https://claude.com/claude-code) and GitHub issues. [Orca](https://github.com/stablyai/orca) is optional: it adds a coordinator that runs several issues in parallel.
+For any developer who works with [Claude Code](https://claude.com/claude-code) and GitHub issues. `/aw-coordinate` takes several issues through all stages at once; [Orca](https://github.com/stablyai/orca) is optional and runs them as supervised workers.
 
 ## Quickstart
 
@@ -22,7 +22,7 @@ cd <your repo> && claude             # then: /aw-setup
 6. You type `/aw-build 12`.
 7. It works on a branch and worktree of its own, implements the spec and runs the project's tests.
 8. It checks every acceptance criterion against evidence and opens a PR with `Closes #12`.
-9. You run `/code-review`, then merge the PR yourself: without Orca no skill merges.
+9. You run `/code-review`, then merge the PR yourself: only `/aw-coordinate` merges.
 10. Is the UX open (a new screen or flow)? Start with `/aw-ui-design 12`: variants, your pick, then steps 2-9.
 
 A question only you can answer **parks** the issue as a comment. Answer there and run the same skill again: it continues where it stopped.
@@ -39,12 +39,14 @@ A question only you can answer **parks** the issue as a comment. Answer there an
 
 | | Without Orca | With Orca |
 |---|---|---|
-| Skills | `/aw-setup`, `/aw-ui-design`, `/aw-specify`, `/aw-build`, `/aw-retro`, `/code-review`: one issue per session, you start each stage | the same, plus `/aw-coordinate <issues>`: workers run the stages in parallel, PRs get reviewed and merged |
+| Skills | `/aw-setup`, `/aw-ui-design`, `/aw-specify`, `/aw-build`, `/aw-retro`, `/code-review`, and `/aw-coordinate <issues>` in subagent mode | the same; `/aw-coordinate` runs the stages as Orca workers |
+| Workers of `/aw-coordinate` | background subagents, each in its own git worktree; they report once, at the end | Orca workers in their own terminals: you can watch and message them |
+| When the session ends | the run stops; run `/aw-coordinate <issues>` again to go on | Orca wakes the coordinator; many issues run as waves |
 | Decisions | the issue parks; `~/.claude/agent-workflow/bin/decide.sh status` lists what waits; rerun the skill after answering | the coordinator sends one digest and restarts the worker after your answer |
-| Settings | every setting not marked Orca in [Settings](#settings) | all |
+| Settings | all in [Settings](#settings) | all |
 | Profile sections | all but "Orchestration" | all |
 
-Without `orca` on PATH, `/aw-coordinate` stops and prints the manual path. A coordinator that runs without Orca is planned.
+Without `orca` on PATH, `/aw-coordinate 12 15 #18` runs in subagent mode: it screens and batches the issues, runs each stage as a subagent (up to `WF_MAX_WORKERS` at once, `1` for one after the other), parks on decision requests, routes the review through `/code-review` and merges. The word `subagents` in the input picks that mode with Orca too. Both modes follow [reference/coordination.md](reference/coordination.md).
 
 ## With Orca
 
@@ -68,19 +70,19 @@ Without `/aw-setup`: copy [reference/project-profile.md](reference/project-profi
 
 ## Settings
 
-Two sourced bash files, read in this order (later wins): built-in defaults, the global `~/.claude/agent-workflow-settings.sh` (template [reference/global-settings.sh](reference/global-settings.sh)), the repo's `.claude/issue-workflow.sh` (template [reference/project-config.sh](reference/project-config.sh)). `bash ~/.claude/agent-workflow/bin/settings.sh show` prints every value with its source. **Orca** marks a setting only `/aw-coordinate` and its workers read.
+Two sourced bash files, read in this order (later wins): built-in defaults, the global `~/.claude/agent-workflow-settings.sh` (template [reference/global-settings.sh](reference/global-settings.sh)), the repo's `.claude/issue-workflow.sh` (template [reference/project-config.sh](reference/project-config.sh)). `bash ~/.claude/agent-workflow/bin/settings.sh show` prints every value with its source. **Coord.** marks a setting only `/aw-coordinate` and its workers read.
 
-| Setting | Default | Orca | What it does |
+| Setting | Default | Coord. | What it does |
 |---|---|---|---|
 | `WF_MODEL_DEFAULT` | `sonnet` | | normal workers, Design's tech check, the retro agent |
 | `WF_MODEL_FAST` | `haiku` | | mechanical subagents (`rg` audits, copy sweeps) |
-| `WF_MODEL_STRONG` | `opus` | Orca | coordinators, reviewers, the root-cause subagent of a stuck lead |
-| `WF_MODEL_HEAVY` | `claude-fable-5-2` | Orca | workers for a new feature, a bigger UI change, complex technical work |
-| `WF_MAX_WORKERS` | `3` | Orca | concurrent workers in a Run |
-| `WF_PORTS` | `3101-3105` | Orca | one dev-server and E2E port per worker |
-| `WF_DIGEST_CAP` | `2h` | Orca | how long the oldest unannounced decision request waits for the digest |
-| `WF_NO_WAIT_CI` | `0` | Orca | `1`: merge prep does not wait for pending checks |
-| `WF_RISK_GLOBS`, `WF_IGNORE_GLOBS`, `WF_REVIEW_LINES`, `WF_HOLD_LABELS`, `WF_REQUIRED_CHECKS`, `WF_CHECKS_TSV`, `wf_*` functions | see the template | Orca | review routing, merge holds, CI gate, verify / build / after-merge steps |
+| `WF_MODEL_STRONG` | `opus` | Coord. | coordinators, reviewers, the root-cause subagent of a stuck lead |
+| `WF_MODEL_HEAVY` | `claude-fable-5-2` | Coord. | workers for a new feature, a bigger UI change, complex technical work |
+| `WF_MAX_WORKERS` | `3` | Coord. | concurrent workers of one hand-off |
+| `WF_PORTS` | `3101-3105` | Coord. | one dev-server and E2E port per worker |
+| `WF_DIGEST_CAP` | `2h` | Coord. | how long the oldest unannounced decision request waits for the digest |
+| `WF_NO_WAIT_CI` | `0` | Coord. | `1`: merge prep does not wait for pending checks |
+| `WF_RISK_GLOBS`, `WF_IGNORE_GLOBS`, `WF_REVIEW_LINES`, `WF_HOLD_LABELS`, `WF_REQUIRED_CHECKS`, `WF_CHECKS_TSV`, `wf_*` functions | see the template | Coord. | review routing, merge holds, CI gate, verify / build / after-merge steps |
 | `WF_PROTO_PORTS` | `3111-3119` | | prototype previews of `/aw-ui-design` |
 | `WF_COMMENT_CAP` | `1500` | | visible characters per agent issue comment |
 | `WF_ISSUE_LOG_DIR` | `~/.claude/issue-logs` | | per-issue coordination logs |

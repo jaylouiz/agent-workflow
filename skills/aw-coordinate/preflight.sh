@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# Preflight of /aw-coordinate (SKILL.md section 0, step 1): the coordinator needs the `orca` CLI. Without it this
-# stops the skill before anything else runs and names the manual path. Run: preflight.sh
-# Exit: 0 `orca` is on PATH (prints nothing, or one warning line when it is older than ORCA_MIN of bin/lib.sh: the
-# run goes on), 69 it is not (the message below, on stdout, is what the user gets).
+# Preflight of /aw-coordinate (SKILL.md section 0, step 1): which runner drives the stages. With the `orca` CLI it is
+# Orca; without it (or when asked) the skill runs in subagent mode (subagent-mode.md). Run: preflight.sh [--subagents]
+# Exit: 0 Orca mode (prints nothing, or one warning line when Orca is older than ORCA_MIN of bin/lib.sh: the run
+# goes on), 69 subagent mode: no `orca` on PATH, or --subagents (the user asked for it). The line on stdout says
+# which and is passed on to the user. 64 usage.
 set -u
+MODE='subagent mode: the stages run as Claude Code subagents, each in a git worktree of its own. Go on with subagent-mode.md in this skill'"'"'s directory.'
+case "${1:-}" in
+  "") ;;
+  --subagents) echo "Asked for $MODE"; exit 69 ;;
+  *) echo "preflight.sh: unknown argument: $1 (usage: preflight.sh [--subagents])" >&2; exit 64 ;;
+esac
 if command -v orca >/dev/null 2>&1; then
   SRC=${BASH_SOURCE[0]}; case $SRC in */*) SRC=${SRC%/*} ;; *) SRC=. ;; esac # no dirname: the PATH may be bare
   LIB="$SRC/../../bin/lib.sh"
@@ -15,17 +22,5 @@ if command -v orca >/dev/null 2>&1; then
   fi
   exit 0
 fi
-cat <<'MSG'
-/aw-coordinate needs Orca: there is no `orca` on PATH (https://github.com/stablyai/orca). Nothing was started.
-
-Without Orca, take each issue through its stages yourself, one skill at a time:
-  /aw-ui-design <n>   label needs-design: design rounds, then the UX decision
-  /aw-specify <n>     label needs-spec: the spec
-  /aw-build <n>       label ready: the PR; then /code-review
-
-A stage that needs a decision from you parks its issue with a decision request. Your decision inbox:
-  ~/.claude/agent-workflow/bin/decide.sh status    answered and waiting requests
-  ~/.claude/agent-workflow/bin/decide.sh digest    the waiting ones as one list
-Answer on the issue, then run the same stage skill again: it reads your answer and continues where it parked.
-MSG
+echo "No \`orca\` on PATH (https://github.com/stablyai/orca is optional): $MODE"
 exit 69

@@ -22,7 +22,7 @@ done
 for t in "No profile" CLAUDE_CONFIG_DIR "Orca below the minimum" "not logged in or too old" "Hooks not firing"; do
   check "Troubleshooting covers: $t" 'sed -n "/^## Troubleshooting/,/^## Vocabulary/p" README.md | grep -qF -- "$t"'
 done
-check "README: Orca-only settings are marked" '[ "$(grep -c "^| \`WF_.*| Orca |" README.md)" -ge 6 ] && grep -q "^| \`WF_MAX_WORKERS\` | \`3\` | Orca |" README.md && grep -q "^| \`WF_PROTO_PORTS\` | \`3111-3119\` | |" README.md'
+check "README: coordinator-only settings are marked" '[ "$(grep -c "^| \`WF_.*| Coord. |" README.md)" -ge 6 ] && grep -q "^| \`WF_MAX_WORKERS\` | \`3\` | Coord. |" README.md && grep -q "^| \`WF_PROTO_PORTS\` | \`3111-3119\` | |" README.md'
 check "README: the glossary has five terms and links to docs/vocabulary.md" '[ "$(sed -n "/^## Vocabulary/,/^Every term/p" README.md | grep -c "^- \*\*")" = 5 ] && grep -qF "](docs/vocabulary.md)" README.md'
 # the supported versions live in bin/lib.sh alone: the docs name the constants, not their values
 . bin/lib.sh
@@ -62,9 +62,9 @@ check "docs/vocabulary.md holds the term table" 'grep -q "^| Term | Meaning |" d
 
 # optional skills: every skill line that names one carries the fallback; /wayfinder is named nowhere
 OPT='/gh-inbox-dispatcher|/ui-canvas|[Ii]mpeccable|harvesting-session-knowledge'
-miss=$(grep -rnE --include='*.md' -- "$OPT" skills | grep -v '(if installed; otherwise ' || :)
-check "every optional-skill mention in skills/ has '(if installed; otherwise …)'${miss:+: $miss}" '[ -z "$miss" ]'
-check "the lint finds the mentions it guards" '[ "$(grep -rnE --include="*.md" -- "$OPT" skills | wc -l)" -ge 6 ]'
+miss=$(grep -rnE --include='*.md' -- "$OPT" skills reference/coordination.md | grep -v '(if installed; otherwise ' || :)
+check "every optional-skill mention in skills/ and the coordination rules has '(if installed; otherwise …)'${miss:+: $miss}" '[ -z "$miss" ]'
+check "the lint finds the mentions it guards" '[ "$(grep -rnE --include="*.md" -- "$OPT" skills reference/coordination.md | wc -l)" -ge 6 ]'
 check "no /wayfinder anywhere" '! grep -rnqi --exclude-dir=.git --exclude=test-generic.sh --exclude=test-docs.sh wayfinder .'
 
 echo "docs: $((n - fail))/$n passed"

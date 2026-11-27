@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for preflight.sh: /aw-coordinate stops cleanly without `orca` (a PATH without it; nothing is uninstalled).
+# Tests for preflight.sh: without `orca` (a PATH without it; nothing is uninstalled) /aw-coordinate goes on in subagent mode.
 # Run: bash skills/aw-coordinate/test-preflight.sh
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -16,13 +16,18 @@ has() { n=$((n + 1)); printf '%s\n' "$out" | grep -qF -- "$2" || { fail=$((fail 
 out=$(PATH="$T/empty" "$BASH_BIN" "$DIR/preflight.sh" 2>"$T/err"); code=$?
 eq "without orca on PATH: exit 69" "$code" 69
 eq "without orca: nothing on stderr (the message is the output)" "$(cat "$T/err")" ""
-has "says what is missing" 'no `orca` on PATH'
-has "names the design skill" "/aw-ui-design <n>"
-has "names the specify skill" "/aw-specify <n>"
-has "names the build skill" "/aw-build <n>"
-has "names the inbox: status" "bin/decide.sh status"
-has "names the inbox: digest" "bin/decide.sh digest"
-has "says how a parked issue goes on" "run the same stage skill again"
+has "says what is missing" 'No `orca` on PATH'
+has "names the mode it goes on in" "subagent mode"
+has "names the file the skill continues with" "subagent-mode.md"
+eq "without orca: one line (it is passed on to the user)" "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" 1
+n=$((n + 1)); [ -f "$DIR/subagent-mode.md" ] || { fail=$((fail + 1)); echo "FAIL [subagent-mode.md exists]"; }
+
+# asked for by the user: the same mode with Orca installed
+out=$(PATH="$T/orca" "$BASH_BIN" "$DIR/preflight.sh" --subagents 2>"$T/err"); code=$?
+eq "--subagents with orca on PATH: exit 69" "$code" 69
+has "--subagents: names the mode" "Asked for subagent mode"
+out=$(PATH="$T/orca" "$BASH_BIN" "$DIR/preflight.sh" --bogus 2>/dev/null); code=$?
+eq "unknown argument: exit 64, nothing on stdout" "$code/$out" "64/"
 
 out=$(PATH="$T/orca" "$BASH_BIN" "$DIR/preflight.sh" 2>&1); code=$?
 eq "with orca on PATH: exit 0, no output" "$code/$out" "0/"
@@ -44,6 +49,7 @@ eq "Orca at the minimum: exit 0, no output" "$code/$out" "0/"
 
 # the skill runs it first, before the Orca guide it cannot load without the CLI
 first=$(awk '/^## 0\. Preflight/ {p = 1; next} p && /^1\. / {print; exit}' "$DIR/SKILL.md")
+n=$((n + 1)); case "$first" in *"exit 69"*subagent-mode.md*) ;; *) fail=$((fail + 1)); echo "FAIL [SKILL.md step 1 sends exit 69 to subagent-mode.md]" ;; esac
 n=$((n + 1)); case "$first" in *preflight.sh*) ;; *) fail=$((fail + 1)); echo "FAIL [SKILL.md preflight step 1 runs preflight.sh] got '$(printf '%s' "$first" | cut -c1-80)'" ;; esac
 
 echo "preflight: $((n - fail))/$n passed"

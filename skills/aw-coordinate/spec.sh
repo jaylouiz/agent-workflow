@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Print a complete Orca task spec for one issue and stage, from task-template.md (aw-coordinate section 4).
+# Print a complete task spec for one issue and stage, from task-template.md: for an Orca worker (aw-coordinate
+# section 4) or, with --runner subagent, the brief of a Claude Code subagent (subagent-mode.md).
 #
 #   spec.sh <lead|design|review|delta-review|fix> <issue> --ledger <run ledger dir>
+#           [--runner <orca|subagent>: default orca; subagent = a brief for a Claude Code subagent (subagent-mode.md), needs --branch]
 #           [--tier <text>] [--model <alias>: default the settings' WF_MODEL_STRONG for review and delta-review, else WF_MODEL_DEFAULT] [--branch <b>] [--pr <n>] [--wt <path>] [--extra <file>] [--batch <n,m,...>: lead only, the other issues of a batch] [--no-port] [--interactive]
 #   spec.sh release-port <port> --ledger <dir>     drop a reservation when its worker settled
 #
@@ -19,7 +21,7 @@ die() { echo "spec.sh: $*" >&2; exit 64; }
 stage=${1:-}; n=${2:-}
 [ -n "$stage" ] && [ -n "$n" ] || { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 64; }
 shift 2
-tier="Standard - default"; model=""; branch=""; pr=""; wt=""; ledger=""; extra=""; want_port=1; interactive=0; batch=""
+tier="Standard - default"; model=""; branch=""; pr=""; wt=""; ledger=""; extra=""; want_port=1; interactive=0; batch=""; runner=orca
 while [ $# -gt 0 ]; do
   case "$1" in --no-port|--interactive) ;; --*) case "${2-}" in ""|--*) die "$1 needs a value, got '${2-}' (an empty unquoted variable is dropped by zsh)" ;; esac ;; esac
   case "$1" in
@@ -31,6 +33,7 @@ while [ $# -gt 0 ]; do
     --ledger) ledger=${2:?}; shift 2 ;;
     --extra) [ -r "$2" ] || die "--extra file not readable: $2 (a spec without its notes would go out silently)"; extra="$extra $2"; shift 2 ;;
     --batch) batch=${2:?}; shift 2 ;;
+    --runner) runner=${2:?}; shift 2 ;;
     --no-port) want_port=0; shift ;;
     --interactive) interactive=1; shift ;;
     *) die "unknown flag $1" ;;
@@ -45,6 +48,7 @@ if [ "$stage" = release-port ]; then
   grep -v "^$n " "$ledger/ports" >"$ledger/ports.tmp"; mv "$ledger/ports.tmp" "$ledger/ports"; exit 0
 fi
 case "$stage" in lead|design|review|delta-review|fix) ;; *) die "unknown stage '$stage'" ;; esac
+case "$runner" in orca) ;; subagent) [ -n "$branch" ] || die "--runner subagent needs --branch <branch> (wt.sh init puts it into the subagent's worktree)" ;; *) die "unknown runner '$runner' (orca | subagent)" ;; esac
 grep -q "<!-- stage:$stage -->" "$DIR/task-template.md" || die "no template block for $stage"
 
 wf_load
@@ -78,21 +82,30 @@ repo=$(cd "$ledger" && wf_repo_slug 2>/dev/null) || repo=$(wf_repo_slug) || repo
 decide="~/.claude/agent-workflow/bin/decide.sh"
 [ -z "$repo" ] || decide="WF_REPO=$repo $decide"
 if [ $interactive = 1 ]; then
+  if [ "$runner" = subagent ]; then
+    questions='Interactive issue: every open choice for the user (Specify approaches with your recommendation, any open question) becomes a decision request, one-way or not: park on it, the coordinator asks the user at once.'
+  else
   questions='Interactive issue: put every question for the user (Specify approaches with your recommendation, any open choice) through the preamble'"'"'s `ask` and use the reply; the coordinator relays it to the user. One-way choices still park.'
+  fi
 else
   questions="No questions to the user."
 fi
 
 TITLE=$title N=$n STAGE=$stage TIER=$tier MODEL=$model BRANCH=$branch PR=${pr:-"(see issue)"} WT=${wt:-"(this worktree)"} \
 PROTO_PORT=${proto:-none} MODEL_STRONG=$WF_MODEL_STRONG MODEL_FAST=$WF_MODEL_FAST PORT=${port:-"(none: no dev server for this stage)"} LEDGER=$ledger BINDIR="~/.claude/agent-workflow/bin" DECIDE="$decide" \
-QUESTIONS=$questions STAGEKEY=$stage python3 -I -c '
+QUESTIONS=$questions STAGEKEY=$stage RUNNER=$runner SKILLDIR="~/.claude/skills/aw-coordinate" python3 -I -c '
 import os, re, sys
 t = open(sys.argv[1], encoding="utf-8").read()
 def block(name):
     m = re.search(r"<!-- %s -->\n(.*?)<!-- /%s -->" % (re.escape(name), name.split(":")[0]), t, re.S)
     return m.group(1)
 out = block("common") + block("stage:" + os.environ["STAGEKEY"])
-out = re.sub(r"\{\{([A-Z_]+)\}\}", lambda m: os.environ.get(m.group(1), m.group(0)), out)
+# the phrases of the runner (KEY=text lines) fill their placeholders first; they may hold placeholders themselves
+phrases = dict(l.split("=", 1) for l in block("phrases:" + os.environ["RUNNER"]).splitlines() if "=" in l)
+phrases["SP"] = " "  # a trailing space in a phrase, kept visible in the template
+fill = lambda m: phrases.get(m.group(1), os.environ.get(m.group(1), m.group(0)))
+for _ in range(3):
+    out = re.sub(r"\{\{([A-Z_]+)\}\}", fill, out)
 sys.stdout.write(out)
 ' "$DIR/task-template.md"
 if [ -n "$batch" ]; then

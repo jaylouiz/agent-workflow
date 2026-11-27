@@ -47,4 +47,4 @@ The label `on-hold` (set by the user, on GitHub or on their board) stops an issu
 
 The stage skills run on their own. Unattended then means: the run parks, the user answers on the issue, and the user runs `/<stage> <n>` again; its Resume step picks the answer up. The user's inbox is `decide.sh status` (answered and waiting requests, change requests on agent decisions) and `decide.sh digest` (the waiting ones as one list). A Design round has nobody to keep its local preview alive: serve it yourself before parking (`proto-serve.sh port <n>`, then `proto-serve.sh start <n> <worktree> <port>`, both in `~/.claude/agent-workflow/bin/`); `resume` stops it.
 
-With `/aw-coordinate`, the coordinator sweeps the answers, resolves and starts the next worker (its section 5).
+With `/aw-coordinate`, the coordinator sweeps the answers, resolves and starts the next worker ([coordination.md](coordination.md), "Decisions and the user").
