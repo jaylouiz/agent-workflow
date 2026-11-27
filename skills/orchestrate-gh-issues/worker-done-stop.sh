@@ -58,7 +58,7 @@ rc=$?
 cat >&2 <<MSG
 worker-done-stop.sh: you are the dispatched worker for task $task (dispatch $dispatch) and have not settled it, so you cannot end yet.
 If your work is finished, send exactly once: orca orchestration send --from <your orca_session_id> --type worker_done --subject "<status>" --body "<what you did, found, what is left>" --task-id $task --dispatch-id $dispatch --outcome succeeded|failed
-(full command and your session id are in your task preamble).
+(failed only when you could not finish; red checks or open findings are a succeeded report; full command and your session id are in your task preamble).
 If you are only waiting (on your own run_in_background job such as an E2E run, or on an ask/escalation answer), the work is not done: do NOT send worker_done yet, just end your turn again. This block fires once per stop, so the second stop passes and Orca wakes you when the job or the answer arrives.
 MSG
 exit 2

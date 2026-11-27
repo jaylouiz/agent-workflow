@@ -14,7 +14,7 @@ Commands:
   inbox              Show messages across (or for) recipients
   task-create        Create an orchestration task
   task-list          List orchestration tasks
-  task-update        Update a task status
+  task-update        Update a task status or passive worker note
   worker-start       Start one supervised worker on the Run home or a connected Orca server
   worker-show        Inspect one supervised worker Dispatch
   worker-read        Read bounded output from one supervised worker
