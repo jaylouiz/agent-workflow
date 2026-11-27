@@ -47,7 +47,7 @@ profile_check() { # profile_check [<file>]: see the header
   if [ "$size" -gt 15360 ]; then
     if [ "$size" -gt 20480 ]; then echo "profile over the 20 KB limit ($size bytes): split it now (/aw-setup update, retro)"
     else echo "profile over the 15 KB budget ($size bytes): consider a split"; fi
-    echo "  sections (bytes): $(awk '/^## /{if(h!="")printf "%s %d, ",h,n; h=substr($0,4); n=0} {n+=length($0)+1} END{if(h!="")printf "%s %d",h,n}' "$f")"
+    echo "  sections (bytes): $(LC_ALL=C awk '/^## /{if(h!="")printf "%s %d, ",h,n; h=substr($0,4); n=0} {n+=length($0)+1} END{if(h!="")printf "%s %d",h,n}' "$f")"
     echo "  convention: a long section keeps its heading and becomes one line, \`Full text: .claude/issue-workflow/<slug>.md (read when: <stage/step>)\` (reference/project-profile.md)"
   fi
   return 0
