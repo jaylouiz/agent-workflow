@@ -1,5 +1,6 @@
 # issue-workflow profile: agent-workflow
 
+<!-- profile-template: 1 -->
 <!-- Facts the code cannot tell. Executable facts: `.claude/issue-workflow.sh`. Method and vocabulary: README.md.
      No UI here (shell scripts and Markdown), so there is no Design quality, Pattern check, Design feedback, Screenshots,
      Prototype, Canvas or Components section: those steps do not apply. -->

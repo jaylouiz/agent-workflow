@@ -53,6 +53,8 @@ Compare the existing files with the templates and the fresh `detect.sh` output; 
 - sections that now apply but are missing (e.g. a UI was added), and sections that no longer apply
 - commands, scripts or check names that no longer exist
 - config variables the template has gained
+- the template version: run `bash ~/.claude/agent-workflow/bin/settings.sh profile`; an older `profile-template` line means the diff above is due, and the update ends by setting the line to the template's number
+- size: the same command warns above 15 KB with the section sizes. Offer to split each section over about 3 KB (over 20 KB: propose it first): write `.claude/issue-workflow/<slug>.md` with the full text and leave the heading plus one line `Full text: .claude/issue-workflow/<slug>.md (read when: <stage/step>)` (`reference/stage-sections.md` says which stage reads it). Every heading stays; show the diff first
 
 Never rewrite the user's prose unseen: show the diff and apply only what the user accepts, then section 5 (labels again, commit as `chore: update issue-workflow profile`).
 
