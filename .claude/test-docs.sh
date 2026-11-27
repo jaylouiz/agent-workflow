@@ -27,6 +27,7 @@ check "README: the glossary has five terms and links to docs/vocabulary.md" '[ "
 # the supported versions live in bin/lib.sh alone: the docs name the constants, not their values
 . bin/lib.sh
 for v in "$GH_MIN" "$ORCA_MIN" "$ORCA_TESTED"; do
+  [ -n "$v" ] || { n=$((n + 1)); fail=$((fail + 1)); echo "FAIL [bin/lib.sh sets no GH_MIN/ORCA_MIN/ORCA_TESTED value]"; continue; }
   check "no doc repeats the version $v of bin/lib.sh" '! grep -nF -- "$v" README.md CHANGELOG.md docs/releasing.md docs/vocabulary.md'
 done
 # every setting settings.sh reports is in the README table, and the defaults shown there are lib.sh's

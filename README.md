@@ -31,8 +31,8 @@ A question only you can answer **parks** the issue as a comment. Answer there an
 
 - Both platforms: [Claude Code](https://claude.com/claude-code), `git`, `bash` (3.2 is enough), `jq`, `python3` and [`gh`](https://cli.github.com), logged in (`gh auth login`) and at least `GH_MIN` of [bin/lib.sh](bin/lib.sh), the one place the minimum versions live.
 - macOS: `brew install gh jq python`; the system `bash` and `git` do.
-- Linux: `sudo apt install gh jq python3 lsof` or your distribution's packages; `lsof` is only for prototype previews.
-- `bash install.sh --check` checks all of it and changes nothing. CI runs the test suite on macOS and Ubuntu.
+- Linux: `sudo apt install jq python3 lsof`, and `gh` from [GitHub's apt/rpm repository](https://github.com/cli/cli/blob/trunk/docs/install_linux.md) (distribution packages are older than `GH_MIN`); `lsof` is only for prototype previews.
+- `bash install.sh --check` (run in your clone of this repo) checks all of it and changes nothing. CI runs the test suite on macOS and Ubuntu.
 - Optional, not shipped here: `/gh-inbox-dispatcher`, `/ui-canvas`, `harvesting-session-knowledge` and the Impeccable plugin. `/code-review` is built into Claude Code. A step whose tool is missing is skipped or reported, or takes the fallback its skill names.
 
 ## Without and with Orca
@@ -52,7 +52,7 @@ Without `orca` on PATH, `/aw-coordinate` stops and prints the manual path. A coo
 2. Check: `bash install.sh --check` warns when your Orca is older than the minimum; `/aw-coordinate` warns too, neither blocks. Minimum and tested version are `ORCA_MIN` and `ORCA_TESTED`: `bash -c '. ~/.claude/agent-workflow/bin/lib.sh; echo "$ORCA_MIN $ORCA_TESTED"'`.
 3. In your repo: `/aw-coordinate 12 15 #18`, or an idea in plain words.
 
-`WF_MAX_WORKERS` (default `3`) is how many workers run at once. `WF_PORTS` (`3101-3105`) gives each worker a dev-server and E2E port, so the range needs at least that many ports. `WF_PROTO_PORTS` (`3111-3119`) holds the prototype previews that stay up while a design decision waits; keep it outside `WF_PORTS`.
+`WF_MAX_WORKERS` (default `3`) is how many workers run at once. `WF_PORTS` (`3101-3105`; prototype previews check it without Orca too) gives each worker a dev-server and E2E port, so the range needs at least that many ports. `WF_PROTO_PORTS` (`3111-3119`) holds the prototype previews that stay up while a design decision waits; keep it outside `WF_PORTS`.
 
 ## Install
 

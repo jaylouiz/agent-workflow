@@ -34,7 +34,7 @@ They live in `bin/lib.sh`, nowhere else:
   `gh issue comment --attach`).
 
 Raising `ORCA_MIN` or `GH_MIN` is a Breaking entry. The README and the other docs name the constants, never the
-numbers (`.claude/test-docs.sh` checks the README).
+numbers (`.claude/test-docs.sh` checks them), also in `CHANGELOG.md`: log a raised minimum as "`ORCA_MIN` raised".
 
 `bash install.sh --dev` also links `/aw-orca-review` (maintainer only, run by hand after an Orca update): it reviews
 the new version against this workflow and asks before it changes anything. Users get the result through

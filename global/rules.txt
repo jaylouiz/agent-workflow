@@ -4,7 +4,7 @@
 # line here, a line has no heading, or a rule names an optional skill its line does not.
 Out-of-scope opportunities -> GitHub `inbox` :: a side finding outside the task becomes a GitHub issue labelled `inbox` (about 5 per run at most), never a fix in the current change :: /gh-inbox-dispatcher (optional, sorts the inbox; without it you relabel those issues yourself)
 Unspecific, large goals -> the user's direction first (only when needed) :: a vague goal too big for one session comes back to you for a direction; agents never choose it ::
-Self-improvement: friction ledger and retro (standing practice) :: agents note each friction (a retry, a round trip, 2+ minutes lost) in a ledger, /aw-retro turns the notes into fixes, and every always-loaded CLAUDE.md stays under 15 KB ::
+Self-improvement: friction ledger and retro (standing practice) :: agents note each friction (a retry, a round trip, 2+ minutes lost) in a ledger, /aw-retro turns the notes into fixes, and every always-loaded CLAUDE.md aims for 15 KB and never exceeds 20 KB ::
 Multiple issues -> screen all first :: several issues at once are screened together before any starts: order, batches, one branch and PR for related ones ::
 Commit and push without asking :: agents commit and push finished work themselves (features through a branch and PR); merging a PR still needs your word ::
 Waiting in shell loops :: agents never wait with `while pgrep -f` (it matches itself and never ends) ::

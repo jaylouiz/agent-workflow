@@ -35,7 +35,7 @@ Post the findings (class, file:line, evidence, proposed change, one line each) a
 
 - agent-workflow: edit, run every `skills/*/test-*.sh` the change touches, commit, push to `main` (solo repo).
 - A project repo: its own worktree and branch (never the main checkout: a release or dev server may run there), its commit and push rules; say when a push waits (e.g. a running release).
-- Supported versions: `ORCA_TESTED` is the snapshot's version, so `snapshot.sh` moves it. `ORCA_MIN` (one line in the shared `lib.sh`) is raised by hand, to the Orca version that introduced it, whenever an applied change makes the workflow rely on a command, flag or message older versions lack; otherwise it stays. Add the change to the changelog's Unreleased section.
+- Supported versions: `ORCA_TESTED` is the snapshot's version, so `snapshot.sh` moves it. `ORCA_MIN` (one line in the shared `lib.sh`) is raised by hand, to the Orca version that introduced it, whenever an applied change makes the workflow rely on a command, flag or message older versions lack; otherwise it stays. Add the change to the changelog's Unreleased section, naming the constant (`ORCA_MIN`), not its value.
 - Then `bash snapshot.sh`, commit `snapshot/` with the change (`... for Orca <v>`), push. Delete `~/.claude/orca-updates/<v>.*` only after the snapshot is committed.
 - Out-of-scope findings go to the `inbox` rule (`~/.claude/CLAUDE.md`).
 
