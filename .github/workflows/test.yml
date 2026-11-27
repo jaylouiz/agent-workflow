@@ -50,21 +50,23 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set +e
-          sw_vers; which -a lsof python3; python3 --version; lsof -v 2>&1 | head -4
-          python3 -m http.server 49555 --bind 127.0.0.1 >/dev/null 2>&1 &
-          pid=$!; sleep 3; echo "pid=$pid"
-          echo "--- t -i"; lsof -nP -tiTCP:49555 -sTCP:LISTEN; echo "rc=$?"
-          echo "--- -i"; lsof -nP -iTCP:49555 -sTCP:LISTEN; echo "rc=$?"
-          echo "--- -i no state"; lsof -nP -iTCP:49555; echo "rc=$?"
-          echo "--- -i :port"; lsof -nP -i :49555; echo "rc=$?"
-          echo "--- all listen"; lsof -nP -iTCP -sTCP:LISTEN | head -20; echo "rc=$?"
-          echo "--- -a -p -i"; lsof -nP -a -p "$pid" -i; echo "rc=$?"
-          echo "--- -p cwd"; lsof -a -p "$pid" -d cwd -Fn; echo "rc=$?"
-          echo "--- -p all fds"; lsof -nP -p "$pid" | head -30; echo "rc=$?"
-          echo "--- sudo"; sudo lsof -nP -tiTCP:49555 -sTCP:LISTEN; echo "rc=$?"
-          echo "--- netstat"; netstat -anv -p tcp | grep 49555
-          echo "--- nc"; nc -z 127.0.0.1 49555; echo "rc=$?"
+          mkdir -p "$RUNNER_TEMP/wt"; log="$RUNNER_TEMP/srv.log"
+          pid=$(python3 -I -c '
+          import os, subprocess, sys
+          wt, port, log, cmd = sys.argv[1:5]
+          with open(log, "ab") as out:
+              p = subprocess.Popen(["sh", "-c", "exec " + cmd], cwd=wt, env=dict(os.environ, PORT=port),
+                                   stdin=subprocess.DEVNULL, stdout=out, stderr=out, start_new_session=True)
+          print(p.pid)' "$RUNNER_TEMP/wt" 49556 "$log" 'python3 -m http.server "$PORT" --bind 127.0.0.1')
+          sleep 3; echo "pid=$pid"; ps -o pid,pgid,stat,command -p "$pid"
+          echo "--- log"; cat "$log"
+          echo "--- lsof"; lsof -nP -tiTCP:49556 -sTCP:LISTEN; echo "rc=$?"
+          echo "--- lsof verbose"; lsof -nP -iTCP:49556 -sTCP:LISTEN; echo "rc=$?"
+          echo "--- lsof -p"; lsof -nP -a -p "$pid" -i; echo "rc=$?"
+          echo "--- netstat"; netstat -anv -p tcp | grep 49556
+          echo "--- nc"; nc -z 127.0.0.1 49556; echo "rc=$?"
           kill "$pid"
+          echo "--- test -x"; bash -x skills/orchestrate-gh-issues/test-proto-serve.sh 2>&1 | head -120 | cut -c1-300
           exit 1
 
       - name: Run every suite
