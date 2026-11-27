@@ -1,9 +1,19 @@
 # issue-workflow profile: <project>
 
+<!-- profile-template: 1 -->
+
 <!-- Read by the agent-workflow skills; /aw-setup writes and updates it. Project facts only (README
      "Generic vs project"): reference CLAUDE.md instead of copying it; delete a section that does not apply (a missing
      section means the step does not apply). A "ui" tag comment under a heading marks a section only a project with a
-     UI needs, "orca" one only Orca orchestration needs. Settings (models, max workers, digest cap): settings.sh show. -->
+     UI needs, "orca" one only Orca orchestration needs. Settings (models, max workers, digest cap): settings.sh show.
+
+     Template version: the `profile-template` line above; /aw-setup update bumps it. `settings.sh show` and
+     `settings.sh profile` print one line when a profile has an older version or none.
+     Budget: warn above 15 KB, limit 20 KB (`settings.sh profile` prints the section sizes). Over the budget, split.
+     Partials: every `##` heading stays; a section over about 3 KB shrinks to one line,
+     `Full text: .claude/issue-workflow/<slug>.md (read when: <stage/step>)`. The skills say "the profile's X" and follow
+     the pointer only when the step needs it. Which stage reads which section: reference/stage-sections.md.
+     Routing a project lesson: about files -> path-scoped `.claude/rules/` (`paths:`); about a workflow step -> this profile. -->
 
 ## Labels
 

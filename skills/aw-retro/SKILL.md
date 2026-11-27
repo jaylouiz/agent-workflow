@@ -46,6 +46,7 @@ Measure the files in the profile's "Context files" (`wc -w`; `wc -c` too for eac
 - merge rules that say the same thing in two places (one home, pointers elsewhere);
 - delete rules that restate the code, a tool's `--help` or another skill, and rules with no hit (no ledger entry, no `win`) whose failure would be cheap; an instruction to invoke a skill that `usage.py summary` shows was never invoked is dead: delete the call and keep its one-line rule inline;
 - move out of always-loaded files to the targets "Budget" names, and workflow facts to the profile;
+- profile budget: `bash ~/.claude/agent-workflow/bin/settings.sh profile` (warns above 15 KB, limit 20 KB). Over 20 KB, or growing past 15 KB, propose the split of `/aw-setup` update mode (pointer partials, headings stay), never a deletion of project facts.
 - keep anything a `win` entry vouches for.
 
 ## 5. Apply and record

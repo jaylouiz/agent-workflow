@@ -74,5 +74,31 @@ bash "$DIR/decide.sh" check "$T/ok.md" >/dev/null 2>"$T/err2"; eq "decide.sh sur
 check "unparsable global file: stderr names it" 'grep -qF "$WF_GLOBAL_SETTINGS" "$T/err2"'
 rm -f "$WF_GLOBAL_SETTINGS"
 
+
+# settings.sh profile: template version and size budget
+. "$DIR/lib.sh"
+TPL="$DIR/../reference/project-profile.md"
+want=$(sed -n 's/.*<!-- profile-template: \([0-9][0-9]*\) -->.*/\1/p' "$TPL" | head -1)
+check "template carries a version line" '[ -n "$want" ]'
+P="$T/profile.md"
+printf '# p\n\n<!-- profile-template: %s -->\n\n## Labels\n\n- a\n' "$want" >"$P"
+eq "current profile is silent" "$(bash "$S" profile "$P")" ""
+printf '# p\n\n## Labels\n\n- a\n' >"$P"
+eq "no version: one line" "$(bash "$S" profile "$P")" "profile older than the template (none < $want): run /aw-setup update"
+printf '# p\n\n<!-- profile-template: 0 -->\n\n## Labels\n' >"$P"
+check "older version: one line" '[ "$(bash "$S" profile "$P" | wc -l | tr -d " ")" = 1 ] && bash "$S" profile "$P" | grep -q "^profile older than the template (0 < "'
+printf '# p\n\n<!-- profile-template: %s -->\n\n## Big\n\n' "$want" >"$P"
+head -c 16000 /dev/zero | tr '\0' x >>"$P"; printf '\n\n## Small\n\n- a\n' >>"$P"
+out=$(bash "$S" profile "$P")
+check "over 15 KB: warns with budget" 'echo "$out" | grep -q "over the 15 KB budget"'
+check "over 15 KB: section sizes" 'echo "$out" | grep -q "Big 16"'
+check "over 15 KB: convention named" 'echo "$out" | grep -qF "Full text: .claude/issue-workflow/<slug>.md"'
+head -c 5000 /dev/zero | tr '\0' x >>"$P"
+check "over 20 KB: split now" 'bash "$S" profile "$P" | grep -q "over the 20 KB limit"'
+eq "missing profile is silent" "$(bash "$S" profile "$T/none.md")" ""
+# show ends with the check for the repo's own profile
+printf '# p\n\n## Labels\n' >"$R/.claude/issue-workflow.md"
+check "show prints the version line" 'bash "$S" show | grep -q "^profile older than the template"'
+rm -f "$R/.claude/issue-workflow.md"
 echo "$((n - fail))/$n passed"
 [ "$fail" = 0 ]
