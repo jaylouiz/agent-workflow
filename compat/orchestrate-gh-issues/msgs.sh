@@ -1,1 +1,1 @@
-../../skills/aw-orchestrate/msgs.sh
+../../skills/aw-coordinate/msgs.sh

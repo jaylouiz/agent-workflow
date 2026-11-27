@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests for preflight.sh: /aw-orchestrate stops cleanly without `orca` (a PATH without it; nothing is uninstalled).
-# Run: bash skills/aw-orchestrate/test-preflight.sh
+# Tests for preflight.sh: /aw-coordinate stops cleanly without `orca` (a PATH without it; nothing is uninstalled).
+# Run: bash skills/aw-coordinate/test-preflight.sh
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT

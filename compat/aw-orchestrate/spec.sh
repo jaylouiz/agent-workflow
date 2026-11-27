@@ -1,0 +1,1 @@
+../../skills/aw-coordinate/spec.sh

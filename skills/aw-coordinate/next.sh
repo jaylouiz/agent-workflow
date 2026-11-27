@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Coordinator helper: settle a finished worker and start the next queued task in ONE call (aw-orchestrate
+# Coordinator helper: settle a finished worker and start the next queued task in ONE call (aw-coordinate
 # sections 2 and 6). Replaces the manual release / release-port / spec / task-create / worker-start sequence.
 # Orca V3 (1.4.246+): reading mail with `check` acknowledges it and Orca wakes the coordinator, so there is no ack
 # step and no waiter to re-arm; a legacy --delivery flag is accepted and ignored.

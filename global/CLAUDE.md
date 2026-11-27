@@ -9,7 +9,7 @@ Worthwhile things noticed outside the current task (bugs, design debt, refactors
 - Dedupe first: `gh issue list --search "<keywords>" --state all`; comment on an existing issue instead of opening a duplicate.
 - Only in repos the user owns/works in and whose tracker is GitHub. Never in public or third-party repos without asking. Skip if there is no `gh` auth.
 - Only real, concrete findings. No speculative or stylistic nitpicks. At most ~5 per run; if more, bundle the rest into one issue.
-- Inbox issues are never picked up by `/aw-orchestrate`, `/aw-ui-design`, `/aw-specify` or `/aw-build` until relabelled by the user or by `/gh-inbox-dispatcher` (which the user invokes or allows). Mention the filed issues in one line in the final report.
+- Inbox issues are never picked up by `/aw-coordinate`, `/aw-ui-design`, `/aw-specify` or `/aw-build` until relabelled by the user or by `/gh-inbox-dispatcher` (which the user invokes or allows). Mention the filed issues in one line in the final report.
 - Formal audit deliverables that a project already stores in docs (e.g. `docs/design/backlog.md`) stay there; `inbox` is for side-findings outside the task.
 
 ## Unspecific, large goals -> the user's direction first (only when needed)

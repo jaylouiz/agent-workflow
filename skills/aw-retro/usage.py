@@ -22,15 +22,15 @@ BASE = os.path.expanduser('~/.claude/projects')
 
 
 def coordinator_marks():
-    """How a coordinator session starts: the skill's name, and its name before the rename (compat/renames), so a
-    transcript from before the rename still counts as a coordinator."""
-    marks = ['/aw-orchestrate']
+    """How a coordinator session starts: the skill's name, and each name it had before a rename (compat/renames),
+    so a transcript from before a rename still counts as a coordinator."""
+    marks = ['/aw-coordinate']
     renames = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'compat', 'renames')
     try:
         with open(renames, encoding='utf-8') as f:
             for line in f:
                 parts = line.split()
-                if len(parts) == 2 and parts[1] == 'aw-orchestrate':
+                if len(parts) == 2 and parts[1] == 'aw-coordinate':
                     marks.append('/' + parts[0])
     except OSError:
         pass

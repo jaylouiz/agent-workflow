@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for next.sh with a stubbed `orca` and `gh` (offline). Run: bash skills/aw-orchestrate/test-next.sh
+# Tests for next.sh with a stubbed `orca` and `gh` (offline). Run: bash skills/aw-coordinate/test-next.sh
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT

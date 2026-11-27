@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for spec.sh. Run: bash skills/aw-orchestrate/test-spec.sh
+# Tests for spec.sh. Run: bash skills/aw-coordinate/test-spec.sh
 set -u
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT

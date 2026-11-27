@@ -1,1 +1,1 @@
-../../skills/aw-orchestrate/wave-template.md
+../../skills/aw-coordinate/wave-template.md

@@ -118,7 +118,7 @@ Steps:
 5. **Review**: show the draft as a short summary (filled, guessed, left out and why); the user edits or accepts.
 6. **Write and validate**: write `.claude/issue-workflow.md` and `.claude/issue-workflow.sh`; `bash -n` the config; `settings.sh show` from the repo; run the gate command once when the user agrees (it can be slow). `labels.sh`. Commit on `chore/issue-workflow-setup` and open a PR when the repo has a remote; the user may choose the current branch or no commit instead. Only its own two files are staged (`git commit -- <paths>`), so a dirty tree is left as it was. The skill never merges.
 7. **Update mode**: compare the existing profile with the template: sections that now apply but are missing, commands that no longer exist, check names no longer reported. Propose each change; never rewrite user prose without showing the diff.
-8. **Report**: what was detected, asked, left out; next steps (`/aw-specify <n>`, `/aw-build <n>`, `/aw-orchestrate` when Orca is present).
+8. **Report**: what was detected, asked, left out; next steps (`/aw-specify <n>`, `/aw-build <n>`, `/aw-coordinate` when Orca is present).
 
 ### 5. Skills without a profile
 

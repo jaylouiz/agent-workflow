@@ -1,1 +1,1 @@
-../../skills/aw-orchestrate/next.sh
+../../skills/aw-coordinate/next.sh

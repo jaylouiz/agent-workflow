@@ -1,6 +1,6 @@
 # Decisions
 
-Loaded by every stage skill (`/aw-ui-design`, `/aw-specify`, `/aw-build`) and by `/aw-orchestrate`: who decides what, how an issue parks on a question for the user, and how it goes on once the answer is there. Script: `~/.claude/agent-workflow/bin/decide.sh` (usage: run it without arguments). Comment format: `~/.claude/agent-workflow/docs/decision-format.md`.
+Loaded by every stage skill (`/aw-ui-design`, `/aw-specify`, `/aw-build`) and by `/aw-coordinate`: who decides what, how an issue parks on a question for the user, and how it goes on once the answer is there. Script: `~/.claude/agent-workflow/bin/decide.sh` (usage: run it without arguments). Comment format: `~/.claude/agent-workflow/docs/decision-format.md`.
 
 Goal: few questions, nothing waits that does not have to.
 
@@ -42,4 +42,4 @@ Each stage skill starts with it, right after it loads the issue and before any o
 
 The stage skills run on their own. Unattended then means: the run parks, the user answers on the issue, and the user runs `/<stage> <n>` again; its Resume step picks the answer up. The user's inbox is `decide.sh status` (answered and waiting requests, change requests on agent decisions) and `decide.sh digest` (the waiting ones as one list). A Design round has nobody to keep its local preview alive: serve it yourself before parking (`proto-serve.sh port <n>`, then `proto-serve.sh start <n> <worktree> <port>`, both in `~/.claude/agent-workflow/bin/`); `resume` stops it.
 
-With `/aw-orchestrate`, the coordinator sweeps the answers, resolves and starts the next worker (its section 5).
+With `/aw-coordinate`, the coordinator sweeps the answers, resolves and starts the next worker (its section 5).

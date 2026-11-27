@@ -26,13 +26,13 @@ for s in aw-ui-design aw-specify aw-build; do
   ok "$s: Resume comes before the phase write" '[ -n "$r" ] && [ -n "$p" ] && [ "$r" -lt "$p" ]'
   ok "$s: the Resume step names all three results" 'sed -n "${r:-1}p" "$f" | grep -q "\`none\`.*\`waiting\` (exit 2).*\`resumed\`"'
   ok "$s points to reference/decisions.md" 'grep -qF "agent-workflow/reference/decisions.md" "$f"'
-  ok "$s does not point into the coordinator skill" '! grep -nE "aw-orchestrate\`? section|orchestrate section" "$f"'
+  ok "$s does not point into the coordinator skill" '! grep -nE "aw-coordinate\`? section|coordinate section|orchestrate section" "$f"'
 done
 
 ok "nothing names 'orchestrate section 5' as the home of the rules any more" \
-  '! grep -rnE "aw-orchestrate\`? section 5|orchestrate section 5" bin skills global reference README.md docs .claude/issue-workflow.md --include="*.md" --include="*.sh"'
+  '! grep -rnE "aw-coordinate\`? section 5|coordinate section 5|orchestrate section 5" bin skills global reference README.md docs .claude/issue-workflow.md --include="*.md" --include="*.sh"'
 
-o=skills/aw-orchestrate/SKILL.md
+o=skills/aw-coordinate/SKILL.md
 ok "the coordinator skill points to reference/decisions.md" 'grep -qF "agent-workflow/reference/decisions.md" "$o"'
 rec=$(grep -F "**Lost coordinator session**" "$o")
 ok "recovery reads the issue status first, the phase label second" \

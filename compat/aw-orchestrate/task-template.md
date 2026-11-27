@@ -1,0 +1,1 @@
+../../skills/aw-coordinate/task-template.md
