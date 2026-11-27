@@ -106,7 +106,7 @@ Decide and write the reason in one line:
    </details>
    ```
    A question is one thing the user decides (the layout; how steps move); the round has as many as it asks, usually one. Options are lettered `A`, `B`, … per question and carry the same letters in the prototype's switcher (one switcher key per question, labelled `1 <label>`) and in the image labels; the recommended one has `★`. One image per question, its options side by side with their letters on them, at each of the profile's widths (one montage, or one image per width), directly under the question.
-4. Ask for the choice. Interactive: `AskUserQuestion`, one option per variant (short description, no image). Unattended or worker: `~/.claude/agent-workflow/bin/decide.sh request` (the question, the same `Preview:` and `Local:` lines, `Overview: <the round comment's URL>` and one line per question with 1 to 3 keywords per option; run it without arguments for the shape), then park (`/aw-orchestrate` section 5); never prompt locally. A resumed round starts from that request's answer.
+4. Ask for the choice. Interactive: `AskUserQuestion`, one option per variant (short description, no image). Unattended or worker: `~/.claude/agent-workflow/bin/decide.sh request` (the question, the same `Preview:` and `Local:` lines, `Overview: <the round comment's URL>` and one line per question with 1 to 3 keywords per option; run it without arguments for the shape), then park (`/aw-coordinate` section 5); never prompt locally. A resumed round starts from that request's answer.
 
 ## 8. Iterate
 

@@ -55,7 +55,7 @@
 
 ## Decisions
 
-- one-way (ask the user; everything else the agent decides and records): <list; default: aw-orchestrate section 5>
+- one-way (ask the user; everything else the agent decides and records): <list; default: aw-coordinate section 5>
 - explicitly two-way: <calls the user trusts agents with, e.g. internal structure, data shape changes with migration>
 
 ## Design quality

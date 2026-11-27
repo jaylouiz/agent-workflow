@@ -12,12 +12,12 @@ bash agent-workflow/install.sh       # checks the requirements, asks two questio
 cd <your repo> && claude             # then: /aw-setup
 ```
 
-`/aw-setup` reads the repo (scripts, CI checks, UI or not, docs), drafts the project's profile and config, asks only what it could not tell, creates the labels and opens a PR with the setup. Then take an issue through it: `/aw-specify <n>` or `/aw-build <n>` for a clear one, `/aw-ui-design <n>` when the UX is open, `/aw-orchestrate <issues>` for several at once with Orca. Rerun `/aw-setup update` when the project changes.
+`/aw-setup` reads the repo (scripts, CI checks, UI or not, docs), drafts the project's profile and config, asks only what it could not tell, creates the labels and opens a PR with the setup. Then take an issue through it: `/aw-specify <n>` or `/aw-build <n>` for a clear one, `/aw-ui-design <n>` when the UX is open, `/aw-coordinate <issues>` for several at once with Orca. Rerun `/aw-setup update` when the project changes.
 
 ## Requirements
 
 - [Claude Code](https://claude.com/claude-code), [`gh`](https://cli.github.com) logged in, `git`, `bash` (3.2 is enough), `jq`, `python3`. macOS is the tested platform. `install.sh --check` checks them and changes nothing.
-- [Orca](https://github.com/stablyai/orca) and its `orca` CLI for `/aw-orchestrate` (workers, messages). The single-issue skills (`/aw-ui-design`, `/aw-specify`, `/aw-build`) run without it.
+- [Orca](https://github.com/stablyai/orca) and its `orca` CLI for `/aw-coordinate` (workers, messages). The single-issue skills (`/aw-ui-design`, `/aw-specify`, `/aw-build`) run without it.
 - Skills and plugins the skills call but this repo does not ship: `/code-review` (Claude Code), and optionally `/gh-inbox-dispatcher`, `/ui-canvas`, `harvesting-session-knowledge` and the Impeccable plugin. A step whose tool is missing is skipped or reported, not guessed.
 
 ## Install
@@ -68,7 +68,7 @@ The model tiers are written by `install.sh`; a repo may override one in its `.cl
 | Design | Discovery | How should it look and behave for the user? | `/aw-ui-design` | UX decision, user stories, UACs |
 | Specify | Delivery | How do we build it, how do we know it is done? | `/aw-specify` | Spec (approach, technical ACs, verification) |
 | Build | Delivery | | `/aw-build` | PR |
-| Review, Merge | Delivery | Is it correct, can it ship? | `/code-review`, `/aw-orchestrate` | merged PR |
+| Review, Merge | Delivery | Is it correct, can it ship? | `/code-review`, `/aw-coordinate` | merged PR |
 
 "Design" always means UX design here. Tech design is part of Specify.
 
@@ -111,7 +111,7 @@ The **status** is GitHub's native issue status (Backlog, Todo, In progress, In r
 | Decision request | A one-way question as a marked issue comment (`decide.sh request`) plus label `needs-decision`: numbered questions, lettered options (`★` = recommended), a link to the overview that explains them and a prefilled answer to copy. The user answers in a comment, any time: `ok`, the copied block, `1B 2A` or free text. Format: [docs/decision-format.md](docs/decision-format.md). |
 | Parked | An issue waiting on a decision request. Its worker has ended; a fresh one resumes after the answer. |
 | Agent decision | A two-way decision recorded in the body's `## Decisions` and a marked comment, label `agent-decided`. Never blocks; removing the label accepts it, a comment asks for a change. |
-| Push | [Tandem](https://github.com/jaylouiz/tandem) telling the coordinator that Feedback arrived or a Card should start: `orca orchestration send --to run:<id> --type status --subject "tandem push: <owner/repo>#<n> <feedback\|start>"` to the newest Run whose coordinator terminal is live in that repo; with no Run it launches `/aw-orchestrate #<n>`. The coordinator handles it in its message read (orchestrate section 6). |
+| Push | [Tandem](https://github.com/jaylouiz/tandem) telling the coordinator that Feedback arrived or a Card should start: `orca orchestration send --to run:<id> --type status --subject "tandem push: <owner/repo>#<n> <feedback\|start>"` to the newest Run whose coordinator terminal is live in that repo; with no Run it launches `/aw-coordinate #<n>`. The coordinator handles it in its message read (orchestrate section 6). |
 | Digest | The coordinator's one bundled ping of all open decision requests: when the run goes idle, or when the oldest unannounced one passes `WF_DIGEST_CAP`. |
 | Running log | The project's committed watch list of recurring causes and the context-size history (path in the profile's "Retro"). Never loaded into a session. |
 

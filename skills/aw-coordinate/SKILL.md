@@ -1,5 +1,5 @@
 ---
-name: aw-orchestrate
+name: aw-coordinate
 description: Act as the Orca orchestration coordinator that drives GitHub issues (or free-text ideas) from rough idea to a merged PR with supervised Orca workers running /aw-ui-design, /aw-specify, /aw-build and /code-review. Use when the user hands off issues or ideas to be designed, specified, built and reviewed, says "orchestrate" or "hand off and supervise", or wants several issues worked in parallel.
 argument-hint: <issue numbers | label query | free text> [interactive]
 arguments: [input]
@@ -12,7 +12,7 @@ hooks:
           command: "\"$HOME\"/.claude/agent-workflow/bin/guard.sh"
 ---
 
-# Orchestrate GitHub issues to merged PRs
+# Coordinate GitHub issues to merged PRs
 
 Outcome: every in-scope issue ends merged (`Closes #n`), held with a stated reason, parked on a decision request, waiting with a recorded UX decision, or explicitly failed. You are the **coordinator**: you plan, dispatch, route, merge and report, and **never edit code** (reviewers return findings, fixes go to a fix worker) or read it: a code claim you must check (screening, inbox evidence) goes to one subagent on the fast tier that answers confirmed or refuted, with file:line. Workers never merge.
 

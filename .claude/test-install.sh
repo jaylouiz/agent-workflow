@@ -120,7 +120,8 @@ check "stale link of an unknown name: no rename map" '! grep -q "skills were ren
 
 # rename migration: an install from before the rename has one link per old skill name into skills/; a rerun removes
 # them, links the new names, turns the old coordinator skill's link into the compat link and prints the rename map
-eq "rename map: seven skills" "$(renames | wc -l | tr -d ' ')" 7
+eq "rename map: seven skills" "$(renames | awk '{ print $2 }' | sort -u | wc -l | tr -d ' ')" 7
+eq "rename map: eight old names (the coordinator skill was renamed twice)" "$(renames | awk '{ print $1 }' | sort -u | wc -l | tr -d ' ')" 8
 new; mkdir -p "$C/skills"
 renames | while read -r old _; do ln -s "$ROOT/skills/$old" "$C/skills/$old"; done
 run --yes --dev; rc=$?
@@ -140,6 +141,24 @@ $(renames)
 EOF2
 check "rename: every installed skill starts with aw-" '[ -z "$(for d in "$C"/skills/*/; do [ -f "$d/SKILL.md" ] && basename "$d"; done | grep -v "^aw-")" ]'
 run --yes; check "rename: a second run prints no map" '! grep -q "skills were renamed" "$T/out"'
+# the coordinator skill's second rename, from the install as it is before it: every aw- skill linked, the coordinator
+# under its previous aw- name, the first old names as compat links. A rerun links the new name, turns the previous name
+# into its compat link (old script paths keep running) and prints the map.
+PREV=$(renames | awk '$2 == "aw-coordinate" && $1 ~ /^aw-/ { print $1 }')
+check "second rename: the map names the previous aw- name" '[ -n "$PREV" ] && [ -d "$ROOT/compat/$PREV" ]'
+new; mkdir -p "$C/skills"
+for d in "$ROOT"/skills/*/; do b=$(basename "$d"); [ "$b" != aw-coordinate ] || b=$PREV; ln -s "$ROOT/skills/$b" "$C/skills/$b"; done
+for d in "$ROOT"/compat/*/; do d=${d%/}; b=$(basename "$d"); [ "$b" = "$PREV" ] || ln -s "$d" "$C/skills/$b"; done
+run --yes --dev; rc=$?
+eq "second rename: exit 0" "$rc" 0
+check "second rename: aw-coordinate linked" '[ "$(readlink "$C/skills/aw-coordinate")" = "$ROOT/skills/aw-coordinate" ]'
+check "second rename: the previous name is the compat link" '[ "$(readlink "$C/skills/$PREV")" = "$ROOT/compat/$PREV" ]'
+check "second rename: no skill under the previous name" '[ ! -e "$C/skills/$PREV/SKILL.md" ]'
+check "second rename: the map is printed with the previous name" 'grep -qxF "  /$PREV -> /aw-coordinate" "$T/out"'
+bash "$C/skills/$PREV/next.sh" bogus >/dev/null 2>&1; eq "second rename: an old coordinator script path runs through the install" "$?" 64
+check "second rename: the other skills keep their links" '[ "$(readlink "$C/skills/aw-build")" = "$ROOT/skills/aw-build" ] && [ "$(readlink "$C/skills/aw-orca-review")" = "$ROOT/skills/aw-orca-review" ]'
+run --yes --dev; check "second rename: a second run prints no map" '! grep -q "skills were renamed" "$T/out"'
+run --uninstall; check "second rename: uninstall removes the compat link too" '[ ! -L "$C/skills/$PREV" ] && [ ! -L "$C/skills/aw-coordinate" ]'
 new; run --yes
 check "fresh install: no rename map" '! grep -q "skills were renamed" "$T/out"'
 for d in "$ROOT"/compat/*/; do
@@ -179,7 +198,7 @@ check "standard dir: --check has no warning" '! grep -q "CLAUDE_CONFIG_DIR" "$T/
 HOME=$H CLAUDE_CONFIG_DIR="$H/.claude/" PATH=$P bash "$ROOT/install.sh" --yes </dev/null >"$T/out" 2>&1
 check "CLAUDE_CONFIG_DIR set to ~/.claude (trailing slash): no warning" '! grep -q "is not supported" "$T/out"'
 # the hooks the skills register resolve in the standard install (what the warning is about)
-for s in aw-build aw-specify aw-ui-design aw-orchestrate; do
+for s in aw-build aw-specify aw-ui-design aw-coordinate; do
   for h in $(awk '/^---$/{c++} c==1' "$ROOT/skills/$s/SKILL.md" | sed -n 's/.*command: "\\"\$HOME\\"\(.*\)"$/\1/p'); do
     check "$s hook $h resolves in ~/.claude" '[ -x "$H$h" ]'
   done

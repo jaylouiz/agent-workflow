@@ -34,7 +34,7 @@ At most two `AskUserQuestion` calls of up to four questions each, the recommende
 - UI project? (only when `ui: unsure`)
 - Gate command (only when several candidates exist or none does)
 - Risk areas: the proposed globs to confirm or edit
-- One-way decisions: the default list (aw-orchestrate section 5) plus any the user adds
+- One-way decisions: the default list (aw-coordinate section 5) plus any the user adds
 - Max workers (only with Orca, and only if the user wants a repo value)
 
 Then show a short summary of the draft: filled, guessed, left out and why. The user accepts or edits.
@@ -60,4 +60,4 @@ Never rewrite the user's prose unseen: show the diff and apply only what the use
 
 ## 7. Report
 
-Detected, asked, left out (and how to add it later: rerun `/aw-setup update`), the PR link, and the next commands: `/aw-specify <n>` or `/aw-build <n>` for one issue, `/aw-ui-design <n>` when the UX is open, `/aw-orchestrate <issues>` with Orca.
+Detected, asked, left out (and how to add it later: rerun `/aw-setup update`), the PR link, and the next commands: `/aw-specify <n>` or `/aw-build <n>` for one issue, `/aw-ui-design <n>` when the UX is open, `/aw-coordinate <issues>` with Orca.

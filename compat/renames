@@ -1,9 +1,11 @@
-# Skill renames of v1.0.0: <old name> <new name>, one per line. install.sh reads this file: it prints the map when it
-# removes a link under an old name, and finds the retired Orca update check hook by its old path.
+# Skill renames: <old name> <new name>, one per line (v1.0.0, and the coordinator skill's second rename after it: a
+# skill may have several old names). install.sh reads this file: it prints the map when it removes or repoints a link
+# under an old name, and finds the retired Orca update check hook by its old path.
 design-gh-issue aw-ui-design
 specify-gh-issue aw-specify
 build-gh-issue aw-build
-orchestrate-gh-issues aw-orchestrate
+orchestrate-gh-issues aw-coordinate
+aw-orchestrate aw-coordinate
 init-issue-workflow aw-setup
 workflow-retro aw-retro
 orca-update-review aw-orca-review
