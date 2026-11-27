@@ -228,6 +228,7 @@ cmd_prune() {
 cmd_hosted() { # the project's functions run at its root (cwd = the checkout, wf_load sets ROOT)
   [ $# -eq 1 ] || die "usage: hosted <branch>"
   wf_load
+  local lh rh; lh=$(git rev-parse --verify -q "refs/heads/$1") && { rh=$(git ls-remote origin "refs/heads/$1" | cut -f1); [ "$lh" = "$rh" ] || die "hosted: origin/$1 is not at the local tip (the push failed or is missing); push first, or the preview URL would be stale"; }
   wf_has wf_proto_preview_url || { echo "proto-serve: no hosted previews in this project (no wf_proto_preview_url)" >&2; return 2; }
   (cd "$ROOT" && wf_proto_preview_url "$1") || return 2
 }
