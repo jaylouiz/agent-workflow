@@ -41,7 +41,7 @@
 
 ## Decisions
 
-- one-way: the default list (aw-orchestrate section 5) plus anything that edits `~/.claude` settings or runs `install.sh` outside `wf_after_merge`.
+- one-way: the default list (`reference/decisions.md`) plus anything that edits `~/.claude` settings or runs `install.sh` outside `wf_after_merge`.
 - two-way: script internals, test layout, wording of skills, what goes into the profile.
 
 ## Orchestration

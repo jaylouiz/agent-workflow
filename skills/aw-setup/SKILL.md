@@ -34,7 +34,7 @@ At most two `AskUserQuestion` calls of up to four questions each, the recommende
 - UI project? (only when `ui: unsure`)
 - Gate command (only when several candidates exist or none does)
 - Risk areas: the proposed globs to confirm or edit
-- One-way decisions: the default list (aw-orchestrate section 5) plus any the user adds
+- One-way decisions: the default list (`~/.claude/agent-workflow/reference/decisions.md`) plus any the user adds
 - Max workers (only with Orca, and only if the user wants a repo value)
 
 Then show a short summary of the draft: filled, guessed, left out and why. The user accepts or edits.

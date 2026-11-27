@@ -15,9 +15,10 @@ cat >"$T/bin/gh" <<'STUB'
 T=$(dirname "$(dirname "$0")")
 case "$1 $2" in
   "issue list") case "$*" in *agent-decided*comments*) cat "$T/agent.json" ;; *--label*needs-decision*) [ -e "$T/nolabel" ] && echo '[]' || cat "$T/needs.json" ;; *comments*) cat "$T/needs.json" ;; *--jq*) echo 0 ;; *) echo '[]' ;; esac ;;
-  "issue view") case "$*" in *"--json comments"*) jq '.[0].comments' "$T/needs.json" ;; *) cat "$T/state-$3" 2>/dev/null || echo OPEN ;; esac ;;
+  "issue view") case "$*" in *"--json comments"*) jq '.[0].comments' "$T/needs.json" ;; *"--json number,url,comments"*) [ ! -e "$T/viewfail" ] || { echo "gh: could not read the issue" >&2; exit 1; }; jq '.[0]' "$T/needs.json" ;; *) cat "$T/state-$3" 2>/dev/null || echo OPEN ;; esac ;;
   "issue comment") while [ $# -gt 0 ]; do [ "$1" = --body-file ] && cat "$2" >>"$T/posted"; shift; done ;;
-  "issue edit"|"label create") ;;
+  "issue edit") echo "$*" >>"$T/edits" ;;
+  "label create") ;;
   "repo view") echo https://github.com/acme/widgets ;;
   *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
 esac
@@ -291,6 +292,46 @@ eq "the resume text reaches the coordination log" "$(grep -c 'resumed D1 with: 1
 : >"$T/posted"; eq "resolve passes free text on as it is" "$(bash "$D" resolve 7 'B but calmer' D1 2>/dev/null)/$(sed -n 2p "$T/posted")" "resumed D1 with: B but calmer/Resumed (D1)."
 bash "$D" log --rm 7
 
+# resume: a stage's Resume step for one issue (none / waiting / answered), reference/decisions.md
+resume() { : >"$T/posted"; : >"$T/edits"; out=$(bash "$D" resume 7 2>/dev/null); code=$?; }
+wrote() { echo "$(wc -c <"$T/posted" | tr -d ' ')/$(wc -c <"$T/edits" | tr -d ' ')"; }
+rm -rf "$T/logs"
+thread "$T/needs.json" 'plain comment'; resume
+eq "resume, no request: none" "$code/$out" "0/none"
+eq "resume none writes nothing" "$(wrote)/$(ls "$T/logs" 2>/dev/null | wc -l | tr -d ' ')" "0/0/0"
+thread "$T/needs.json" 'req D1'; resume
+eq "resume, unanswered request: exit 2 and the waiting line" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "2/waiting  #7 D1 (0m): Pick D1?"
+eq "resume waiting says how to go on" "$(printf '%s\n' "$out" | sed -n 2p)" "Answer on the issue (u), then run the stage again. Nothing was changed."
+eq "resume waiting writes nothing" "$(wrote)" "0/0"
+thread "$T/needs.json" 'req D1' 'ans D1' 'res D1' 'req D2' 'D1: late'; resume
+eq "resume names the waiting decision, not a resolved one" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "2/waiting  #7 D2 (0m): Pick D2?"
+thread "$T/needs.json" 'req D1' 'req D2' 'Decision D1: B'; resume
+eq "resume with one request answered and one waiting: waiting, nothing written" "$code/$(printf '%s\n' "$out" | sed -n 1p)/$(wrote)" "2/waiting  #7 D2 (0m): Pick D2?/0/0"
+bash "$D" log 7 "parked D1 at build step 4, next: migration"
+thread "$T/needs.json" 'req D1' 'Decision D1: B'; resume
+eq "resume, answered: resolves with the answer" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "0/resumed D1 with: Decision D1: B"
+eq "resume answered posts the Resumed comment and drops the label" "$(head -1 "$T/posted")/$(cat "$T/edits")" "<!-- decision-resolved D1 -->/issue edit 7 --remove-label needs-decision"
+eq "resume answered prints the log path" "$(printf '%s\n' "$out" | sed -n 2p)" "log: $T/logs/acme/widgets/7.md"
+eq "resume answered prints the log entries, the parked step and the resume line" "$(printf '%s\n' "$out" | sed -n '3,$p' | sed 's/^- [^ ]* //' | tr '\n' '|')" "parked D1 at build step 4, next: migration|resumed D1 with: Decision D1: B|"
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23; do bash "$D" log 7 "entry $i"; done
+resume
+eq "resume prints only the last 20 log entries" "$(printf '%s\n' "$out" | grep -c '^- ')/$(printf '%s\n' "$out" | tail -1 | sed 's/^- [^ ]* //')" "20/resumed D1 with: Decision D1: B"
+thread "$T/needs.json" 'req D1' 'Decision D1: B' 'res D1'; resume
+eq "resume after a resolve: none, nothing written (idempotent; under Orca the coordinator resolved first)" "$code/$out/$(wrote)" "0/none/0/0"
+thread "$T/needs.json" 'req D1' 'ans D1'; resume
+eq "resume takes an answer the coordinator posted" "$code/$(printf '%s\n' "$out" | sed -n 1p)" "0/resumed D1 with: B"
+thread "$T/needs.json" 'rec D1' 'Decision D1: change it'; resume
+eq "resume leaves a change request on a record alone" "$code/$out/$(wrote)" "0/none/0/0"
+jq -n --arg t "$now" --rawfile b "$T/req-multi.md" '[{number: 7, url: "u", comments: [{body: $b, createdAt: $t}, {body: "ok", createdAt: $t}]}]' >"$T/needs.json"; resume
+eq "resume spells an ok out against the request's choices" "$(printf '%s\n' "$out" | sed -n 1p)" "resumed D1 with: 1 Shell: B (footer bar) · 2 Heading: A (hidden) (answer: ok)"
+touch "$T/viewfail"; thread "$T/needs.json" 'req D1' 'Decision D1: B'; resume; rm -f "$T/viewfail"
+n=$((n + 1)); { [ "$code" != 0 ] && [ "$code" != 2 ] && [ -z "$out" ] && [ "$(wrote)" = "0/0" ]; } || { fail=$((fail + 1)); echo "FAIL [resume when the issue cannot be read: an error, never none or waiting, nothing written] got '$code/$out/$(wrote)'"; }
+eq "resume without an issue number is a usage error" "$(rc bash "$D" resume)/$(rc bash "$D" resume x7)" "64/64"
+rm -rf "$T/logs"; thread "$T/needs.json" 'plain comment'; bash "$D" request 7 "$T/single.md" >/dev/null 2>&1
+eq "request logs where the issue parked" "$(sed 's/^- [^ ]* //' "$T/logs/acme/widgets/7.md" | tail -1)" "parked D1: $(sed -n 1p "$T/single.md")"
+eq "the usage lists resume" "$(bash "$D" | grep -c 'decide.sh resume  <n>')" 1
+eq "the usage ends with the header's last line" "$(bash "$D" | tail -1 | cut -c1-28)" "GitHub's label filter lags a"
+
 # repo resolution: WF_REPO first, else the checkout's origin, else loud failure before anything is written
 rm -rf "$T/logs"; mkdir -p "$T/scratch"; : >"$T/posted"; : >"$T/gh-env"
 cat >"$T/bin/gh" <<'STUB'
@@ -299,7 +340,8 @@ T=$(dirname "$(dirname "$0")")
 echo "GH_REPO=${GH_REPO:-}" >>"$T/gh-env"
 case "$1 $2" in
   "issue comment") while [ $# -gt 0 ]; do [ "$1" = --body-file ] && cat "$2" >>"$T/posted"; shift; done ;;
-  "issue edit"|"label create") ;;
+  "issue edit") echo "$*" >>"$T/edits" ;;
+  "label create") ;;
   "issue view") echo '[]' ;;
   "repo view") exit 1 ;;
   *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
