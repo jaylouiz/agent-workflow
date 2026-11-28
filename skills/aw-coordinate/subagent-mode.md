@@ -30,7 +30,7 @@ One stage is one `Agent` call.
      | `READY #<n> PR <url> route=reviewer` | `review` | stage `review` (`--pr <pr>`, the PR's branch) |
      | `REVIEWED #<n> PR #<pr> open=0` | `merge` | after a `delta-review` stage: `rounds.sh delta <n> <pr> open=0` first; the merge queue |
      | `REVIEWED #<n> PR #<pr> open=<k>` | `fix` | after a `delta-review` stage: `rounds.sh delta <n> <pr> open=<k>` first. Stage `fix` (`rounds.sh start` before it), then `delta-review`, within the rounds the rules allow; `hold` after 2 fix rounds: the held merge as above |
-     | `FIXED #<n> PR #<pr>` | `delta-review`, also when the worker left a new `-> open` line; when the rules skip the delta-review (docs or comments only), after `rounds.sh delta <n> <pr> skipped`: `merge` (`fix` or `hold` with a line open) | `rounds.sh fixed <n> <pr>` first; then stage `delta-review`, else the merge queue |
+     | `FIXED #<n> PR #<pr>` | `delta-review`, also when the worker left a new `-> open` line; when the rules skip the delta-review (docs or comments only), after `rounds.sh delta <n> <pr> skipped` (refused while the PR head moved since the round started): `merge` (`fix` or `hold` with a line open) | `rounds.sh fixed <n> <pr>` first; then stage `delta-review`, else the merge queue |
      | `PARKED #<n> D<k>` | `skip` (waiting) | section 3; a Design round also gets its preview served as the rules say (the worktree: `git worktree list`, the line with the proto branch) |
      | `ROUTED #<n> needs-design` | `design` | stage `design` |
      | `FAILED #<n>: …`, no result line, or `plan.sh` shows another step | | one retry: a fresh worker for the step `plan.sh` shows, the failure text in `--extra`; a second failure ends that issue's pipeline and goes into the report |

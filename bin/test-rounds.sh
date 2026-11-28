@@ -68,6 +68,11 @@ eq "fixed without a start, no marker on the PR: opens and settles round 1" "$(r 
 eq "... in flight, settled" "$(st 20 2); $(last 2)" "1 1 settled; round: fix 1 settled ddd444 pr=20"
 r delta 2 20 open=0 >/dev/null; head_is eee555
 eq "a later FIXED on a new head, no round in flight: nothing written" "$(r fixed 2 20); $(marks 2); $(st 20 2)" "round=1 settled before (nothing written); 2; 1 0 none"
+# delta skipped on a started round whose head moved (the fix worker pushed, the session was lost): refused, nothing written
+head_is eee111; r start 2 20 >/dev/null; head_is eee222; m=$(marks 2)
+eq "delta skipped after commits since start: refused, nothing written" "$(rc delta 2 20 skipped); $(marks 2); $(st 20 2)" "1; $m; 2 2 started"
+eq "... the message points to plan.sh" "$(r delta 2 20 skipped | grep -c 'run plan.sh 2 for the next step')" 1
+eq "... delta open=0 on it still settles" "$(r delta 2 20 open=0)" "round=2 delta settled open=0"
 # start -> delta skipped (no settled marker), then a late FIXED on another head (e.g. prep merged the base in)
 closes 25 2
 head_is fed666; r start 2 25 >/dev/null; r delta 2 25 skipped >/dev/null; head_is abc777

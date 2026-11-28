@@ -195,6 +195,13 @@ jq -n '[range(0;300) | {number: (1000 + .), headRefName: "x", body: ""}]' >"$FIX
 out=$(bash "$DIR/plan.sh" 1 2>&1); rc=$?; rm "$FIX/prs-big.json"
 eq "300 open PRs (page full): unknown, exit 1" "$rc/$(printf '%s' "$out" | cut -f2)" "1/unknown"
 
+# lost session after the fix worker pushed (head moved since start, lines already `fixed`): rounds.sh refuses to skip the review
+issue 48 OPEN ready; review 48 480 complete
+PR_HEAD=aaa0001 rounds start 48 480
+eq "lost session after the push: started round, lines fixed: delta-review, never merge" "$(step 48)" "delta-review lane=ready pr=480 branch=fix/48-seq round=1"
+PR_HEAD=bbb0002 rounds delta 48 480 skipped
+eq "delta skipped on a head that moved since start is refused: still delta-review" "$(step 48)" "delta-review lane=ready pr=480 branch=fix/48-seq round=1"
+
 # the whole hand-over in one call: one line per issue, in the order given, exit 1 only because #14 is unreadable
 out=$(bash "$DIR/plan.sh" 1 '#3' 14 9 10 4 2>&1); rc=$?
 eq "several issues: one line each, input order" "$(printf '%s\n' "$out" | cut -f1,2 | tr '\t' ' ' | tr '\n' ',')" "#1 lead,#3 design,#14 unknown,#9 fix,#10 merge,#4 skip,"

@@ -16,7 +16,8 @@
 #                                       a PR with rounds already (a late or repeated FIXED) writes nothing.
 #   rounds.sh delta <issue> <pr> open=<m>|skipped
 #                                       a delta-review ended `REVIEWED … open=<m>`, or the rules skip it: the delta marker
-#                                       of the round in flight. No round in flight: nothing written, exit 0.
+#                                       of the round in flight (`skipped` is refused while the PR head moved since the round started: those
+#                                       commits get a delta-review). No round in flight: nothing written, exit 0.
 # The three writes read the PR (its head, and the issues it closes: the round is counted over all their logs, whichever
 # issue's log a marker went to); when it cannot be read, or does not close the issue named, they exit 1 and write nothing.
 #
@@ -49,9 +50,9 @@ state() { # state <pr> <issue>...: "<used> <in flight or 0> <phase> <sha the hig
   awk -v pr="pr=$pr" '
     # fields: 1 "-", 2 timestamp, 3 "round:", 4 fix|delta, 5 k, 6 started|settled|skipped, last: pr=<pr> when recorded
     $NF ~ /^pr=/ && $NF != pr { next }
-    /^- [^ ]+ round: fix [0-9]+ (started|settled) [0-9a-f]+( pr=[0-9]+)?$/ { k = $5 + 0; if (k > F) F = k; if ($6 == "settled") st[k] = $7 }
+    /^- [^ ]+ round: fix [0-9]+ (started|settled) [0-9a-f]+( pr=[0-9]+)?$/ { k = $5 + 0; if (k > F) F = k; if ($6 == "settled") st[k] = $7; else ss[k] = $7 }
     /^- [^ ]+ round: delta [0-9]+ (settled open=[0-9]+|skipped)( pr=[0-9]+)?$/ { k = $5 + 0; if (k > D) D = k }
-    END { sha = (F in st) ? st[F] : "-"; if (F > D) print F, F, ((F in st) ? "settled" : "started"), sha; else print F + 0, 0, "none", sha }' "$TMP/logs"
+    END { sha = (F in st) ? st[F] : "-"; if (F > D) print F, F, ((F in st) ? "settled" : "started"), sha, ((F in ss) ? ss[F] : "-"); else print F + 0, 0, "none", sha, "-" }' "$TMP/logs"
 }
 pr_state() { # pr_state <issue> <pr>: sets sha, used, k, phase from the PR and the logs of every issue it closes; 1 = unreadable
   local s
@@ -62,7 +63,7 @@ pr_state() { # pr_state <issue> <pr>: sets sha, used, k, phase from the PR and t
   grep -qx "$1" "$TMP/issues" || { echo "rounds.sh: PR #$2 does not close #$1 (no line-leading 'Closes #$1' in its body$([ ! -s "$TMP/ierr" ] || echo "; issues-of said: $(head -c 300 "$TMP/ierr")")): nothing written" >&2; return 1; }
   # shellcheck disable=SC2046
   s=$(state "$2" $(cat "$TMP/issues")) || return 1
-  read -r used k phase _ <<<"$s"
+  read -r used k phase _ startsha <<<"$s"
 }
 mark() { # mark <issue> <pr> <marker>
   "$DIR/decide.sh" log "$1" "$3 pr=$2" || { echo "rounds.sh: could not write the marker to the log of #$1" >&2; exit 1; }
@@ -75,7 +76,7 @@ case "$cmd" in
     num "$pr" && [ $# -gt 0 ] || usage
     for a in "$@"; do num "${a#\#}" || usage; done
     s=$(state "$pr" "${@#\#}") || exit 1
-    echo "${s% *}" ;;
+    echo "${s% * *}" ;;
   start | fixed | delta)
     n=${1:-}; n=${n#\#}; pr=${2:-}; pr=${pr#\#}
     num "$n" && num "$pr" || usage
@@ -98,6 +99,13 @@ case "$cmd" in
       fixed:none)
         if [ "$used" -gt 0 ]; then echo "round=$used settled before (nothing written)"
         else k=1; mark "$n" "$pr" "round: fix $k settled $sha"; echo "round=$k settled $sha (no round was started: opened and settled)"; fi ;;
+      delta:started)
+        # skipping is for a fix that changed nothing but docs or comments; a head that moved since the round started may hold
+        # the fix worker's commits (a lost session after the push): that fix is reviewed, not skipped
+        if [ "$what" = skipped ] && [ "$sha" != "$startsha" ]; then
+          echo "rounds.sh: PR #$pr has commits since fix round $k started ($startsha, head $sha): run plan.sh $n for the next step (nothing written)" >&2; exit 1
+        fi
+        mark "$n" "$pr" "round: delta $k $what"; echo "round=$k delta $what" ;;
       delta:none) echo "round=0 no fix round in flight (nothing written)" ;;
       delta:*) mark "$n" "$pr" "round: delta $k $what"; echo "round=$k delta $what" ;;
     esac ;;

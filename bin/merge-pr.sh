@@ -177,7 +177,7 @@ case "$cmd" in
       if rs=$("$DIR/rounds.sh" state "$pr" $issues 2>"$bodyf.err") && read -r _ rk rphase <<<"$rs" && [ -n "${rphase:-}" ] &&
         case "$rk" in *[!0-9]*) false ;; esac; then
         if [ "$rk" != 0 ]; then
-          if [ "$rphase" = started ]; then stop="$stop\nreview: fix round $rk of #$(echo $issues | sed 's/ / #/g') is still in flight (no FIXED recorded): let the fix worker finish (rounds.sh fixed), or rounds.sh delta skipped"
+          if [ "$rphase" = started ]; then stop="$stop\nreview: fix round $rk of #$(echo $issues | sed 's/ / #/g') is still in flight (no FIXED recorded): run plan.sh for the next step: it routes the round to the fix worker, then to its delta-review"
           else stop="$stop\nreview: fix round $rk ($rphase) of #$(echo $issues | sed 's/ / #/g') has no delta-review yet: run it, then rounds.sh delta"; fi
         fi
       else
