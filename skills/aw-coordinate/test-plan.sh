@@ -9,13 +9,14 @@ export WF_REPO=acme/widgets WF_ISSUE_LOG_DIR="$T/logs"; mkdir -p "$T/logs/acme/w
 export FIX="$T/fix"; mkdir -p "$T/bin" "$FIX" "$T/repo/.claude"
 cat >"$T/bin/gh" <<'EOS'
 #!/usr/bin/env bash
-echo "$*" >>"$FIX/calls"
+echo "$*" >>"${CALLS:-$FIX/calls}"
 case "$1 $2" in
   "issue view") [ -f "$FIX/issue-$3.json" ] && cat "$FIX/issue-$3.json" || exit 1 ;;
   "pr list")
     [ ! -f "$FIX/prs.fail" ] || exit 1
     jq -s 'add // []' "$FIX"/prs-*.json ;;
-  "pr view") echo "${PR_HEAD:-}" ;; # rounds.sh asks for the PR head when it writes a marker
+  "pr view") # rounds.sh reads the PR (head and body) when it writes a marker
+    jq -s --argjson n "$3" --arg h "${PR_HEAD:-abc1234}" 'add | map(select(.number == $n))[0] | {headRefOid: $h, body: .body}' "$FIX"/prs-*.json ;;
   *) exit 1 ;;
 esac
 EOS
@@ -94,10 +95,10 @@ eq "a stage branch without a PR is named" "$(step 16)" "design lane=needs-design
 eq "a held merge waits for its decision" "$(step 17)" "skip waiting for a decision (decide.sh status) lane=ready pr=170 branch=feat/17-g"
 eq "Fixes owner/repo#n in a list closes" "$(step 18)" "lead lane=ready pr=180 branch=feat/18-h"
 eq "a batch PR closes its second issue too" "$(step 19)" "lead lane=ready pr=180 branch=feat/18-h"
-eq "route lead, finding still open after the lead's rounds: hold, no third fix round" "$(step 20)" "hold fix rounds used (lead: 2, settled: 0) lane=ready pr=200 branch=feat/20-i"
+eq "route lead, finding still open after the lead's rounds: hold, no third fix round" "$(step 20)" "hold fix rounds used (lead: 2, used: 0) lane=ready pr=200 branch=feat/20-i"
 eq "AC11 a settled marker without a started one (a log from before): delta-review, never merge" "$(step 21)" "delta-review lane=ready pr=210 branch=fix/21-j round=1"
 eq "round 1 settled and its delta-review reopened a line (worker free text 'fix round 1' ignored): fix, not hold" "$(step 22)" "fix lane=ready pr=220 branch=fix/22-k round=2"
-eq "round 2 settled with its delta-review still open: hold" "$(step 23)" "hold fix rounds used (lead: 2, settled: 2) lane=ready pr=230 branch=fix/23-l"
+eq "round 2 settled with its delta-review still open: hold" "$(step 23)" "hold fix rounds used (lead: 2, used: 2) lane=ready pr=230 branch=fix/23-l"
 eq "a delta marker 'skipped' for the same k: merge" "$(step 24)" "merge lane=ready pr=240 branch=fix/24-m"
 eq "a delta already settled for k: merge, no second delta-review (worker free text ignored)" "$(step 28)" "merge lane=ready pr=280 branch=fix/28-n"
 eq "AC9 worker free text 'fix round 1/2 done' counts no round: fix round 1" "$(step 29)" "fix lane=ready pr=290 branch=fix/29-o round=1"
@@ -108,8 +109,7 @@ eq "Orca branch of another issue (270) is not issue 27's" "$(step 27)" "lead lan
 
 # --- the round state machine (bin/rounds.sh writes the markers as the coordinator does; plan.sh routes at every point
 # where a session can get lost). `open` / `complete` = the PR's `## Review` with or without a finding `-> open`.
-rounds() { FIX="$T/seq" PR_HEAD=${PR_HEAD:-abc1234} bash "$DIR/../../bin/rounds.sh" "$@" >/dev/null 2>&1; } # its gh calls stay out of $FIX/calls
-mkdir -p "$T/seq"
+rounds() { CALLS="$T/seq-calls" bash "$DIR/../../bin/rounds.sh" "$@" >/dev/null 2>&1; } # its gh calls stay out of $FIX/calls
 review() { # review <issue> <pr> <open|complete> [route] [also closes]
   local l='- [medium] y (a.sh:3) -> fixed abc'; [ "$3" = complete ] || l='- [medium] y (a.sh:3) -> open'
   pr "$1" "$2" "fix/$1-seq" "Closes #$1\n${5:+Closes #$5\n}\n## Review\nroute: ${4:-reviewer} · by: opus\n$l\nlows: 0\n"
@@ -127,7 +127,7 @@ PR_HEAD=def5678 rounds fixed 40 400
 eq "AC4 lost after FIXED, before the delta-review: delta-review" "$(step 40)" "delta-review $S40 round=1"
 review 40 400 open
 eq "AC5/AC8 lost during the delta-review after it reopened a line, or FIXED with a new open line: delta-review, not fix" "$(step 40)" "delta-review $S40 round=1"
-rounds delta 40 open=1
+rounds delta 40 400 open=1
 eq "AC6 after the delta marker, a line open: fix round 2" "$(step 40)" "fix $S40 round=2"
 rounds start 40 400
 eq "round 2 started, open: round 2 goes on (no hold, no round 3)" "$(step 40)" "fix $S40 round=2"
@@ -135,40 +135,52 @@ rounds fixed 40 400
 eq "AC8 round 2 ended FIXED with a new open line: delta-review first, not hold" "$(step 40)" "delta-review $S40 round=2"
 review 40 400 complete
 eq "round 2 settled, complete: delta-review" "$(step 40)" "delta-review $S40 round=2"
-rounds delta 40 open=1; review 40 400 open
-eq "AC6 after round 2 and its delta-review, a line open: hold" "$(step 40)" "hold fix rounds used (lead: 2, settled: 2) $S40"
+rounds delta 40 400 open=1; review 40 400 open
+eq "AC6 after round 2 and its delta-review, a line open: hold" "$(step 40)" "hold fix rounds used (lead: 2, used: 2) $S40"
+rounds start 40 400
+eq "AC16 a start after both rounds opens no third: still hold" "$(step 40)" "hold fix rounds used (lead: 2, used: 2) $S40"
+eq "AC24 the round state cannot be read: unknown, exit 1, never merge" "$(WF_REPO=nope bash "$DIR/plan.sh" 40 2>&1 | cut -f2,3 | cut -d' ' -f1-4; WF_REPO=nope bash "$DIR/plan.sh" 40 >/dev/null 2>&1; echo $?)" "unknown	round state unreadable (rounds.sh
+1"
 review 40 400 complete
 eq "AC6 after round 2 and its delta-review, complete: merge" "$(step 40)" "merge $S40"
 
 issue 41 OPEN ready; review 41 410 complete
-rounds start 41 410; rounds fixed 41 410; rounds delta 41 open=0
+rounds start 41 410; rounds fixed 41 410; rounds delta 41 410 open=0
 eq "AC6 one round, delta open=0: merge" "$(step 41)" "merge lane=ready pr=410 branch=fix/41-seq"
-rounds start 41 410; rounds delta 41 skipped
+rounds start 41 410; rounds delta 41 410 skipped
 eq "a round whose delta-review the rules skip: merge" "$(step 41)" "merge lane=ready pr=410 branch=fix/41-seq"
 
 issue 42 OPEN ready; review 42 420 complete
 logf 42 "round: fix 1 settled abc1234"; logf 42 "round: fix 2 settled def5678"; logf 42 "round: delta 2 settled open=0"
 eq "AC7 two fix rounds, one delta-review for both, complete: merge, no delta-review again" "$(step 42)" "merge lane=ready pr=420 branch=fix/42-seq"
 review 42 420 open
-eq "AC7 ... with a line open: hold" "$(step 42)" "hold fix rounds used (lead: 2, settled: 2) lane=ready pr=420 branch=fix/42-seq"
+eq "AC7 ... with a line open: hold" "$(step 42)" "hold fix rounds used (lead: 2, used: 2) lane=ready pr=420 branch=fix/42-seq"
 
 issue 43 OPEN ready; issue 44 OPEN ready; review 43 430 complete reviewer 44
 rounds start 43 430
 eq "AC12 a batch PR, markers on the first issue's log: its own step" "$(step 43)" "delta-review lane=ready pr=430 branch=fix/43-seq round=1"
 eq "AC12 ... and the same step for the second issue" "$(step 44)" "delta-review lane=ready pr=430 branch=fix/43-seq round=1"
+rounds fixed 43 430; rounds delta 43 430 open=1; rounds start 44 430
+eq "AC12 round 2 opened under the second issue: both show round 2 in flight, never merge" "$(step 43 | cut -d' ' -f1,5); $(step 44 | cut -d' ' -f1,5)" "delta-review round=2; delta-review round=2"
+
+issue 47 OPEN ready; review 47 470 complete
+logf 47 "round: fix 1 started abc1234 pr=469"; logf 47 "round: fix 1 settled abc1234 pr=469"; logf 47 "round: delta 1 settled open=1 pr=469"; logf 47 "round: fix 2 started abc1234 pr=469"
+eq "AC23 rounds of the issue's earlier PR (closed without a merge) do not count: merge" "$(step 47)" "merge lane=ready pr=470 branch=fix/47-seq"
+review 47 470 open
+eq "AC23 ... and its first finding gets fix round 1, not hold" "$(step 47)" "fix lane=ready pr=470 branch=fix/47-seq round=1"
 
 issue 45 OPEN ready; review 45 450 open lead
 rounds start 45 450
 eq "AC13 route lead with a round in flight (started, open): the round goes on" "$(step 45)" "fix lane=ready pr=450 branch=fix/45-seq round=1"
 rounds fixed 45 450; review 45 450 complete lead
 eq "AC13 route lead, round settled, complete: delta-review, never merge" "$(step 45)" "delta-review lane=ready pr=450 branch=fix/45-seq round=1"
-rounds delta 45 open=1; review 45 450 open lead
-eq "AC13 route lead, no round in flight, a line open: hold" "$(step 45)" "hold fix rounds used (lead: 2, settled: 1) lane=ready pr=450 branch=fix/45-seq"
+rounds delta 45 450 open=1; review 45 450 open lead
+eq "AC13 route lead, no round in flight, a line open: hold" "$(step 45)" "hold fix rounds used (lead: 2, used: 1) lane=ready pr=450 branch=fix/45-seq"
 
 issue 46 OPEN ready do-not-merge; review 46 460 complete
 rounds start 46 460
 eq "a hold label does not hide a round in flight" "$(step 46)" "delta-review lane=ready pr=460 branch=fix/46-seq round=1"
-rounds delta 46 open=0
+rounds delta 46 460 open=0
 eq "... and holds the merge once the round is reviewed" "$(step 46)" "skip merge held: label do-not-merge lane=ready pr=460 branch=fix/46-seq"
 eq "AC10 no marker (rounds under the Orca coordinator, or no log here): open is fix round 1, complete is merge" "$(step 9 | cut -d' ' -f1,5) / $(step 10 | cut -d' ' -f1)" "fix round=1 / merge"
 eq "AC14 only fix and delta-review carry round=" "$(for i in 1 3 7 8 10 11 20; do step $i; done | grep -c 'round=')" 0

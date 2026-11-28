@@ -12,7 +12,7 @@
 #   merge-pr.sh prep <pr>
 #        refuse on a hold label, an open needs-decision, no `Closes #<n>` (opt-out: `No-issue: <reason>` or `Part of #<n>`), a
 #        failing review-check or a fix round without its delta-review (rounds.sh; subagent mode only: no round markers,
-#        no refusal); then, in the PR's worktree (wf_install first when the base brought a package.json change),
+#        no refusal; an unreadable round state refuses); then, in the PR's worktree (wf_install first when the base brought a package.json change),
 #        fast-forward to a remote head that moved ahead (gh pr update-branch; diverged = exit 64, nothing pushed),
 #        merge the base branch in when behind (no rebase, no force-push), wf_verify (+ wf_build when
 #        wf_build_needed), push, wait until GitHub reports the pushed commit as the PR head and (10 min after a push)
@@ -170,11 +170,15 @@ case "$cmd" in
     r=$(route_pr "$pr") && [ -n "$r" ] || die "route for PR #$pr failed"
     echo "route $r"
     msg=$(review_check "$bodyf" "${r%%:*}") || stop="$stop\n$msg"
-    # a fix round the subagent coordinator started and no delta-review covers (rounds.sh; the Orca mode writes no markers)
+    # a fix round the subagent coordinator started and no delta-review covers (rounds.sh; the Orca mode writes no markers).
+    # A round state that cannot be read holds (fail closed), like a failed label lookup above.
     if [ -n "$issues" ]; then
       # shellcheck disable=SC2086
-      read -r _ rk rphase <<<"$("$DIR/rounds.sh" state $issues 2>/dev/null)"
-      [ "${rk:-0}" = 0 ] || stop="$stop\nreview: fix round $rk ($rphase) of #$(echo $issues | sed 's/ / #/g') has no delta-review yet: run it, then rounds.sh delta"
+      if rs=$("$DIR/rounds.sh" state "$pr" $issues 2>&1) && read -r _ rk rphase <<<"$rs" && [ -n "${rphase:-}" ]; then
+        [ "$rk" = 0 ] || stop="$stop\nreview: fix round $rk ($rphase) of #$(echo $issues | sed 's/ / #/g') has no delta-review yet: run it, then rounds.sh delta"
+      else
+        stop="$stop\nreview: cannot read the fix rounds of PR #$pr: $(printf '%s' "$rs" | head -c 300)"
+      fi
     fi
     # Orca's setup `npm install` rewrites package-lock.json; committed without a package.json change it breaks `npm ci` in CI
     files=$(gh pr diff "$pr" --name-only 2>/dev/null || true)

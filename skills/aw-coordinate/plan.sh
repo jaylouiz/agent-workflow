@@ -17,7 +17,7 @@
 #   merge    its `## Review` is complete and no fix round is in flight: merge-pr.sh prep decides the rest
 # The rounds come from the round markers on the coordination logs of the issues the PR closes, written and read by
 # `bin/rounds.sh` only (its header has the markers and the rules; a worker's "fix round 1 done" counts nothing):
-#   rounds.sh state -> `<F: rounds used> <round in flight or 0> <started|settled|none>`
+#   rounds.sh state <pr> <issues> -> `<F: rounds used> <round in flight or 0> <started|settled|none>`
 #   | in flight | review   | step                                                    |
 #   | no        | open     | fix round=<F+1>; hold when `route: lead` or F >= 2      |
 #   | no        | complete | merge (skip: a hold label)                              |
@@ -25,11 +25,11 @@
 #   | started   | complete | delta-review round=<F>                                  |
 #   | settled   | either   | delta-review round=<F>                                  |
 # A round in flight routes the same for every review route. No marker (no log on this machine, or the earlier rounds
-# ran under the Orca coordinator, which writes none) counts as no round.
+# ran under the Orca coordinator, which writes none) counts as no round; a round state that cannot be read is `unknown`.
 #   design   label needs-design
 #   lead     label needs-spec or ready
 #   screen   no lane label: the coordinator gives it a lane by the triage rule first
-#   unknown  the issue could not be read
+#   unknown  the issue, the PR list or the round state could not be read
 # Detail: `lane=<label>`, and for work that exists `pr=<n> branch=<head>` (the branch a later stage takes over; `fix` and
 # `delta-review` add `round=<k>`, the round the stage belongs to) or
 # `branch=<b>` (a local or remote `<type>/<n>-*`, `proto/<n>-*` or Orca's `<user>/<type>-<n>-*` branch without an open PR).
@@ -69,12 +69,9 @@ branch_of() { # branch_of <n>: a stage branch of the issue without a PR (local f
 review_route() { # review_route <body file>: lead | reviewer | "" (the route line of the `## Review` section)
   awk '/^## Review[[:space:]]*$/ { on = 1; next } on && /^## / { on = 0 } on && /^route:/ { sub(/^route:[[:space:]]*/, ""); sub(/[[:space:]·].*/, ""); print; exit }' "$1"
 }
-rounds() { # rounds <body file>: `rounds.sh state` over every issue the PR closes; "0 0 none" when it cannot be read
-  local ns out
-  ns=$(grep -Eio '^[[:space:]-]*(closes|fixes|resolves) +([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+' "$1" | grep -Eo '[0-9]+$' | tr '\n' ' ')
-  # shellcheck disable=SC2086
-  out=$("$DIR/../../bin/rounds.sh" state $ns 2>/dev/null) || out=""
-  echo "${out:-0 0 none}"
+rounds() { # rounds <pr> <body file>: `rounds.sh state` of the PR over every issue it closes; fails when it cannot be read
+  # shellcheck disable=SC2046
+  "$DIR/../../bin/rounds.sh" state "$1" $("$DIR/../../bin/merge-pr.sh" issues-of "$2" 2>/dev/null) 2>/dev/null
 }
 
 for arg in "$@"; do
@@ -110,11 +107,13 @@ for arg in "$@"; do
       none) line lead "$detail" ;;
       unreviewed) line review "$detail" ;;
       *)
-        read -r used flight phase <<<"$(rounds "$TMP/b")"
+        # never routed as if there were no round when the round state could not be read
+        r=$(rounds "$pr" "$TMP/b") && [ -n "$r" ] || { line unknown "round state unreadable (rounds.sh state) $detail"; rc=1; continue; }
+        read -r used flight phase <<<"$r"
         if [ "$flight" != 0 ]; then # a fix round the coordinator started and no delta marker covers
           if [ "$phase" = started ] && [ "$rs" = open ]; then line fix "$detail round=$flight"; else line delta-review "$detail round=$flight"; fi
         elif [ "$rs" = open ]; then
-          if [ "$(review_route "$TMP/b")" = lead ] || [ "$used" -ge 2 ]; then line hold "fix rounds used (lead: 2, settled: $used) $detail"
+          if [ "$(review_route "$TMP/b")" = lead ] || [ "$used" -ge 2 ]; then line hold "fix rounds used (lead: 2, used: $used) $detail"
           else line fix "$detail round=$((used + 1))"; fi
         else
           held=""; for h in $WF_HOLD_LABELS; do if lab "$h"; then held=$h; break; fi; done

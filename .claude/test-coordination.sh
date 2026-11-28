@@ -49,16 +49,17 @@ for s in design lead review fix hold delta-review merge screen skip; do
 done
 # the round state has one owner: bin/rounds.sh writes and reads the markers; the doc names its commands, never a marker to
 # word by hand; plan.sh and merge-pr.sh prep read the state from it
-for c in 'rounds.sh` `start <n> <pr>`' 'rounds.sh fixed <n> <pr>' 'rounds.sh delta <n> open=' 'rounds.sh delta <n> skipped'; do
+for c in 'rounds.sh` `start <n> <pr>`' 'rounds.sh fixed <n> <pr>' 'rounds.sh delta <n> <pr> open=' 'rounds.sh delta <n> <pr> skipped'; do
   ok "subagent-mode.md names the round command '$c'" 'grep -qF -- "$c" "$sub"'
 done
 ok "subagent-mode.md words no round marker itself" '! grep -nE "round: (fix|delta) " "$sub"'
 ok "subagent-mode.md opens the round before the fix worker's Agent call" 'grep -qE "Before a .fix. worker, and before its .Agent. call" "$sub"'
 ok "subagent-mode.md says what no marker means (Orca rounds, a lost log)" 'grep -qF "ran under the Orca coordinator" "$sub"'
-for m in 'round: fix <k> started <sha>' 'round: fix <k> settled <sha>' 'round: delta <k> settled open=<m>' 'round: delta <k> skipped'; do
+for m in 'round: fix <k> started <sha> pr=<pr>' 'round: fix <k> settled <sha> pr=<pr>' 'round: delta <k> settled open=<m> pr=<pr>' 'round: delta <k> skipped pr=<pr>'; do
   ok "rounds.sh defines the round marker '$m'" 'grep -qF -- "$m" bin/rounds.sh'
 done
-ok "plan.sh and merge-pr.sh prep read the round state from rounds.sh, with no marker regex of their own" 'grep -qF "rounds.sh\" state" skills/aw-coordinate/plan.sh && grep -qF "rounds.sh\" state" bin/merge-pr.sh && ! grep -nE "round: (fix|delta) \[" skills/aw-coordinate/plan.sh bin/merge-pr.sh'
+ok "the round delta is settled only after a delta-review stage" 'grep -qF "never after a first \`review\`" "$sub"'
+ok "plan.sh and merge-pr.sh prep read the round state from rounds.sh, with no marker regex of their own" 'grep -qF "rounds.sh\" state \"\$1\"" skills/aw-coordinate/plan.sh && grep -qF "rounds.sh\" state \"\$pr\"" bin/merge-pr.sh && ! grep -nE "round: (fix|delta) \[" skills/aw-coordinate/plan.sh bin/merge-pr.sh'
 for s in plan.sh wt.sh spec.sh preflight.sh; do ok "$s is executable" '[ -x "skills/aw-coordinate/$s" ]'; done
 for r in READY REVIEWED FIXED PARKED ROUTED FAILED; do
   ok "the result line $r is in the template and settled in subagent-mode.md" 'grep -qF "$r #" skills/aw-coordinate/task-template.md && grep -qF "\`$r #" "$sub"'
