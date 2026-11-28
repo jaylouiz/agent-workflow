@@ -7,6 +7,8 @@ under **Breaking**, first in its release: `install.sh --update` prints those ent
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-28
+
 ### Breaking
 
 - Every skill has a new name that starts with `aw-` (type `/aw-` to list them). The old names are gone; the map is
@@ -39,6 +41,10 @@ under **Breaking**, first in its release: `install.sh --update` prints those ent
   with the manual path when there is no `orca`.
 - Project profile: long sections can move to their own file, with a size budget and a template version check
   (`settings.sh profile`).
+- Board client contract v1 in [docs/contract.md](docs/contract.md): every string a board client such as Tandem
+  reads or writes, with golden fixtures in `docs/contract-fixtures/` generated from the real writers. The label
+  `on-hold` now holds an issue (no stage starts, no answer is taken, no merge; it is in the default
+  `WF_HOLD_LABELS`), and an issue routed as fog gets the label `needs-direction`.
 - `test.sh` runs every suite; CI runs it on macOS (bash 3.2) and ubuntu.
 - `WF_PR_ATTRIBUTION=off` drops the attribution line the guard hook requires in a PR body.
 
