@@ -174,11 +174,13 @@ case "$cmd" in
     # A round state that cannot be read holds (fail closed), like a failed label lookup above.
     if [ -n "$issues" ]; then
       # shellcheck disable=SC2086
-      if rs=$("$DIR/rounds.sh" state "$pr" $issues 2>&1) && read -r _ rk rphase <<<"$rs" && [ -n "${rphase:-}" ]; then
+      if rs=$("$DIR/rounds.sh" state "$pr" $issues 2>"$bodyf.err") && read -r _ rk rphase <<<"$rs" && [ -n "${rphase:-}" ] &&
+        case "$rk" in *[!0-9]*) false ;; esac; then
         [ "$rk" = 0 ] || stop="$stop\nreview: fix round $rk ($rphase) of #$(echo $issues | sed 's/ / #/g') has no delta-review yet: run it, then rounds.sh delta"
       else
-        stop="$stop\nreview: cannot read the fix rounds of PR #$pr: $(printf '%s' "$rs" | head -c 300)"
+        stop="$stop\nreview: cannot read the fix rounds of PR #$pr: $(head -c 300 "$bodyf.err")"
       fi
+      rm -f "$bodyf.err"
     fi
     # Orca's setup `npm install` rewrites package-lock.json; committed without a package.json change it breaks `npm ci` in CI
     files=$(gh pr diff "$pr" --name-only 2>/dev/null || true)

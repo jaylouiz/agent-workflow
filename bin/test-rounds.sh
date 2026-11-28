@@ -10,7 +10,7 @@ cat >"$T/bin/gh" <<'EOS'
 #!/usr/bin/env bash
 echo "$*" >>"$T/calls"
 case "$1 $2" in
-  "pr view") # the head from $T/head, the body from $T/body-<pr> (default: closes nothing)
+  "pr view") # the head from $T/head, the body from $T/body-<pr> (none: closes nothing)
     [ -f "$T/head" ] || exit 1
     jq -n --arg h "$(cat "$T/head")" --arg b "$(cat "$T/body-$3" 2>/dev/null)" '{headRefOid: $h, body: $b}' ;;
   *) exit 1 ;;
@@ -28,6 +28,8 @@ marks() { [ -f "$L/$1.md" ] && grep -c ' round: ' "$L/$1.md" || echo 0; } # mark
 last() { tail -1 "$L/$1.md" | cut -d' ' -f3-; }
 logf() { printf -- '- 2026-11-28T00:00Z %s\n' "$2" >>"$L/$1.md"; }
 head_is() { echo "$1" >"$T/head"; }
+closes() { local pr=$1; shift; printf 'Closes #%s\n' "$@" >"$T/body-$pr"; } # closes <pr> <issue>...
+closes 10 1; closes 20 2; closes 30 3; closes 70 7; closes 71 7
 
 # AC15: state reads only; no log is no round
 eq "no log: no round" "$(st 10 1)" "0 0 none"
@@ -51,7 +53,7 @@ eq "AC18 delta settles the round" "$(r delta 1 10 open=1)" "round=1 delta settle
 eq "AC18 its marker" "$(last 1)" "round: delta 1 settled open=1 pr=10"
 eq "state: nothing in flight, one round used" "$(st 10 1)" "1 0 none"
 eq "AC18 delta without a round in flight: exit 0, nothing written" "$(r delta 1 10 open=0); $(rc delta 1 10 open=0); $(marks 1)" "round=0 no fix round in flight (nothing written); 0; 3"
-eq "AC17 fixed again after the round's delta marker: exit 1, no new round" "$(rc fixed 1 10); $(marks 1); $(st 10 1)" "1; 3; 1 0 none"
+eq "AC17 fixed again after the round's delta marker (the same head): no new round" "$(r fixed 1 10); $(marks 1); $(st 10 1)" "round=1 settled before (nothing written); 3; 1 0 none"
 head_is ccc333
 eq "round 2 opens" "$(r start 1 10)" "round=2 started ccc333"
 eq "AC18 a delta on a started round settles it (the session was lost before FIXED was read)" "$(r delta 1 10 skipped)" "round=2 delta skipped"
@@ -59,9 +61,19 @@ eq "its marker" "$(last 1)" "round: delta 2 skipped pr=10"
 eq "state: two rounds used" "$(st 10 1)" "2 0 none"
 eq "AC16 both rounds used: start refuses a third, exit 1" "$(rc start 1 10); $(marks 1); $(st 10 1)" "1; 5; 2 0 none"
 
-# AC17: fixed without a started round writes nothing
+# AC17: a FIXED nobody opened a round for (the fix began under the Orca coordinator, or the start was missed): the next
+# round is opened and settled, so its delta-review is due; the same head again writes nothing
 head_is ddd444
-eq "fixed without a start: exit 1, nothing written" "$(rc fixed 2 20); $(marks 2)" "1; 0"
+eq "fixed without a start opens and settles round 1" "$(r fixed 2 20)" "round=1 settled ddd444 (no round was started: opened and settled)"
+eq "... in flight, settled" "$(st 20 2); $(last 2)" "1 1 settled; round: fix 1 settled ddd444 pr=20"
+r delta 2 20 open=0 >/dev/null; head_is eee555
+eq "a later fix without a start, on a new head: round 2" "$(r fixed 2 20 | cut -d' ' -f1-3); $(st 20 2)" "round=2 settled eee555; 2 2 settled"
+
+# AC25: a write under an issue the PR does not close would land on a log nobody reads: refused
+eq "start under an issue the PR does not close: exit 1" "$(rc start 3 10)" 1
+eq "delta under an issue the PR does not close: exit 1" "$(rc delta 3 10 open=0)" 1
+eq "a PR that closes nothing: exit 1" "$(rc start 3 31)" 1
+eq "... nothing written" "$(marks 3)" 0
 
 # AC16: the PR cannot be read: nothing written
 rm "$T/head"
@@ -97,7 +109,7 @@ eq "the two PRs keep their own rounds" "$(st 70 7) / $(st 71 7)" "2 2 started / 
 eq "a delta of the new PR settles its own round only" "$(r delta 7 71 open=0); $(st 70 7) / $(st 71 7)" "round=1 delta settled open=0; 2 2 started / 1 0 none"
 
 # AC12: a batch PR (#80 closes 8 and 9): one round count over both logs, whichever issue a command names
-printf 'Summary\n\nCloses #8\n- Fixes acme/widgets#9\n' >"$T/body-80"
+printf 'Summary\r\n\r\nCloses #8\r\n- Fixes acme/widgets#9\r\n' >"$T/body-80" # CRLF, as GitHub's editor saves it
 r start 8 80 >/dev/null; r fixed 8 80 >/dev/null; r delta 8 80 open=1 >/dev/null
 eq "state over both issues" "$(st 80 8 '#9')" "1 0 none"
 eq "start under the other issue opens round 2, not a second round 1" "$(r start 9 80)" "round=2 started aaa111"
@@ -111,6 +123,7 @@ eq "no command: 64" "$(rc)" 64
 eq "state without an issue: 64" "$(rc state 10)" 64
 eq "state with a non-number: 64" "$(rc state 10 x7)" 64
 eq "start without a PR: 64" "$(rc start 1)" 64
+closes 50 5
 eq "AC18 delta with another argument: 64" "$(rc delta 5 50 done)" 64
 eq "delta without the PR: 64" "$(rc delta 5 open=0)" 64
 eq "delta open= without a number: 64" "$(rc delta 5 50 open=)" 64
@@ -119,6 +132,11 @@ eq "gh is asked for the PR only" "$(cut -d' ' -f1-2 "$T/calls" | sort -u | tr '\
 
 # AC24: a log that cannot be located (no repo to resolve) is no "no round": state fails, a write writes nothing
 eq "state with an unusable WF_REPO: exit 1, nothing printed" "$(WF_REPO=nope bash "$DIR/rounds.sh" state 10 1 2>/dev/null; echo "rc=$?")" "rc=1"
+chmod 000 "$L/8.md"
+if [ -r "$L/8.md" ]; then n=$((n + 1)) # root reads everything (a CI container): the case cannot be set up
+else eq "a log that exists and cannot be read: state exit 1, nothing printed" "$(st 80 8 9 2>/dev/null; echo "rc=$?")" "rc=1"
+  eq "... and no write counts without it" "$(rc start 9 80); $(marks 9)" "1; 2"; fi
+chmod 644 "$L/8.md"
 eq "start with an unusable WF_REPO: exit 1" "$(WF_REPO=nope bash "$DIR/rounds.sh" start 3 30 >/dev/null 2>&1; echo $?); $(marks 3)" "1; 0"
 
 echo "rounds: $((n - fail))/$n passed"
