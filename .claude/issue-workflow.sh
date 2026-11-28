@@ -2,6 +2,9 @@
 # issue-workflow config for agent-workflow (sourced by the bin/ scripts; template: reference/project-config.sh).
 # Shell scripts only: no dev server (default WF_PORTS stay unused), no build, no deploy, no PR-body check.
 
+# GitHub's issue status carries the phase alone (cut-over, docs/phase-label-cutover.md): no phase:design / phase:build labels.
+WF_PHASE_LABELS=off
+
 # Hooks and always-loaded files every session runs: a bug there breaks all sessions, so these PRs get a separate reviewer.
 WF_RISK_GLOBS=(
   'bin/guard.sh'

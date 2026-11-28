@@ -19,13 +19,14 @@ printf '%s%s\n' "${GH_REPO:+GH_REPO=$GH_REPO }" "$*" >>"$T/calls"
 case "$1 $2" in
   "api graphql")
     case "$*" in
-      *setIssueStatus*) [ ! -e "$T/fail-mutation" ] || exit 1 ;;
+      *setIssueStatus*) [ ! -e "$T/fail-mutation" ] || exit 1; touch "$T/written" ;;
       *) [ ! -e "$T/fail-lookup" ] || { echo "gh: Field 'planningStatuses' doesn't exist" >&2; exit 1; }
-         cat "$T/lookup" ;;
+         if [ -e "$T/written" ] && [ -e "$T/lookup-after" ]; then cat "$T/lookup-after"; else cat "$T/lookup"; fi ;;
     esac ;;
   "label create") ;;
   "issue edit") [ ! -e "$T/fail-edit" ] || exit 1 ;;
   "issue view") cat "$T/labels" 2>/dev/null ;;
+  "issue list") case "$*" in *phase:design*) cat "$T/list-design" 2>/dev/null ;; *) cat "$T/list-build" 2>/dev/null ;; esac ;;
   *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
 esac
 STUB
@@ -39,7 +40,7 @@ S="$DIR/issue-status.sh"
 answer() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >"$T/lookup"; }
 run() { rm -f "$T/calls" "$T/err"; : >"$T/calls"; bash "$S" "$@" >"$T/out" 2>"$T/err"; echo $?; }
 calls() { grep -c "$1" "$T/calls"; }
-reset() { rm -f "$T"/fail-* "$T/labels" "$WF_GLOBAL_SETTINGS" "$T/repo/.claude/issue-workflow.sh"; answer I_7 Backlog IS_x; }
+reset() { rm -f "$T"/fail-* "$T/labels" "$T/written" "$T/lookup-after" "$T/list-design" "$T/list-build" "$WF_GLOBAL_SETTINGS" "$T/repo/.claude/issue-workflow.sh"; answer I_7 Backlog IS_x; }
 
 check "the script is executable (the skills call it by path)" '[ -x "$S" ]'
 
@@ -159,6 +160,48 @@ eq "get prints the status name" "$(cat "$T/out")" "In review"
 eq "get writes nothing" "$(calls "setIssueStatus\|issue edit")" 0
 reset; touch "$T/fail-lookup"
 eq "get in a repo without statuses: exit 0, empty" "$(run get 7)$(cat "$T/out")" 0
+
+# --- cutover: the phase labels move to statuses (dry run by default, safe to rerun) ---
+reset; printf '7\n9\n' >"$T/list-build"; printf '5\n' >"$T/list-design"; answer I_7 Backlog IS_x
+eq "cutover dry run exits 0" "$(run cutover)" 0
+check "dry run names every issue with its plan" 'grep -q "^#5 phase:design: status Backlog -> In progress, lane needs-design ensured, remove phase:design" "$T/out" && grep -q "^#7 phase:build: status Backlog -> In progress, remove phase:build" "$T/out" && grep -q "^#9 " "$T/out"'
+check "dry run says so" 'grep -q "dry run, nothing written" "$T/out"'
+eq "dry run writes nothing" "$(calls "setIssueStatus\|issue edit\|label create")" 0
+check "only open issues are listed" 'grep -q "issue list --state open --label phase:build" "$T/calls"'
+
+reset; printf '7\n' >"$T/list-build"; printf 'phase:build\n' >"$T/labels"; answer I_7 Backlog IS_x; printf 'I_7\tIn progress\tIS_x\n' >"$T/lookup-after"
+eq "cutover --apply exits 0" "$(run cutover --apply)" 0
+check "apply sets the status" '[ "$(calls setIssueStatus)" = 1 ]'
+check "apply removes the label after the status" 'grep -qx "issue edit 7 --remove-label phase:build" "$T/calls" && [ "$(grep -n setIssueStatus "$T/calls" | head -1 | cut -d: -f1)" -lt "$(grep -n remove-label "$T/calls" | head -1 | cut -d: -f1)" ]'
+eq "a build issue gets no lane label" "$(calls "add-label")" 0
+
+reset; printf '5\n' >"$T/list-design"; printf 'phase:design\n' >"$T/labels"; answer I_5 "In progress" IS_x
+run cutover --apply >/dev/null
+eq "a started status is not rewritten" "$(calls setIssueStatus)" 0
+check "design: the lane is ensured, then only the label it has goes" 'grep -qx "issue edit 5 --add-label needs-design" "$T/calls" && grep -qx "issue edit 5 --remove-label phase:design" "$T/calls"'
+reset; printf '5\n' >"$T/list-design"; answer I_5 "In review" IS_x; printf 'needs-design\n' >"$T/labels"
+run cutover --apply >/dev/null
+eq "design with the lane already there: no label added" "$(calls "add-label")" 0
+
+reset; printf '7\n' >"$T/list-build"; answer I_7 Backlog IS_x; touch "$T/fail-mutation"
+eq "a failed status write: exit 0" "$(run cutover --apply)" 0
+eq "the label stays" "$(calls remove-label)" 0
+check "and the output says so" 'grep -q "^#7 phase:build: kept (the status could not be set)" "$T/out"'
+
+reset; printf '7\n' >"$T/list-build"; touch "$T/fail-lookup"
+eq "a repo without statuses: exit 0" "$(run cutover --apply)" 0
+eq "keeps the label" "$(calls "remove-label")" 0
+
+reset; printf '7\n' >"$T/list-build"; printf 'phase:build\n' >"$T/labels"; touch "$T/fail-edit"; answer I_7 "In progress" IS_x
+run cutover --apply >/dev/null
+check "a failed label removal is reported, not fatal" 'grep -q "^#7 phase:build: kept (label not removed)" "$T/out"'
+
+reset
+eq "no phase labels left: exit 0" "$(run cutover --apply)" 0
+check "nothing to do is said" 'grep -q "nothing to do" "$T/out"'
+eq "and nothing written (a rerun)" "$(calls "setIssueStatus\|issue edit")" 0
+eq "cutover with a bad flag: usage" "$(bash "$S" cutover --now >/dev/null 2>&1; echo $?)" 64
+eq "cutover with extra args: usage" "$(bash "$S" cutover --apply x >/dev/null 2>&1; echo $?)" 64
 
 # --- which repo ---
 reset

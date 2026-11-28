@@ -25,7 +25,7 @@ Fill both templates in the session scratchpad, not in the repo yet:
 
 - Every detected fact goes in; a guess is marked `(guess)`.
 - Sections that do not apply are left out, not left empty: with `ui: no`, every section tagged `<!-- ui -->`; without Orca (`orca: no`), the section tagged `<!-- orca -->`. A missing section means "does not apply" to every skill.
-- Config: `WF_PORTS` from the dev script (only with Orca), `WF_RISK_GLOBS` from the risk areas, `WF_IGNORE_GLOBS` from the lockfile, `WF_REQUIRED_CHECKS` from `required_check` (else the check names the gate job reports), `wf_verify` from the gate script, `wf_install` from the package manager. Model tiers and `WF_MAX_WORKERS` stay global unless the user asks.
+- Config: `WF_PHASE_LABELS=off` only when `issue_statuses: yes` (GitHub's issue status then carries the phase; the cut-over steps are in docs/phase-label-cutover.md); `no` or `unknown`: leave it unset, the labels stay the only phase signal. `WF_PORTS` from the dev script (only with Orca), `WF_RISK_GLOBS` from the risk areas, `WF_IGNORE_GLOBS` from the lockfile, `WF_REQUIRED_CHECKS` from `required_check` (else the check names the gate job reports), `wf_verify` from the gate script, `wf_install` from the package manager. Model tiers and `WF_MAX_WORKERS` stay global unless the user asks.
 
 ## 4. Ask only the gaps
 

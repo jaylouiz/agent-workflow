@@ -86,18 +86,19 @@ Two sourced bash files, read in this order (later wins): built-in defaults, the 
 | `WF_PROTO_PORTS` | `3111-3119` | | prototype previews of `/aw-ui-design` |
 | `WF_COMMENT_CAP` | `1500` | | visible characters per agent issue comment |
 | `WF_ISSUE_LOG_DIR` | `~/.claude/issue-logs` | | per-issue coordination logs |
-| `WF_PHASE_LABELS` | `on` | | `off`: no `phase:design` / `phase:build` labels; GitHub's issue status carries the phase alone |
+| `WF_PHASE_LABELS` | `on` | | `off`: no `phase:*` labels; the issue status carries the phase |
 | `WF_PR_ATTRIBUTION` | `on` | | `off`: the guard hook stops requiring the "Generated with [Claude Code]" line in a PR body |
 
-Fixed on purpose: label names and colours (board clients read them), the retro thresholds and the CI wait windows.
+Fixed on purpose: label names and colours (clients read them), retro thresholds, CI wait windows.
 
 ## Updating
 
-`bash install.sh --update` refuses local changes to tracked files, runs `git pull --ff-only`, reruns the install when a skill was added, renamed or removed or `install.sh` changed, and prints the version jump and the new **Breaking** entries of the [CHANGELOG](CHANGELOG.md). Restart open Claude sessions and coordinators afterwards: a running session keeps the skill text it loaded. Releases are semver tags; the maintainer's procedure is [docs/releasing.md](docs/releasing.md).
+`bash install.sh --update` refuses local changes to tracked files, runs `git pull --ff-only`, reruns the install when a skill was added, renamed or removed or `install.sh` changed, and prints the version jump and the new **Breaking** entries of the [CHANGELOG](CHANGELOG.md). Restart open sessions and coordinators afterwards: they keep the skill text they loaded. Releases are semver tags; the maintainer's procedure is [docs/releasing.md](docs/releasing.md).
 
 ## Troubleshooting
 
-- **"No profile in this repo"**: the skills run, but skip every project-specific step. Run `/aw-setup` once and merge its PR.
+- **`WF_PHASE_LABELS=off`**: [cut-over steps](docs/phase-label-cutover.md).
+- **"No profile in this repo"**: the skills skip every project-specific step. Run `/aw-setup` once and merge its PR.
 - **`CLAUDE_CONFIG_DIR` is set**: not supported. Hooks and script paths assume `~/.claude`; `install.sh` warns. Unset it and rerun `install.sh`.
 - **Orca below the minimum**: `/aw-coordinate` relies on commands of `ORCA_MIN`. Update Orca; the warning goes.
 - **`gh` not logged in or too old**: `gh auth login`, or update `gh`. Screenshots in issue comments need `GH_MIN`. `install.sh --check` reports both.
