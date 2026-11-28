@@ -15,6 +15,9 @@
 #        phase:build gets its status set from the label (In progress; an existing In progress or In review stays), and
 #        only after a re-read shows a started status the label goes (phase:design also makes sure of the lane
 #        needs-design, the rule that reads UX Design). Without --apply it only prints the plan. Safe to rerun.
+#        Kept, with a line saying why: no status lookup (a repo without statuses; also in the dry run), unreadable
+#        labels, a phase:build issue in the lane needs-design (it would read as UX Design: settle the lane, rerun).
+#        An unreadable issue list prints "incomplete" instead of "nothing to do".
 #
 # Best effort: a repo without statuses, a name it does not have or a failed call print a note on stderr and exit 0,
 # so no skill stops on a status. Labels stay the fallback clients read. Exit 64: usage, or no repo to act on.
@@ -79,7 +82,7 @@ started() { case "$1" in "In progress" | "In review") return 0 ;; *) return 1 ;;
 status_of() { lookup "$1" "" 2>/dev/null | cut -f2; } # status_of <n>: empty on none or failure
 
 cutover() { # cutover <apply 0|1>: see the header; best effort, always 0
-  local apply=$1 only='' design build n lab row cur plan have rm l ok=1
+  local apply=$1 only='' design build n lab row cur plan have rmopts l ok=1
   design=$(gh issue list --state open --label phase:design --limit 500 --json number --jq '.[].number' 2>/dev/null) || { ok=0; design=""; }
   build=$(gh issue list --state open --label phase:build --limit 500 --json number --jq '.[].number' 2>/dev/null) || { ok=0; build=""; }
   [ "$apply" = 1 ] && echo "cutover $REPO (apply)" || echo "cutover $REPO (dry run, nothing written; --apply writes)"
@@ -93,8 +96,9 @@ cutover() { # cutover <apply 0|1>: see the header; best effort, always 0
     if printf '%s\n' "$design" | grep -qx "$n"; then lab=phase:design; else lab=phase:build; fi
     row=$(lookup "$n" "" 2>/dev/null) || { echo "#$n $lab: kept (no status lookup: this repo has no issue statuses, or GitHub did not answer)"; continue; }
     cur=$(printf '%s' "$row" | cut -f2)
+    have=$(gh issue view "$n" --json labels --jq '.labels[].name' 2>/dev/null) || { echo "#$n $lab: kept (labels not readable)"; continue; }
     # a phase:build issue in the lane needs-design would read as UX Design once the label is gone
-    if [ "$lab" = phase:build ] && has_label "$n" needs-design; then
+    if [ "$lab" = phase:build ] && printf '%s\n' "$have" | grep -qx needs-design; then
       echo "#$n $lab: kept (lane needs-design would make it read as UX Design: settle the lane, then rerun)"; continue
     fi
     if started "$cur"; then plan="status $cur stays"; else plan="status ${cur:-none} -> In progress"; fi
@@ -105,17 +109,16 @@ cutover() { # cutover <apply 0|1>: see the header; best effort, always 0
       cur=$(status_of "$n")
       started "$cur" || { echo "#$n $lab: kept (the status could not be set)"; continue; }
     fi
-    if [ "$lab" = phase:design ] && ! has_label "$n" needs-design; then
+    if [ "$lab" = phase:design ] && ! printf '%s\n' "$have" | grep -qx needs-design; then
       gh issue edit "$n" --add-label needs-design >/dev/null 2>&1 || { echo "#$n $lab: kept (lane needs-design not added)"; continue; }
     fi
     # only the labels it has: gh refuses to remove one the issue lacks
-    have=$(gh issue view "$n" --json labels --jq '.labels[].name' 2>/dev/null) || have=""
-    rm=""
-    for l in phase:design phase:build; do printf '%s\n' "$have" | grep -qx "$l" && rm="$rm --remove-label $l"; done
+    rmopts=""
+    for l in phase:design phase:build; do printf '%s\n' "$have" | grep -qx "$l" && rmopts="$rmopts --remove-label $l"; done
     # none left: the list is a search index and lags a removal by seconds
-    [ -n "$rm" ] || { echo "#$n $lab: nothing to remove (already clean)"; continue; }
+    [ -n "$rmopts" ] || { echo "#$n $lab: nothing to remove (already clean)"; continue; }
     # shellcheck disable=SC2086
-    if gh issue edit "$n" $rm >/dev/null 2>&1; then echo "#$n $lab: $plan, label removed"
+    if gh issue edit "$n" $rmopts >/dev/null 2>&1; then echo "#$n $lab: $plan, label removed"
     else echo "#$n $lab: kept (label not removed)"; fi
   done
   return 0

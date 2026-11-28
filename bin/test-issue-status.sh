@@ -25,7 +25,7 @@ case "$1 $2" in
     esac ;;
   "label create") ;;
   "issue edit") [ ! -e "$T/fail-edit" ] || exit 1 ;;
-  "issue view") cat "$T/labels" 2>/dev/null ;;
+  "issue view") [ ! -e "$T/fail-view" ] || exit 1; cat "$T/labels" 2>/dev/null || : ;;
   "issue list") case "$*" in *phase:design*) cat "$T/list-design" 2>/dev/null || : ;; *) cat "$T/list-build" 2>/dev/null || : ;; esac ;;
   *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
 esac
@@ -206,6 +206,9 @@ check "the other build issue is planned too" 'grep -q "^#7 phase:build" "$T/out"
 reset; printf '7\n' >"$T/list-build"; printf 'phase:build\nneeds-design\n' >"$T/labels"; answer I_7 Backlog IS_x
 run cutover --apply >/dev/null
 check "phase:build in the lane needs-design keeps its label (it would read as UX Design)" 'grep -q "^#7 phase:build: kept (lane needs-design" "$T/out" && [ "$(calls "setIssueStatus\|remove-label")" = 0 ]'
+reset; printf '7\n' >"$T/list-build"; printf 'phase:build\nneeds-design\n' >"$T/labels"; touch "$T/fail-view"
+run cutover --apply >/dev/null
+check "unreadable labels keep the issue untouched" 'grep -q "^#7 phase:build: kept (labels not readable)" "$T/out" && [ "$(calls "setIssueStatus\|remove-label")" = 0 ]'
 reset; printf '7\n' >"$T/list-build"; touch "$T/fail-lookup"
 run cutover >/dev/null
 check "dry run without statuses promises no removal" 'grep -q "^#7 phase:build: kept (no status lookup" "$T/out"'
