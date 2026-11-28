@@ -47,6 +47,10 @@ for s in design lead review fix hold delta-review merge screen skip; do
   ok "plan.sh documents the step $s" 'grep -qE "^#   $s " skills/aw-coordinate/plan.sh'
   ok "subagent-mode.md names the step $s" 'grep -qF "\`$s\`" "$sub"'
 done
+for m in 'round: fix <r> settled <sha>' 'round: delta <r> settled open=' 'round: delta <r> skipped'; do
+  ok "subagent-mode.md defines the round marker '$m'" 'grep -qF -- "$m" "$sub"'
+done
+ok "plan.sh counts the marker lines the doc defines" 'grep -qF "round: fix [0-9]+ settled" skills/aw-coordinate/plan.sh && grep -qF "round: delta [0-9]+ (settled open=" skills/aw-coordinate/plan.sh'
 for s in plan.sh wt.sh spec.sh preflight.sh; do ok "$s is executable" '[ -x "skills/aw-coordinate/$s" ]'; done
 for r in READY REVIEWED FIXED PARKED ROUTED FAILED; do
   ok "the result line $r is in the template and settled in subagent-mode.md" 'grep -qF "$r #" skills/aw-coordinate/task-template.md && grep -qF "\`$r #" "$sub"'

@@ -8,14 +8,18 @@
 #   skip     closed | held: label on-hold | merge held: label <l> | waiting for a decision | fog: label needs-direction
 #   lead     an open PR closes the issue but has no `## Review` yet (the lead goes on at the review route)
 #   review   its `## Review` is `route: reviewer` and nobody reviewed yet (no `by:`)
-#   fix      its `## Review` has a finding `-> open` and fewer than 2 fix rounds are logged
+#   fix      its `## Review` has a finding `-> open` and fewer than 2 fix rounds are settled on the log
 #   hold     a finding is `-> open` after the rounds the rules allow (a `route: lead` review: the lead used its 2; a
-#            `route: reviewer` review: 2 `fix round` log lines): never another fix round, the coordinator holds the merge
-#   delta-review  the review is complete but the last logged event is a `fix round`: its delta-review is still due
+#            `route: reviewer` review: 2 settled fix rounds): never another fix round, the coordinator holds the merge
+#   delta-review  the review is complete but a settled fix round has no delta marker on the log: its delta-review is due
 #   merge    its `## Review` is complete: merge-pr.sh prep decides the rest
-# The rounds come from the issue's coordination log (`decide.sh log --path <n>`), where the coordinator writes one
-# `fix round <k>` line per fix worker it starts and one `delta-review done` (or `delta-review skipped`) line after it;
-# no log on this machine counts as no round.
+# The rounds come from the issue's coordination log (`decide.sh log --path <n>`). Only the coordinator writes the round
+# markers, as exact lines, each when it has read the worker's final line and before it runs `plan.sh`:
+#   round: fix <k> settled <sha>            a fix worker ended `FIXED` (<sha>: the PR's head); k = the round, 1 then 2
+#   round: delta <k> settled open=<m>       the delta-review of round k ended `REVIEWED` with m findings open
+#   round: delta <k> skipped                the rules skip it (the round changed only docs or comments)
+# plan.sh counts only those lines (a worker's "fix round 1 done" is free text and ignored); a fix round is reviewed only
+# when a delta marker with the same k exists. No log on this machine counts as no round.
 #   design   label needs-design
 #   lead     label needs-spec or ready
 #   screen   no lane label: the coordinator gives it a lane by the triage rule first
@@ -58,10 +62,16 @@ branch_of() { # branch_of <n>: a stage branch of the issue without a PR (local f
 review_route() { # review_route <body file>: lead | reviewer | "" (the route line of the `## Review` section)
   awk '/^## Review[[:space:]]*$/ { on = 1; next } on && /^## / { on = 0 } on && /^route:/ { sub(/^route:[[:space:]]*/, ""); sub(/[[:space:]·].*/, ""); print; exit }' "$1"
 }
-log_rounds() { # log_rounds <n>: "<fix rounds logged> <1 when the last logged event is a fix round, i.e. its delta-review is due>"
+log_rounds() { # log_rounds <n>: "<settled fix rounds> <1 when a settled fix round has no delta marker, i.e. its delta-review is due>"
+  # Only the coordinator's exact marker lines count (after the timestamp): `round: fix <k> settled <sha>`,
+  # `round: delta <k> settled open=<m>` and `round: delta <k> skipped`. Worker text ("fix round 1 done") never matches.
   local f; f=$("$DIR/../../bin/decide.sh" log --path "$1" 2>/dev/null) || f=""
   [ -n "$f" ] && [ -f "$f" ] || { echo "0 0"; return; }
-  grep '^- ' "$f" | awk '/fix round [0-9]/ { r++; last = 1 } /delta-review (done|skipped)/ { last = 0 } END { print r + 0, last + 0 }'
+  grep '^- ' "$f" | awk '
+    # fields: 1 "-", 2 timestamp, 3 "round:", 4 fix|delta, 5 k
+    $0 ~ /^- [^ ]+ round: fix [0-9]+ settled [0-9a-f]+$/ { if (!($5 in fx)) { fx[$5] = 1; r++ } }
+    $0 ~ /^- [^ ]+ round: delta [0-9]+ (settled open=[0-9]+|skipped)$/ { dl[$5] = 1 }
+    END { due = 0; for (k in fx) if (!(k in dl)) due = 1; print r + 0, due }'
 }
 
 for arg in "$@"; do
@@ -97,7 +107,7 @@ for arg in "$@"; do
       unreviewed) line review "$detail" ;;
       open)
         read -r rounds _ <<<"$(log_rounds "$n")"
-        if [ "$(review_route "$TMP/b")" = lead ] || [ "$rounds" -ge 2 ]; then line hold "fix rounds used (lead: 2, logged: $rounds) $detail"; else line fix "$detail"; fi ;;
+        if [ "$(review_route "$TMP/b")" = lead ] || [ "$rounds" -ge 2 ]; then line hold "fix rounds used (lead: 2, settled: $rounds) $detail"; else line fix "$detail"; fi ;;
       complete)
         read -r _ due <<<"$(log_rounds "$n")"
         if [ "$due" = 1 ] && [ "$(review_route "$TMP/b")" != lead ]; then line delta-review "$detail"; continue; fi

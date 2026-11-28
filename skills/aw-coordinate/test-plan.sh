@@ -63,11 +63,17 @@ issue 24 OPEN ready;                   pr 24 240 fix/24-m 'Closes #24\n\n## Revi
 issue 25 OPEN ready;                   q branch alice/feat-25-orca-style
 issue 26 OPEN ready;                   q branch fix/26-plain
 issue 27 OPEN ready;                   q branch alice/feat-270-other
+issue 28 OPEN ready;                   pr 28 280 fix/28-n 'Closes #28\n\n## Review\nroute: reviewer · by: opus\n- [medium] y (a.sh:3) -> fixed abc\nlows: 0\n'
+issue 29 OPEN ready;                   pr 29 290 fix/29-o 'Closes #29\n\n## Review\nroute: reviewer · by: opus\n- [medium] y (a.sh:3) -> open\nlows: 0\n'
+issue 30 OPEN ready;                   pr 30 300 fix/30-p 'Closes #30\n\n## Review\nroute: reviewer · by: opus\n- [medium] y (a.sh:3) -> fixed abc\nlows: 0\n'
 logf() { printf -- '- 2026-11-28T00:00Z %s\n' "$2" >>"$T/logs/acme/widgets/$1.md"; }
-logf 21 "fix round 1 (PR #210)"
-logf 22 "fix round 1 (PR #220)"
-logf 23 "fix round 1 (PR #230)"; logf 23 "delta-review done (PR #230)"; logf 23 "fix round 2 (PR #230)"
-logf 24 "fix round 1 (PR #240)"; logf 24 "delta-review skipped"
+logf 21 "round: fix 1 settled abc1234"
+logf 22 "fix round 1 (PR #220)"; logf 22 "fix round 1 done: 3 fixed"; logf 22 "round: fix 1 settled abc1234"; logf 22 "round: delta 1 settled open=1"
+logf 23 "round: fix 1 settled abc1234"; logf 23 "round: delta 1 settled open=1"; logf 23 "round: fix 2 settled def5678"; logf 23 "round: delta 2 settled open=1"
+logf 24 "round: fix 1 settled abc1234"; logf 24 "round: delta 1 skipped"
+logf 28 "fix round 1 (PR #280)"; logf 28 "fix round 1 done: fixed"; logf 28 "round: fix 1 settled abc1234"; logf 28 "round: delta 1 settled open=0"
+logf 29 "fix round 1 done: fixed"; logf 29 "fix round 2 done: fixed"
+logf 30 "round: fix 1 settled abc1234 and more"; logf 30 "round: fix 1 settled abc1234 "; logf 30 "note round: fix 1 settled abc1234"
 
 eq "ready: the lead builds it" "$(step 1)" "lead lane=ready"
 eq "needs-spec: the lead specifies first" "$(step '#2')" "lead lane=needs-spec"
@@ -87,11 +93,14 @@ eq "a stage branch without a PR is named" "$(step 16)" "design lane=needs-design
 eq "a held merge waits for its decision" "$(step 17)" "skip waiting for a decision (decide.sh status) lane=ready pr=170 branch=feat/17-g"
 eq "Fixes owner/repo#n in a list closes" "$(step 18)" "lead lane=ready pr=180 branch=feat/18-h"
 eq "a batch PR closes its second issue too" "$(step 19)" "lead lane=ready pr=180 branch=feat/18-h"
-eq "route lead, finding still open after the lead's rounds: hold, no third fix round" "$(step 20)" "hold fix rounds used (lead: 2, logged: 0) lane=ready pr=200 branch=feat/20-i"
-eq "a fix without its delta-review: delta-review, never merge" "$(step 21)" "delta-review lane=ready pr=210 branch=fix/21-j"
-eq "reviewer route, 1 fix round logged, a finding open: fix" "$(step 22)" "fix lane=ready pr=220 branch=fix/22-k"
-eq "reviewer route, 2 fix rounds logged, a finding open: hold" "$(step 23)" "hold fix rounds used (lead: 2, logged: 2) lane=ready pr=230 branch=fix/23-l"
-eq "a delta-review skipped on the log: merge" "$(step 24)" "merge lane=ready pr=240 branch=fix/24-m"
+eq "route lead, finding still open after the lead's rounds: hold, no third fix round" "$(step 20)" "hold fix rounds used (lead: 2, settled: 0) lane=ready pr=200 branch=feat/20-i"
+eq "a lost session between fix settle and delta: delta-review, never merge" "$(step 21)" "delta-review lane=ready pr=210 branch=fix/21-j"
+eq "round 1 settled and its delta-review reopened a line (worker free text 'fix round 1' ignored): fix, not hold" "$(step 22)" "fix lane=ready pr=220 branch=fix/22-k"
+eq "round 2 settled with its delta-review still open: hold" "$(step 23)" "hold fix rounds used (lead: 2, settled: 2) lane=ready pr=230 branch=fix/23-l"
+eq "a delta marker 'skipped' for the same k: merge" "$(step 24)" "merge lane=ready pr=240 branch=fix/24-m"
+eq "a delta already settled for k: merge, no second delta-review (worker free text ignored)" "$(step 28)" "merge lane=ready pr=280 branch=fix/28-n"
+eq "worker free text 'fix round 1/2 done' counts no round: fix" "$(step 29)" "fix lane=ready pr=290 branch=fix/29-o"
+eq "inexact marker lines (extra text, trailing space, a prefix) count nothing: merge" "$(step 30)" "merge lane=ready pr=300 branch=fix/30-p"
 eq "Orca's <user>/<type>-<n>-* branch is work in progress" "$(step 25)" "lead lane=ready branch=alice/feat-25-orca-style"
 eq "a <type>/<n>-* branch is work in progress" "$(step 26)" "lead lane=ready branch=fix/26-plain"
 eq "Orca branch of another issue (270) is not issue 27's" "$(step 27)" "lead lane=ready"
