@@ -5,15 +5,15 @@
 #
 #   rounds.sh state <pr> <issue>...     one line: `<rounds used> <round in flight, or 0> <started|settled|none>`, the
 #                                       rounds of that PR over the logs of all the issues named (a batch PR closes
-#                                       several). Reads only. Exit 1, nothing printed: a log could not be located.
+#                                       several). Reads only. Exit 1, nothing printed: a log could not be located or read.
 #   rounds.sh start <issue> <pr>        before a fix worker starts: opens the next round on the issue's log. A started
 #                                       round still in flight goes on: nothing written, the same round printed.
 #                                       Exit 1, nothing written: a settled round waits for its delta-review, or both
 #                                       rounds the rules allow are used (plan.sh shows `hold`).
 #   rounds.sh fixed <issue> <pr>        the fix worker ended `FIXED`: settles the started round. A second call writes
-#                                       nothing. No round in flight: a fix nobody recorded (the PR head is not the one
-#                                       the last round settled) opens the next round and settles it, so its delta-review
-#                                       is due; the same head again writes nothing.
+#                                       nothing. No round in flight: a PR with no fix marker at all (the fix began under
+#                                       the Orca coordinator) opens round 1 and settles it, so its delta-review is due;
+#                                       a PR with rounds already (a late or repeated FIXED) writes nothing.
 #   rounds.sh delta <issue> <pr> open=<m>|skipped
 #                                       a delta-review ended `REVIEWED … open=<m>`, or the rules skip it: the delta marker
 #                                       of the round in flight. No round in flight: nothing written, exit 0.
@@ -58,11 +58,11 @@ pr_state() { # pr_state <issue> <pr>: sets sha, used, k, phase from the PR and t
   gh pr view "$2" --json headRefOid,body >"$TMP/pr" 2>/dev/null && sha=$(jq -er .headRefOid "$TMP/pr" 2>/dev/null) || sha=""
   case "$sha" in '' | *[!0-9a-f]*) echo "rounds.sh: cannot read PR #$2 (nothing written)" >&2; return 1 ;; esac
   jq -r '.body // ""' "$TMP/pr" | tr -d '\r' >"$TMP/body"
-  "$DIR/merge-pr.sh" issues-of "$TMP/body" >"$TMP/issues" 2>/dev/null # nothing listed: the PR closes nothing, or the list failed
-  grep -qx "$1" "$TMP/issues" || { echo "rounds.sh: PR #$2 does not close #$1 (no line-leading 'Closes #$1' in its body): nothing written" >&2; return 1; }
+  "$DIR/merge-pr.sh" issues-of "$TMP/body" >"$TMP/issues" 2>"$TMP/ierr" # nothing listed: the PR closes nothing, or the list failed
+  grep -qx "$1" "$TMP/issues" || { echo "rounds.sh: PR #$2 does not close #$1 (no line-leading 'Closes #$1' in its body$([ ! -s "$TMP/ierr" ] || echo "; issues-of said: $(head -c 300 "$TMP/ierr")")): nothing written" >&2; return 1; }
   # shellcheck disable=SC2046
   s=$(state "$2" $(cat "$TMP/issues")) || return 1
-  read -r used k phase last <<<"$s"
+  read -r used k phase _ <<<"$s"
 }
 mark() { # mark <issue> <pr> <marker>
   "$DIR/decide.sh" log "$1" "$3 pr=$2" || { echo "rounds.sh: could not write the marker to the log of #$1" >&2; exit 1; }
@@ -96,8 +96,8 @@ case "$cmd" in
       fixed:started) mark "$n" "$pr" "round: fix $k settled $sha"; echo "round=$k settled $sha" ;;
       fixed:settled) echo "round=$k settled before (nothing written)" ;;
       fixed:none)
-        if [ "$last" = "$sha" ]; then echo "round=$used settled before (nothing written)"
-        else k=$((used + 1)); mark "$n" "$pr" "round: fix $k settled $sha"; echo "round=$k settled $sha (no round was started: opened and settled)"; fi ;;
+        if [ "$used" -gt 0 ]; then echo "round=$used settled before (nothing written)"
+        else k=1; mark "$n" "$pr" "round: fix $k settled $sha"; echo "round=$k settled $sha (no round was started: opened and settled)"; fi ;;
       delta:none) echo "round=0 no fix round in flight (nothing written)" ;;
       delta:*) mark "$n" "$pr" "round: delta $k $what"; echo "round=$k delta $what" ;;
     esac ;;

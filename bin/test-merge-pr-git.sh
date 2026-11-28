@@ -221,7 +221,7 @@ rprep; eq "worker free text about rounds refuses nothing" "$(printf '%s' "$out" 
 rmark 70 "round: fix 1 started abc1234 pr=6"
 rprep; eq "a round of the issue's earlier PR refuses nothing" "$(printf '%s' "$out" | grep -c 'NOT READY')" 0
 rmark 70 "round: fix 1 started abc1234 pr=7"
-rprep; eq "prep refuses a fix round that was started and not reviewed" "$rc:$(printf '%s' "$out" | grep -c '^review: fix round 1 (started) of #70 has no delta-review yet')" "1:1"
+rprep; eq "prep refuses a fix round that was started and not reviewed" "$rc:$(printf '%s' "$out" | grep -c '^review: fix round 1 of #70 is still in flight (no FIXED recorded)')" "1:1"
 rmark 70 "round: fix 1 settled def5678 pr=7"
 rprep; eq "prep refuses a settled fix round without its delta-review" "$rc:$(printf '%s' "$out" | grep -c '^review: fix round 1 (settled) of #70 has no delta-review yet')" "1:1"
 rmark 70 "round: delta 1 settled open=0 pr=7"

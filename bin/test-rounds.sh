@@ -61,13 +61,18 @@ eq "its marker" "$(last 1)" "round: delta 2 skipped pr=10"
 eq "state: two rounds used" "$(st 10 1)" "2 0 none"
 eq "AC16 both rounds used: start refuses a third, exit 1" "$(rc start 1 10); $(marks 1); $(st 10 1)" "1; 5; 2 0 none"
 
-# AC17: a FIXED nobody opened a round for (the fix began under the Orca coordinator, or the start was missed): the next
-# round is opened and settled, so its delta-review is due; the same head again writes nothing
+# AC17: a FIXED nobody opened a round for. A PR with no fix marker at all (the fix began under the Orca coordinator):
+# round 1 is opened and settled, so its delta-review is due. A PR with rounds already: a late or repeated FIXED writes nothing
 head_is ddd444
-eq "fixed without a start opens and settles round 1" "$(r fixed 2 20)" "round=1 settled ddd444 (no round was started: opened and settled)"
+eq "fixed without a start, no marker on the PR: opens and settles round 1" "$(r fixed 2 20)" "round=1 settled ddd444 (no round was started: opened and settled)"
 eq "... in flight, settled" "$(st 20 2); $(last 2)" "1 1 settled; round: fix 1 settled ddd444 pr=20"
 r delta 2 20 open=0 >/dev/null; head_is eee555
-eq "a later fix without a start, on a new head: round 2" "$(r fixed 2 20 | cut -d' ' -f1-3); $(st 20 2)" "round=2 settled eee555; 2 2 settled"
+eq "a later FIXED on a new head, no round in flight: nothing written" "$(r fixed 2 20); $(marks 2); $(st 20 2)" "round=1 settled before (nothing written); 2; 1 0 none"
+# start -> delta skipped (no settled marker), then a late FIXED on another head (e.g. prep merged the base in)
+closes 25 2
+head_is fed666; r start 2 25 >/dev/null; r delta 2 25 skipped >/dev/null; head_is abc777
+eq "a late fixed after start -> delta skipped: nothing written, no extra round" "$(r fixed 2 25); $(st 25 2)" "round=1 settled before (nothing written); 1 0 none"
+eq "a repeated fixed on yet another head: still nothing" "$(head_is abd888; r fixed 2 25); $(st 25 2)" "round=1 settled before (nothing written); 1 0 none"
 
 # AC25: a write under an issue the PR does not close would land on a log nobody reads: refused
 eq "start under an issue the PR does not close: exit 1" "$(rc start 3 10)" 1

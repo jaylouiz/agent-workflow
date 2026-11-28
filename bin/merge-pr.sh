@@ -176,9 +176,12 @@ case "$cmd" in
       # shellcheck disable=SC2086
       if rs=$("$DIR/rounds.sh" state "$pr" $issues 2>"$bodyf.err") && read -r _ rk rphase <<<"$rs" && [ -n "${rphase:-}" ] &&
         case "$rk" in *[!0-9]*) false ;; esac; then
-        [ "$rk" = 0 ] || stop="$stop\nreview: fix round $rk ($rphase) of #$(echo $issues | sed 's/ / #/g') has no delta-review yet: run it, then rounds.sh delta"
+        if [ "$rk" != 0 ]; then
+          if [ "$rphase" = started ]; then stop="$stop\nreview: fix round $rk of #$(echo $issues | sed 's/ / #/g') is still in flight (no FIXED recorded): let the fix worker finish (rounds.sh fixed), or rounds.sh delta skipped"
+          else stop="$stop\nreview: fix round $rk ($rphase) of #$(echo $issues | sed 's/ / #/g') has no delta-review yet: run it, then rounds.sh delta"; fi
+        fi
       else
-        stop="$stop\nreview: cannot read the fix rounds of PR #$pr: $(head -c 300 "$bodyf.err")"
+        stop="$stop\nreview: cannot read the fix rounds of PR #$pr: $(head -c 300 "$bodyf.err" | grep . || echo 'rounds.sh printed no reason')"
       fi
       rm -f "$bodyf.err"
     fi
