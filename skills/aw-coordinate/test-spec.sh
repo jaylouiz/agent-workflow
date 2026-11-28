@@ -9,12 +9,12 @@ mkdir -p "$T/bin" "$T/repo/.claude" "$T/ledger"; git -C "$T/repo" init -q
 cat >"$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
-  "issue view"*) echo "Fix the thing" ;;
+  "issue view"*) if [ -f "$TITLE_FILE" ]; then cat "$TITLE_FILE"; else echo "Fix the thing"; fi ;;
   *) exit 1 ;;
 esac
 EOF
 chmod +x "$T/bin/gh"
-export PATH="$T/bin:$PATH"
+export PATH="$T/bin:$PATH"; export TITLE_FILE="$T/title"
 cd "$T/repo" || exit 1
 echo 'WF_PORTS=39101-39103' >.claude/issue-workflow.sh
 git remote add origin https://github.com/acme/widgets.git
@@ -126,5 +126,10 @@ for want in "then park: worker_done --outcome succeeded, body starting \`PARKED 
 done
 check "the phrase lines themselves never reach a spec" '! printf "%s\n%s" "$od" "$os" | grep -Eq "^(START|PARK|TURN|REBASE|FINDINGS|BRANCH_STEP|NO_ASK|REPORT|REPORT_IN|LEAD_DONE)=|phrases:"'
 
+# an issue title is data: a placeholder written in it stays as written in the brief
+echo 'Fix {{BRANCH}} and {{N}} in {{DECIDE}}' >"$TITLE_FILE"
+out=$(bash "$DIR/spec.sh" lead 9 --ledger "$T/ledger" --no-port 2>&1)
+check "a title with placeholders is not expanded" 'printf "%s" "$out" | head -1 | grep -qF "Issue #9: Fix {{BRANCH}} and {{N}} in {{DECIDE}}."'
+rm -f "$TITLE_FILE"
 echo "spec: $((n - fail))/$n passed"
 [ $fail = 0 ]

@@ -103,9 +103,15 @@ out = block("common") + block("stage:" + os.environ["STAGEKEY"])
 # the phrases of the runner (KEY=text lines) fill their placeholders first; they may hold placeholders themselves
 phrases = dict(l.split("=", 1) for l in block("phrases:" + os.environ["RUNNER"]).splitlines() if "=" in l)
 phrases["SP"] = " "  # a trailing space in a phrase, kept visible in the template
-fill = lambda m: phrases.get(m.group(1), os.environ.get(m.group(1), m.group(0)))
-for _ in range(3):
-    out = re.sub(r"\{\{([A-Z_]+)\}\}", fill, out)
+# a phrase is the template'"'"'s own text and may hold placeholders (up to 3 levels); a value from the environment (an issue
+# title) is final: a `{{X}}` in it stays as written
+def expand(text, depth=0):
+    def fill(m):
+        k = m.group(1)
+        if k in phrases and depth < 3: return expand(phrases[k], depth + 1)
+        return phrases[k] if k in phrases else os.environ.get(k, m.group(0))
+    return re.sub(r"\{\{([A-Z_]+)\}\}", fill, text)
+out = expand(out)
 sys.stdout.write(out)
 ' "$DIR/task-template.md"
 if [ -n "$batch" ]; then

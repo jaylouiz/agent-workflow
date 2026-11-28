@@ -8,14 +8,20 @@
 #   skip     closed | held: label on-hold | merge held: label <l> | waiting for a decision | fog: label needs-direction
 #   lead     an open PR closes the issue but has no `## Review` yet (the lead goes on at the review route)
 #   review   its `## Review` is `route: reviewer` and nobody reviewed yet (no `by:`)
-#   fix      its `## Review` has a finding `-> open`
+#   fix      its `## Review` has a finding `-> open` and fewer than 2 fix rounds are logged
+#   hold     a finding is `-> open` after the rounds the rules allow (a `route: lead` review: the lead used its 2; a
+#            `route: reviewer` review: 2 `fix round` log lines): never another fix round, the coordinator holds the merge
+#   delta-review  the review is complete but the last logged event is a `fix round`: its delta-review is still due
 #   merge    its `## Review` is complete: merge-pr.sh prep decides the rest
+# The rounds come from the issue's coordination log (`decide.sh log --path <n>`), where the coordinator writes one
+# `fix round <k>` line per fix worker it starts and one `delta-review done` (or `delta-review skipped`) line after it;
+# no log on this machine counts as no round.
 #   design   label needs-design
 #   lead     label needs-spec or ready
 #   screen   no lane label: the coordinator gives it a lane by the triage rule first
 #   unknown  the issue could not be read
 # Detail: `lane=<label>`, and for work that exists `pr=<n> branch=<head>` (the branch a later stage takes over) or
-# `branch=<b>` (a local or remote `<type>/<n>-*` / `proto/<n>-*` branch without an open PR).
+# `branch=<b>` (a local or remote `<type>/<n>-*`, `proto/<n>-*` or Orca's `<user>/<type>-<n>-*` branch without an open PR).
 # What it cannot know stays with the coordinator: batches, dependencies, order (reference/coordination.md).
 # Exit: 0 every issue read, 1 one could not be read, 64 usage.
 set -uo pipefail
@@ -31,6 +37,7 @@ rc=0
 prs_ok=1; count=0
 if gh pr list --state open --limit 300 --json number,headRefName,body >"$TMP/p" 2>/dev/null && count=$(jq -e 'length' "$TMP/p" 2>/dev/null); then :
 else prs_ok=0; fi
+[ "$count" -lt 300 ] 2>/dev/null || prs_ok=0 # a full page may have cut PRs off: never route as if the rest were not there
 
 review_state() { # review_state <body file>: none | unreviewed | open | complete (the `## Review` section only)
   awk '
@@ -46,7 +53,15 @@ closes() { # closes <body file> <n>: 0 when a line-leading Closes/Fixes/Resolves
 }
 branch_of() { # branch_of <n>: a stage branch of the issue without a PR (local first, then origin), or nothing
   git for-each-ref --format='%(refname:short)' refs/heads refs/remotes/origin 2>/dev/null |
-    sed 's#^origin/##' | grep -E "^(proto|fix|feat|test|docs|chore)/$1-" | head -1
+    sed 's#^origin/##' | grep -E "^((proto|fix|feat|test|docs|chore)/|[^/]+/(proto|fix|feat|test|docs|chore)-)$1-" | head -1
+}
+review_route() { # review_route <body file>: lead | reviewer | "" (the route line of the `## Review` section)
+  awk '/^## Review[[:space:]]*$/ { on = 1; next } on && /^## / { on = 0 } on && /^route:/ { sub(/^route:[[:space:]]*/, ""); sub(/[[:space:]·].*/, ""); print; exit }' "$1"
+}
+log_rounds() { # log_rounds <n>: "<fix rounds logged> <1 when the last logged event is a fix round, i.e. its delta-review is due>"
+  local f; f=$("$DIR/../../bin/decide.sh" log --path "$1" 2>/dev/null) || f=""
+  [ -n "$f" ] && [ -f "$f" ] || { echo "0 0"; return; }
+  grep '^- ' "$f" | awk '/fix round [0-9]/ { r++; last = 1 } /delta-review (done|skipped)/ { last = 0 } END { print r + 0, last + 0 }'
 }
 
 for arg in "$@"; do
@@ -80,8 +95,12 @@ for arg in "$@"; do
     case $(review_state "$TMP/b") in
       none) line lead "$detail" ;;
       unreviewed) line review "$detail" ;;
-      open) line fix "$detail" ;;
+      open)
+        read -r rounds _ <<<"$(log_rounds "$n")"
+        if [ "$(review_route "$TMP/b")" = lead ] || [ "$rounds" -ge 2 ]; then line hold "fix rounds used (lead: 2, logged: $rounds) $detail"; else line fix "$detail"; fi ;;
       complete)
+        read -r _ due <<<"$(log_rounds "$n")"
+        if [ "$due" = 1 ] && [ "$(review_route "$TMP/b")" != lead ]; then line delta-review "$detail"; continue; fi
         held=""; for h in $WF_HOLD_LABELS; do if lab "$h"; then held=$h; break; fi; done
         if [ -n "$held" ]; then line skip "merge held: label $held $detail"; else line merge "$detail"; fi ;;
     esac

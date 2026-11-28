@@ -26,11 +26,11 @@ One stage is one `Agent` call.
 
      | Result line | `plan.sh` must show | Next |
      | --- | --- | --- |
-     | `READY #<n> PR <url> route=lead` | `merge` | the merge queue (step 6) |
+     | `READY #<n> PR <url> route=lead` | `merge` | the merge queue (step 6); `hold` (a finding still `-> open`: the lead used its 2 rounds) is the rules' held merge: root-cause issue, decision request, never another fix worker |
      | `READY #<n> PR <url> route=reviewer` | `review` | stage `review` (`--pr <pr>`, the PR's branch) |
      | `REVIEWED #<n> PR #<pr> open=0` | `merge` | the merge queue |
-     | `REVIEWED #<n> PR #<pr> open=<k>` | `fix` | stage `fix`, then `delta-review`, within the rounds the rules allow |
-     | `FIXED #<n> PR #<pr>` | `merge` | stage `delta-review` when the rules ask for it, else the merge queue |
+     | `REVIEWED #<n> PR #<pr> open=<k>` | `fix` | stage `fix` (first `decide.sh log <n> "fix round <r> (PR #<pr>)"`), then `delta-review`, within the rounds the rules allow; `hold` after 2 rounds: the held merge as above |
+     | `FIXED #<n> PR #<pr>` | `delta-review` (the log's last event is the fix round) or, when the rules skip it (docs or comments only: `decide.sh log <n> "delta-review skipped"`), `merge` | stage `delta-review`, then `decide.sh log <n> "delta-review done (PR #<pr>)"`; else the merge queue |
      | `PARKED #<n> D<k>` | `skip` (waiting) | section 3; a Design round also gets its preview served as the rules say (the worktree: `git worktree list`, the line with the proto branch) |
      | `ROUTED #<n> needs-design` | `design` | stage `design` |
      | `FAILED #<n>: …`, no result line, or `plan.sh` shows another step | | one retry: a fresh worker for the step `plan.sh` shows, the failure text in `--extra`; a second failure ends that issue's pipeline and goes into the report |
@@ -50,7 +50,7 @@ The coordination rules' "Decisions and the user". Here:
 
 ## 4. Resume and recovery
 
-Durable state is on GitHub and in git, none of it in this session. After a lost session, or when the user comes back with answers: `plan.sh <issues>` gives each issue's next step and branch, `decide.sh status` the decisions; go on from there and never start a second pipeline for an issue. A worker of a lost session is gone: what it pushed is taken over by the next stage's `wt.sh init`; what it did not push stays in its worktree and makes `wt.sh` exit 3 (step 5).
+Durable state is on GitHub and in git, none of it in this session. After a lost session, or when the user comes back with answers: `plan.sh <issues>` gives each issue's next step and branch (it reads the fix rounds and a pending delta-review from the coordination log: write the `fix round` and `delta-review` lines of section 2 step 5 as they happen, else a lost session resumes at `merge` with a fix nobody reviewed), `decide.sh status` the decisions; go on from there and never start a second pipeline for an issue. A worker of a lost session is gone: what it pushed is taken over by the next stage's `wt.sh init`; what it did not push stays in its worktree and makes `wt.sh` exit 3 (step 5).
 
 ## 5. Reporting
 

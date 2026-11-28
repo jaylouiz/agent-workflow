@@ -43,7 +43,7 @@ ok "subagent-mode.md names neither the orca CLI nor worker_done" '! grep -nE "(^
 ok "the Orca mode starts no subagent workers" '! grep -nE "isolation: |wt\.sh|plan\.sh|--runner" "$orca"'
 
 # the subagent mode names every step plan.sh prints, and the scripts it tells the coordinator to run exist
-for s in design lead review fix merge screen skip; do
+for s in design lead review fix hold delta-review merge screen skip; do
   ok "plan.sh documents the step $s" 'grep -qE "^#   $s " skills/aw-coordinate/plan.sh'
   ok "subagent-mode.md names the step $s" 'grep -qF "\`$s\`" "$sub"'
 done
