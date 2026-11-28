@@ -7,6 +7,12 @@ under **Breaking**, first in its release: `install.sh --update` prints those ent
 
 ## [Unreleased]
 
+### Added
+
+- `issue-status.sh cutover [--apply]` moves the `phase:*` labels of open issues to GitHub issue statuses (dry run by
+  default, safe to rerun); `/aw-setup` detects whether a repo has issue statuses and recommends `WF_PHASE_LABELS=off`
+  only then. This repo runs with the switch off. Steps: docs/phase-label-cutover.md.
+
 ## [1.0.0] - 2026-11-28
 
 ### Breaking

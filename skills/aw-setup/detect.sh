@@ -4,7 +4,7 @@
 #   detect.sh [--no-gh]    --no-gh skips the GitHub lookups (check names, required checks, labels)
 #
 # Keys: repo, default_branch, profile, config, pm, lockfile, script.<name>, e2e, ci.workflow, ci.check,
-# required_check, doc, rules, ui, ui.reason, orca, label, gh. A key may repeat (one line per value). Exit 0 always.
+# required_check, doc, rules, ui, ui.reason, orca, issue_statuses (yes|no|unknown: GitHub issue statuses in the repo), label, gh. A key may repeat (one line per value). Exit 0 always.
 set -uo pipefail
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../../bin/lib.sh
@@ -78,9 +78,15 @@ if [ "$GH" = 1 ] && [ -n "$repo" ]; then
       gh api "repos/$repo/commits/$br/check-runs" --jq '.check_runs[].name' 2>/dev/null | sort -u | while IFS= read -r c; do kv ci.check "$c"; done
       gh api "repos/$repo/branches/$br/protection/required_status_checks" --jq '.contexts[]' 2>/dev/null | while IFS= read -r c; do kv required_check "$c"; done
     fi
+    # issue statuses are a GitHub preview: only a repo that has some may switch WF_PHASE_LABELS off
+    n=$(gh api graphql -f query='query($o: String!, $n: String!) { repository(owner: $o, name: $n) { planningStatuses(first: 1) { nodes { id } } } }' \
+      -f o="${repo%%/*}" -f n="${repo#*/}" --jq '.data.repository.planningStatuses.nodes | length' 2>/dev/null) || n=""
+    case "$n" in 0) kv issue_statuses no ;; [1-9]*) kv issue_statuses yes ;; *) kv issue_statuses unknown ;; esac
     gh label list -R "$repo" --limit 200 --json name --jq '.[].name' 2>/dev/null | while IFS= read -r l; do kv label "$l"; done
   else
-    kv gh unavailable
+    kv gh unavailable; kv issue_statuses unknown
   fi
+else
+  kv issue_statuses unknown
 fi
 exit 0

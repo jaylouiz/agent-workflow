@@ -22,7 +22,7 @@ git -C "$W" add -A
 (cd "$W" && bash "$DIR/detect.sh") >"$T/out"; rc=$?
 check "web: exit 0 with gh failing" '[ $rc = 0 ]'
 for want in "repo: acme/web" "pm: npm" "lockfile: package-lock.json" "script.verify: npm run verify" "script.dev: npm run dev" \
-  "e2e: playwright" "ci.workflow: .github/workflows/ci.yml" "doc: CLAUDE.md" "ui: yes" "profile: absent" "config: absent" "gh: unavailable"; do
+  "e2e: playwright" "ci.workflow: .github/workflows/ci.yml" "doc: CLAUDE.md" "ui: yes" "profile: absent" "config: absent" "gh: unavailable" "issue_statuses: unknown"; do
   check "web: $want" 'has "$want"'
 done
 
@@ -33,6 +33,14 @@ rm -f "$T/calls"
 for want in "pm: none" "ui: no" "profile: present" "e2e: none" "repo: none"; do check "shell: $want" 'has "$want"'; done
 check "no-gh: gh never called" '[ ! -f "$T/calls" ]'
 check "no-gh: no gh line" '! grep -q "^gh:" "$T/out"'
+
+# issue_statuses: a stub gh that answers the planningStatuses count
+for pair in "2:yes" "0:no" "x:unknown"; do
+  printf '#!/usr/bin/env bash\ncase "$*" in "auth status"*) exit 0 ;; "api graphql"*) echo %s ;; *) exit 1 ;; esac\n' "${pair%%:*}" >"$T/bin/gh"
+  (cd "$W" && bash "$DIR/detect.sh") >"$T/out"
+  check "issue_statuses ${pair%%:*} -> ${pair#*:}" 'has "issue_statuses: ${pair#*:}"'
+done
+(cd "$S" && bash "$DIR/detect.sh" --no-gh) >"$T/out"; check "no-gh: issue_statuses unknown" 'has "issue_statuses: unknown"'
 
 echo "$((n - fail))/$n passed"
 [ "$fail" = 0 ]

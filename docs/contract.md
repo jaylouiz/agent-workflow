@@ -140,7 +140,7 @@ The **status** is GitHub's native issue status. `bin/issue-status.sh` writes `In
 by name, next to the phase label, best effort: a repo without statuses, or a call that fails, leaves the label as the
 only signal, and a status of Backlog, Todo or none says nothing about the phase. `Todo` means "handed to an agent, not
 started yet" and is written by the client that hands over, never here. `WF_PHASE_LABELS=off` stops the `phase:*` label
-writes once every client reads the status (the cut-over); the labels already on issues stay until then.
+writes once every client reads the status (the cut-over, steps in the [phase-label-cutover.md](phase-label-cutover.md)); `issue-status.sh cutover` moves the labels on open issues to statuses. In a repo where the switch is off a client must not expect `phase:*` labels: the status (and the lane `needs-design`) is the only phase signal there, while repos without statuses keep writing the labels. No string above changes, so no version bump.
 
 ## Coordination log
 

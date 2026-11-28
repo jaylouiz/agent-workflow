@@ -11,6 +11,13 @@
 #   issue-status.sh fog <n>                 fog (the triage rule): add the label needs-direction; the lane label stays
 #   issue-status.sh set <n> <status name>   set the status by its name
 #   issue-status.sh get <n>                 print the status name (empty: none, or the repo has no statuses)
+#   issue-status.sh cutover [--apply]       the phase label cut-over, for any repo: every open issue with phase:design or
+#        phase:build gets its status set from the label (In progress; an existing In progress or In review stays), and
+#        only after a re-read shows a started status the label goes (phase:design also makes sure of the lane
+#        needs-design, the rule that reads UX Design). Without --apply it only prints the plan. Safe to rerun.
+#        Kept, with a line saying why: no status lookup (a repo without statuses; also in the dry run), unreadable
+#        labels, a phase:build issue in the lane needs-design (it would read as UX Design: settle the lane, rerun).
+#        An unreadable issue list prints "incomplete" instead of "nothing to do".
 #
 # Best effort: a repo without statuses, a name it does not have or a failed call print a note on stderr and exit 0,
 # so no skill stops on a status. Labels stay the fallback clients read. Exit 64: usage, or no repo to act on.
@@ -24,7 +31,7 @@ DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$DIR/lib.sh"
 wf_load
 
-usage() { echo "usage: issue-status.sh phase <n> design|build|review|backlog | fog <n> | set <n> <status name> | get <n>" >&2; exit 64; }
+usage() { echo "usage: issue-status.sh phase <n> design|build|review|backlog | fog <n> | set <n> <status name> | get <n> | cutover [--apply]" >&2; exit 64; }
 note() { echo "issue-status.sh: $*" >&2; }
 number() { case "${1:-}" in "" | *[!0-9]*) usage ;; esac; }
 
@@ -71,7 +78,59 @@ clear_fog() { # clear_fog <n>: best effort
   gh issue edit "$1" --remove-label "$FOG" >/dev/null 2>&1 || note "#$1: label $FOG not removed"
 }
 
+started() { case "$1" in "In progress" | "In review") return 0 ;; *) return 1 ;; esac; } # started <status name>
+status_of() { lookup "$1" "" 2>/dev/null | cut -f2; } # status_of <n>: empty on none or failure
+
+cutover() { # cutover <apply 0|1>: see the header; best effort, always 0
+  local apply=$1 only='' design build n lab row cur plan have rmopts l ok=1
+  design=$(gh issue list --state open --label phase:design --limit 500 --json number --jq '.[].number' 2>/dev/null) || { ok=0; design=""; }
+  build=$(gh issue list --state open --label phase:build --limit 500 --json number --jq '.[].number' 2>/dev/null) || { ok=0; build=""; }
+  [ "$apply" = 1 ] && echo "cutover $REPO (apply)" || echo "cutover $REPO (dry run, nothing written; --apply writes)"
+  [ "$ok" = 1 ] || { echo "incomplete: the issue list could not be read (gh auth, rate limit or network), run again"; return 0; }
+  [ -n "$design$build" ] || { echo "nothing to do: no open issue carries a phase:* label"; return 0; }
+  for n in $build; do # an issue with both labels is done once, as design
+    printf '%s\n' "$design" | grep -qx "$n" || only="$only $n"
+  done
+  build=${only# }
+  for n in $design $build; do
+    if printf '%s\n' "$design" | grep -qx "$n"; then lab=phase:design; else lab=phase:build; fi
+    row=$(lookup "$n" "" 2>/dev/null) || { echo "#$n $lab: kept (no status lookup: this repo has no issue statuses, or GitHub did not answer)"; continue; }
+    cur=$(printf '%s' "$row" | cut -f2)
+    have=$(gh issue view "$n" --json labels --jq '.labels[].name' 2>/dev/null) || { echo "#$n $lab: kept (labels not readable)"; continue; }
+    # a phase:build issue in the lane needs-design would read as UX Design once the label is gone
+    if [ "$lab" = phase:build ] && printf '%s\n' "$have" | grep -qx needs-design; then
+      echo "#$n $lab: kept (lane needs-design would make it read as UX Design: settle the lane, then rerun)"; continue
+    fi
+    if started "$cur"; then plan="status $cur stays"; else plan="status ${cur:-none} -> In progress"; fi
+    [ "$lab" != phase:design ] || plan="$plan, lane needs-design ensured"
+    if [ "$apply" != 1 ]; then echo "#$n $lab: $plan, remove $lab"; continue; fi
+    if ! started "$cur"; then
+      set_status "$n" "In progress"
+      cur=$(status_of "$n")
+      started "$cur" || { echo "#$n $lab: kept (the status could not be set)"; continue; }
+    fi
+    if [ "$lab" = phase:design ] && ! printf '%s\n' "$have" | grep -qx needs-design; then
+      gh issue edit "$n" --add-label needs-design >/dev/null 2>&1 || { echo "#$n $lab: kept (lane needs-design not added)"; continue; }
+    fi
+    # only the labels it has: gh refuses to remove one the issue lacks
+    rmopts=""
+    for l in phase:design phase:build; do printf '%s\n' "$have" | grep -qx "$l" && rmopts="$rmopts --remove-label $l"; done
+    # none left: the list is a search index and lags a removal by seconds
+    [ -n "$rmopts" ] || { echo "#$n $lab: nothing to remove (already clean)"; continue; }
+    # shellcheck disable=SC2086
+    if gh issue edit "$n" $rmopts >/dev/null 2>&1; then echo "#$n $lab: $plan, label removed"
+    else echo "#$n $lab: kept (label not removed)"; fi
+  done
+  return 0
+}
+
 case "${1:-}" in
+  cutover)
+    case "${2:-}" in "") a=0 ;; --apply) a=1 ;; *) usage ;; esac
+    [ $# -le 2 ] || usage
+    repo
+    cutover "$a"
+    ;;
   fog)
     number "${2:-}"
     repo
