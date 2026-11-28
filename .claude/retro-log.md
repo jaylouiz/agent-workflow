@@ -8,6 +8,7 @@ Never loaded into a session. Format and rules: `skills/aw-retro/SKILL.md`.
 | 2026-11-06 | run_869230114ca7 | 524 / 29 | 424 | 7629 | 8577 | baseline, profile added in #30 |
 | 2026-11-06 | run_869230114ca7 (retro) | 524 / 29 | 434 | 7647 | 8605 | no context file changed after #32's merge; +28 is a measuring difference (baseline taken before the PR's last edits), no convergence pass |
 | 2026-11-06 | run_2f339c0163f0 | 524 / 29 | 434 | 8026 | 8984 | +379 in SKILL.md: ~330 from 73acf37 (Issue standard, user commit), ~50 from #41/#33-34; no convergence pass on a fresh user change, next retro decides |
+| 2026-11-28 | run_895c8ded04d4 | 876 / 5299 | 559 | 11553 | 12988 | +4004 vs 2026-11-06 (7 PRs incl. #39 subagent mode, #64, #40 statuses); no convergence pass, CLAUDE.md far under budget; start-context not measured |
 
 ## Watch list
 | id | root cause | kind | target | seen | last | status |
@@ -20,3 +21,8 @@ Never loaded into a session. Format and rules: `skills/aw-retro/SKILL.md`.
 | W6 | workers' own E2E runs compete with a running merge gate (5 gate timeouts in the previous run); kan-do #832 added a one-gate-per-machine lock and resumable retries, no timeouts after it in run_fd26a18cf203; worker-side throttle (next.sh holding E2E stages, or workers taking the gate lock) not built | overkill | next.sh / spec.sh / task-template.md | 2 | run_fd26a18cf203 | watching: build the throttle only if a gate times out again |
 | W7 | Playwright 1.59 toHaveScreenshot `style` option leaves the pinned-clock app bar painted and `--update-snapshots` (changed) keeps the old PNG; 10 min; plus stale echo covered the card in a pickUp after Escape (5 min, #834) | tool-failure | kan-do tests/e2e | 1 | run_fd26a18cf203 | watching |
 | W8 | another session's review (non-Orca Claude session, ended) not findable via orca/ListAgents; found by transcript grep in ~/.claude/projects/<repo>; 5 min | rediscovery | session-handoff (no target; epic #29 reshapes the skills) | 1 | session main-82d03bf9 | watching: act only if it recurs |
+
+| W9 | spec for a state-owning script (rounds.sh, #39 subagent round state) listed read-side transitions, not write-command misuse; fix rounds each added a new edge (40 min + 10 min, 2 runs of PRs) | spec-gap | aw-specify | 2 | run_895c8ded04d4 | fixed 2026-11-28 skills/aw-specify/SKILL.md step 2 (draft body): expect fewer fix rounds on state-script PRs |
+| W10 | decide.sh request reports one decision-format violation per call (4 tries, 4 min) | back-and-forth | bin/decision_format.py | 1 | run_895c8ded04d4 | watching: collect all violations if it recurs |
+| W11 | new git-fixture tests: default branch name and background repack race passed locally, failed on CI (8 + 10 min) | escaped | test fixtures | 2 | run_895c8ded04d4 | watching: add a shared fixture helper if a third appears |
+| W12 | leads reported route=lead where merge-pr prep routes reviewer (>400 lines); every reviewer-route PR had medium+ findings | escaped | aw-build route report | 1 | run_895c8ded04d4 | watching |
