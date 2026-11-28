@@ -8,23 +8,30 @@
 #   skip     closed | held: label on-hold | merge held: label <l> | waiting for a decision | fog: label needs-direction
 #   lead     an open PR closes the issue but has no `## Review` yet (the lead goes on at the review route)
 #   review   its `## Review` is `route: reviewer` and nobody reviewed yet (no `by:`)
-#   fix      its `## Review` has a finding `-> open` and fewer than 2 fix rounds are settled on the log
+#   fix      a finding is `-> open` and a fix round may run: a new one (fewer than 2 used), or the round that was
+#            started and whose worker is gone (the same round goes on, it is not counted twice)
 #   hold     a finding is `-> open` after the rounds the rules allow (a `route: lead` review: the lead used its 2; a
-#            `route: reviewer` review: 2 settled fix rounds): never another fix round, the coordinator holds the merge
-#   delta-review  the review is complete but a settled fix round has no delta marker on the log: its delta-review is due
-#   merge    its `## Review` is complete: merge-pr.sh prep decides the rest
-# The rounds come from the issue's coordination log (`decide.sh log --path <n>`). Only the coordinator writes the round
-# markers, as exact lines, each when it has read the worker's final line and before it runs `plan.sh`:
-#   round: fix <k> settled <sha>            a fix worker ended `FIXED` (<sha>: the PR's head); k = the round, 1 then 2
-#   round: delta <k> settled open=<m>       the delta-review of round k ended `REVIEWED` with m findings open
-#   round: delta <k> skipped                the rules skip it (the round changed only docs or comments)
-# plan.sh counts only those lines (a worker's "fix round 1 done" is free text and ignored); a fix round is reviewed only
-# when a delta marker with the same k exists. No log on this machine counts as no round.
+#            `route: reviewer` review: 2 fix rounds used): never another fix round, the coordinator holds the merge
+#   delta-review  a fix round is in flight and its fix may be on the PR: the worker ended `FIXED` (also with a new
+#            `-> open` line), or it set every line to `-> fixed` and the session was lost before `FIXED` was read
+#   merge    its `## Review` is complete and no fix round is in flight: merge-pr.sh prep decides the rest
+# The rounds come from the round markers on the coordination logs of the issues the PR closes, written and read by
+# `bin/rounds.sh` only (its header has the markers and the rules; a worker's "fix round 1 done" counts nothing):
+#   rounds.sh state -> `<F: rounds used> <round in flight or 0> <started|settled|none>`
+#   | in flight | review   | step                                                    |
+#   | no        | open     | fix round=<F+1>; hold when `route: lead` or F >= 2      |
+#   | no        | complete | merge (skip: a hold label)                              |
+#   | started   | open     | fix round=<F> (the round goes on)                       |
+#   | started   | complete | delta-review round=<F>                                  |
+#   | settled   | either   | delta-review round=<F>                                  |
+# A round in flight routes the same for every review route. No marker (no log on this machine, or the earlier rounds
+# ran under the Orca coordinator, which writes none) counts as no round.
 #   design   label needs-design
 #   lead     label needs-spec or ready
 #   screen   no lane label: the coordinator gives it a lane by the triage rule first
 #   unknown  the issue could not be read
-# Detail: `lane=<label>`, and for work that exists `pr=<n> branch=<head>` (the branch a later stage takes over) or
+# Detail: `lane=<label>`, and for work that exists `pr=<n> branch=<head>` (the branch a later stage takes over; `fix` and
+# `delta-review` add `round=<k>`, the round the stage belongs to) or
 # `branch=<b>` (a local or remote `<type>/<n>-*`, `proto/<n>-*` or Orca's `<user>/<type>-<n>-*` branch without an open PR).
 # What it cannot know stays with the coordinator: batches, dependencies, order (reference/coordination.md).
 # Exit: 0 every issue read, 1 one could not be read, 64 usage.
@@ -62,16 +69,12 @@ branch_of() { # branch_of <n>: a stage branch of the issue without a PR (local f
 review_route() { # review_route <body file>: lead | reviewer | "" (the route line of the `## Review` section)
   awk '/^## Review[[:space:]]*$/ { on = 1; next } on && /^## / { on = 0 } on && /^route:/ { sub(/^route:[[:space:]]*/, ""); sub(/[[:space:]·].*/, ""); print; exit }' "$1"
 }
-log_rounds() { # log_rounds <n>: "<settled fix rounds> <1 when a settled fix round has no delta marker, i.e. its delta-review is due>"
-  # Only the coordinator's exact marker lines count (after the timestamp): `round: fix <k> settled <sha>`,
-  # `round: delta <k> settled open=<m>` and `round: delta <k> skipped`. Worker text ("fix round 1 done") never matches.
-  local f; f=$("$DIR/../../bin/decide.sh" log --path "$1" 2>/dev/null) || f=""
-  [ -n "$f" ] && [ -f "$f" ] || { echo "0 0"; return; }
-  grep '^- ' "$f" | awk '
-    # fields: 1 "-", 2 timestamp, 3 "round:", 4 fix|delta, 5 k
-    $0 ~ /^- [^ ]+ round: fix [0-9]+ settled [0-9a-f]+$/ { if (!($5 in fx)) { fx[$5] = 1; r++ } }
-    $0 ~ /^- [^ ]+ round: delta [0-9]+ (settled open=[0-9]+|skipped)$/ { dl[$5] = 1 }
-    END { due = 0; for (k in fx) if (!(k in dl)) due = 1; print r + 0, due }'
+rounds() { # rounds <body file>: `rounds.sh state` over every issue the PR closes; "0 0 none" when it cannot be read
+  local ns out
+  ns=$(grep -Eio '^[[:space:]-]*(closes|fixes|resolves) +([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+' "$1" | grep -Eo '[0-9]+$' | tr '\n' ' ')
+  # shellcheck disable=SC2086
+  out=$("$DIR/../../bin/rounds.sh" state $ns 2>/dev/null) || out=""
+  echo "${out:-0 0 none}"
 }
 
 for arg in "$@"; do
@@ -102,17 +105,21 @@ for arg in "$@"; do
 
   if lab needs-decision; then line skip "waiting for a decision (decide.sh status) $detail"; continue; fi
   if [ -n "$pr" ]; then
-    case $(review_state "$TMP/b") in
+    rs=$(review_state "$TMP/b")
+    case $rs in
       none) line lead "$detail" ;;
       unreviewed) line review "$detail" ;;
-      open)
-        read -r rounds _ <<<"$(log_rounds "$n")"
-        if [ "$(review_route "$TMP/b")" = lead ] || [ "$rounds" -ge 2 ]; then line hold "fix rounds used (lead: 2, settled: $rounds) $detail"; else line fix "$detail"; fi ;;
-      complete)
-        read -r _ due <<<"$(log_rounds "$n")"
-        if [ "$due" = 1 ] && [ "$(review_route "$TMP/b")" != lead ]; then line delta-review "$detail"; continue; fi
-        held=""; for h in $WF_HOLD_LABELS; do if lab "$h"; then held=$h; break; fi; done
-        if [ -n "$held" ]; then line skip "merge held: label $held $detail"; else line merge "$detail"; fi ;;
+      *)
+        read -r used flight phase <<<"$(rounds "$TMP/b")"
+        if [ "$flight" != 0 ]; then # a fix round the coordinator started and no delta marker covers
+          if [ "$phase" = started ] && [ "$rs" = open ]; then line fix "$detail round=$flight"; else line delta-review "$detail round=$flight"; fi
+        elif [ "$rs" = open ]; then
+          if [ "$(review_route "$TMP/b")" = lead ] || [ "$used" -ge 2 ]; then line hold "fix rounds used (lead: 2, settled: $used) $detail"
+          else line fix "$detail round=$((used + 1))"; fi
+        else
+          held=""; for h in $WF_HOLD_LABELS; do if lab "$h"; then held=$h; break; fi; done
+          if [ -n "$held" ]; then line skip "merge held: label $held $detail"; else line merge "$detail"; fi
+        fi ;;
     esac
     continue
   fi

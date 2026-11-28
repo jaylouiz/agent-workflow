@@ -47,10 +47,18 @@ for s in design lead review fix hold delta-review merge screen skip; do
   ok "plan.sh documents the step $s" 'grep -qE "^#   $s " skills/aw-coordinate/plan.sh'
   ok "subagent-mode.md names the step $s" 'grep -qF "\`$s\`" "$sub"'
 done
-for m in 'round: fix <r> settled <sha>' 'round: delta <r> settled open=' 'round: delta <r> skipped'; do
-  ok "subagent-mode.md defines the round marker '$m'" 'grep -qF -- "$m" "$sub"'
+# the round state has one owner: bin/rounds.sh writes and reads the markers; the doc names its commands, never a marker to
+# word by hand; plan.sh and merge-pr.sh prep read the state from it
+for c in 'rounds.sh` `start <n> <pr>`' 'rounds.sh fixed <n> <pr>' 'rounds.sh delta <n> open=' 'rounds.sh delta <n> skipped'; do
+  ok "subagent-mode.md names the round command '$c'" 'grep -qF -- "$c" "$sub"'
 done
-ok "plan.sh counts the marker lines the doc defines" 'grep -qF "round: fix [0-9]+ settled" skills/aw-coordinate/plan.sh && grep -qF "round: delta [0-9]+ (settled open=" skills/aw-coordinate/plan.sh'
+ok "subagent-mode.md words no round marker itself" '! grep -nE "round: (fix|delta) " "$sub"'
+ok "subagent-mode.md opens the round before the fix worker's Agent call" 'grep -qE "Before a .fix. worker, and before its .Agent. call" "$sub"'
+ok "subagent-mode.md says what no marker means (Orca rounds, a lost log)" 'grep -qF "ran under the Orca coordinator" "$sub"'
+for m in 'round: fix <k> started <sha>' 'round: fix <k> settled <sha>' 'round: delta <k> settled open=<m>' 'round: delta <k> skipped'; do
+  ok "rounds.sh defines the round marker '$m'" 'grep -qF -- "$m" bin/rounds.sh'
+done
+ok "plan.sh and merge-pr.sh prep read the round state from rounds.sh, with no marker regex of their own" 'grep -qF "rounds.sh\" state" skills/aw-coordinate/plan.sh && grep -qF "rounds.sh\" state" bin/merge-pr.sh && ! grep -nE "round: (fix|delta) \[" skills/aw-coordinate/plan.sh bin/merge-pr.sh'
 for s in plan.sh wt.sh spec.sh preflight.sh; do ok "$s is executable" '[ -x "skills/aw-coordinate/$s" ]'; done
 for r in READY REVIEWED FIXED PARKED ROUTED FAILED; do
   ok "the result line $r is in the template and settled in subagent-mode.md" 'grep -qF "$r #" skills/aw-coordinate/task-template.md && grep -qF "\`$r #" "$sub"'
