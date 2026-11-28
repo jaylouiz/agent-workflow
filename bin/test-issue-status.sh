@@ -26,7 +26,7 @@ case "$1 $2" in
   "label create") ;;
   "issue edit") [ ! -e "$T/fail-edit" ] || exit 1 ;;
   "issue view") cat "$T/labels" 2>/dev/null ;;
-  "issue list") case "$*" in *phase:design*) cat "$T/list-design" 2>/dev/null ;; *) cat "$T/list-build" 2>/dev/null ;; esac ;;
+  "issue list") case "$*" in *phase:design*) cat "$T/list-design" 2>/dev/null || : ;; *) cat "$T/list-build" 2>/dev/null || : ;; esac ;;
   *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
 esac
 STUB
@@ -199,6 +199,20 @@ check "a failed label removal is reported, not fatal" 'grep -q "^#7 phase:build:
 reset; printf '7\n' >"$T/list-build"; answer I_7 "In progress" IS_x
 run cutover --apply >/dev/null
 check "a stale list entry without the label: reported, nothing removed" 'grep -q "nothing to remove" "$T/out" && [ "$(calls remove-label)" = 0 ]'
+reset; printf '5\n' >"$T/list-design"; printf '5\n7\n' >"$T/list-build"; answer I_5 Backlog IS_x
+run cutover >/dev/null
+eq "an issue with both labels is planned once" "$(grep -c '^#5 ' "$T/out")" 1
+check "the other build issue is planned too" 'grep -q "^#7 phase:build" "$T/out"'
+reset; printf '7\n' >"$T/list-build"; printf 'phase:build\nneeds-design\n' >"$T/labels"; answer I_7 Backlog IS_x
+run cutover --apply >/dev/null
+check "phase:build in the lane needs-design keeps its label (it would read as UX Design)" 'grep -q "^#7 phase:build: kept (lane needs-design" "$T/out" && [ "$(calls "setIssueStatus\|remove-label")" = 0 ]'
+reset; printf '7\n' >"$T/list-build"; touch "$T/fail-lookup"
+run cutover >/dev/null
+check "dry run without statuses promises no removal" 'grep -q "^#7 phase:build: kept (no status lookup" "$T/out"'
+reset; printf '#!/usr/bin/env bash\nexit 1\n' >"$T/bin/gh.fail"
+mv "$T/bin/gh" "$T/bin/gh.ok"; cp "$T/bin/gh.fail" "$T/bin/gh"; chmod +x "$T/bin/gh"
+run cutover --apply >/dev/null; mv "$T/bin/gh.ok" "$T/bin/gh"; rm -f "$T/bin/gh.fail"
+check "a failing issue list is incomplete, not 'nothing to do'" 'grep -q "^incomplete" "$T/out" && ! grep -q "nothing to do" "$T/out"'
 reset
 eq "no phase labels left: exit 0" "$(run cutover --apply)" 0
 check "nothing to do is said" 'grep -q "nothing to do" "$T/out"'
