@@ -10,8 +10,9 @@
 #        exit 0 when the PR body's `## Review` is complete: reviewed (`by:`), no finding `-> open`, and not
 #        `route: lead` where the route says reviewer. Else exit 1 with the reasons.
 #   merge-pr.sh prep <pr>
-#        refuse on a hold label, an open needs-decision, no `Closes #<n>` (opt-out: `No-issue: <reason>` or `Part of #<n>`) or a
-#        failing review-check; then, in the PR's worktree (wf_install first when the base brought a package.json change),
+#        refuse on a hold label, an open needs-decision, no `Closes #<n>` (opt-out: `No-issue: <reason>` or `Part of #<n>`), a
+#        failing review-check or a fix round without its delta-review (rounds.sh; subagent mode only: no round markers,
+#        no refusal; an unreadable round state refuses); then, in the PR's worktree (wf_install first when the base brought a package.json change),
 #        fast-forward to a remote head that moved ahead (gh pr update-branch; diverged = exit 64, nothing pushed),
 #        merge the base branch in when behind (no rebase, no force-push), wf_verify (+ wf_build when
 #        wf_build_needed), push, wait until GitHub reports the pushed commit as the PR head and (10 min after a push)
@@ -169,6 +170,21 @@ case "$cmd" in
     r=$(route_pr "$pr") && [ -n "$r" ] || die "route for PR #$pr failed"
     echo "route $r"
     msg=$(review_check "$bodyf" "${r%%:*}") || stop="$stop\n$msg"
+    # a fix round the subagent coordinator started and no delta-review covers (rounds.sh; the Orca mode writes no markers).
+    # A round state that cannot be read holds (fail closed), like a failed label lookup above.
+    if [ -n "$issues" ]; then
+      # shellcheck disable=SC2086
+      if rs=$("$DIR/rounds.sh" state "$pr" $issues 2>"$bodyf.err") && read -r _ rk rphase <<<"$rs" && [ -n "${rphase:-}" ] &&
+        case "$rk" in *[!0-9]*) false ;; esac; then
+        if [ "$rk" != 0 ]; then
+          if [ "$rphase" = started ]; then stop="$stop\nreview: fix round $rk of #$(echo $issues | sed 's/ / #/g') is still in flight (no FIXED recorded): run plan.sh for the next step: it routes the round to the fix worker, then to its delta-review"
+          else stop="$stop\nreview: fix round $rk ($rphase) of #$(echo $issues | sed 's/ / #/g') has no delta-review yet: run it, then rounds.sh delta"; fi
+        fi
+      else
+        stop="$stop\nreview: cannot read the fix rounds of PR #$pr: $(head -c 300 "$bodyf.err" | grep . || echo 'rounds.sh printed no reason')"
+      fi
+      rm -f "$bodyf.err"
+    fi
     # Orca's setup `npm install` rewrites package-lock.json; committed without a package.json change it breaks `npm ci` in CI
     files=$(gh pr diff "$pr" --name-only 2>/dev/null || true)
     if grep -qx package-lock.json <<<"$files" && ! grep -qx package.json <<<"$files"; then
@@ -272,5 +288,5 @@ case "$cmd" in
   sweep)
     for a in "$@"; do [ "$a" = --dry-run ] || die "sweep [--dry-run]"; done
     exec "$DIR/sweep.sh" "$@" ;;
-  *) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
+  *) sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 64 ;;
 esac

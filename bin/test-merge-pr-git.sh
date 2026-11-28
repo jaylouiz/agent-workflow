@@ -6,6 +6,7 @@ DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 export WF_GLOBAL_SETTINGS="$T/no-global-settings.sh" # never the real ~/.claude settings
 export WF_PROTO_DIR="$T/proto-serve" # never the real prototype-server registry
+export WF_ISSUE_LOG_DIR="$T/issue-logs" # never the real coordination logs
 fail=0; n=0
 eq() { n=$((n + 1)); [ "$2" = "$3" ] || { fail=$((fail + 1)); echo "FAIL [$1] want '$3' got '$2'"; }; }
 first() { awk '{print $1; exit}'; }
@@ -58,6 +59,8 @@ case "$*" in
   "pr list --state open --base"*) : ;;
   "pr view 7 --json body"*) printf 'Closes #70\n' ;;
   "issue view 70 --json labels"*) cat "$T/ilabels" 2>/dev/null || : ;;
+  "issue view 71 --json labels"*) : ;;
+  "repo view --json nameWithOwner"*) echo acme/widgets ;; # the origin here is a local path: gh names the repo (decide.sh, rounds.sh)
   *) echo "gh stub: $*" >&2; exit 1 ;;
 esac
 EOF
@@ -208,6 +211,29 @@ eq "the config's own hold label still holds" "$rc:$(printf '%s' "$out" | grep -c
 held eval 'echo ready >"$T/ilabels"'
 sed -i.bak '/^WF_HOLD_LABELS="do-not-merge"$/d' "$R/main/.claude/issue-workflow.sh"; rm -f "$R/main/.claude/issue-workflow.sh.bak"
 eq "no hold label: prep goes past the refusals" "$(printf '%s' "$out" | grep -c 'NOT READY')" 0
+# fix rounds (rounds.sh, subagent mode): a round in flight refuses the merge; without markers nothing changes (the cases above)
+RL="$T/issue-logs/acme/widgets"; mkdir -p "$RL"
+rprep() { out=$(cd "$R/main" && WF_REPO=acme/widgets bash "$DIR/merge-pr.sh" prep 7 2>&1); rc=$?; }
+rmark() { printf -- '- 2026-11-28T00:00Z %s\n' "$2" >>"$RL/$1.md"; }
+rprep; eq "no round marker: prep goes past the refusals" "$(printf '%s' "$out" | grep -c 'NOT READY')" 0
+rmark 70 "fix round 1 done: 3 fixed"
+rprep; eq "worker free text about rounds refuses nothing" "$(printf '%s' "$out" | grep -c 'NOT READY')" 0
+rmark 70 "round: fix 1 started abc1234 pr=6"
+rprep; eq "a round of the issue's earlier PR refuses nothing" "$(printf '%s' "$out" | grep -c 'NOT READY')" 0
+rmark 70 "round: fix 1 started abc1234 pr=7"
+rprep; eq "prep refuses a fix round that was started and not reviewed" "$rc:$(printf '%s' "$out" | grep -c '^review: fix round 1 of #70 is still in flight (no FIXED recorded)')" "1:1"
+eq "its text offers no unconditional delta skipped" "$(printf '%s' "$out" | grep -c 'delta skipped')" 0
+eq "... and points to plan.sh" "$(printf '%s' "$out" | grep -c 'is still in flight.*run plan.sh')" 1
+rmark 70 "round: fix 1 settled def5678 pr=7"
+rprep; eq "prep refuses a settled fix round without its delta-review" "$rc:$(printf '%s' "$out" | grep -c '^review: fix round 1 (settled) of #70 has no delta-review yet')" "1:1"
+rmark 70 "round: delta 1 settled open=0 pr=7"
+rprep; eq "the delta marker lets prep on" "$(printf '%s' "$out" | grep -c 'NOT READY')" 0
+rm -f "$RL/70.md"; printf 'Closes #70\nCloses #71\n' >"$T/prbody"; rmark 71 "round: fix 1 settled def5678"
+rprep; rm -f "$T/prbody"
+eq "a batch PR: a round on the second issue's log refuses too" "$rc:$(printf '%s' "$out" | grep -c '^review: fix round 1 (settled) of #70 #71 has no delta-review yet')" "1:1"
+rm -f "$RL/71.md"
+out=$(cd "$R/main" && WF_REPO=nope bash "$DIR/merge-pr.sh" prep 7 2>&1); rc=$?
+eq "a round state that cannot be read refuses (fail closed)" "$rc:$(printf '%s' "$out" | grep -c '^review: cannot read the fix rounds of PR #7')" "1:1"
 # a PR that closes no issue: `No-issue: <reason>` or a line-leading `Part of #<n>` opts out; anywhere else it does not
 body() { printf '%b' "$1" >"$T/prbody"; }
 noclose() { held body "$1"; printf '%s' "$out" | grep -c "no line-leading 'Closes"; }
