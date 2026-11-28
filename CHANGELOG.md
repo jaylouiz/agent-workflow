@@ -19,6 +19,11 @@ under **Breaking**, first in its release: `install.sh --update` prints those ent
 
 ### Added
 
+- `/aw-coordinate` without Orca: with no `orca` on PATH (or the word `subagents` in the input) it runs in
+  subagent mode instead of stopping. It screens and batches the issues, runs each stage as a Claude Code background
+  subagent in a git worktree of its own (up to `WF_MAX_WORKERS` at once), parks on decision requests, routes the
+  review through `/code-review` and merges. The rules both modes follow moved into
+  [reference/coordination.md](reference/coordination.md).
 - `install.sh --update`: refuses local changes, runs `git pull --ff-only`, reruns the install only when a skill
   was added, renamed or removed or `install.sh` changed, prints the version jump or the new commits and the new
   Breaking entries, and reminds you to restart open sessions.

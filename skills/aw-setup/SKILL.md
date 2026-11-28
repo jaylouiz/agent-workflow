@@ -60,4 +60,4 @@ Never rewrite the user's prose unseen: show the diff and apply only what the use
 
 ## 7. Report
 
-Detected, asked, left out (and how to add it later: rerun `/aw-setup update`), the PR link, and the next commands: `/aw-specify <n>` or `/aw-build <n>` for one issue, `/aw-ui-design <n>` when the UX is open, `/aw-coordinate <issues>` with Orca.
+Detected, asked, left out (and how to add it later: rerun `/aw-setup update`), the PR link, and the next commands: `/aw-specify <n>` or `/aw-build <n>` for one issue, `/aw-ui-design <n>` when the UX is open, `/aw-coordinate <issues>` for several issues at once (Orca workers, or subagents without Orca).

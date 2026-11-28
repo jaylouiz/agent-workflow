@@ -1,0 +1,77 @@
+# Coordination
+
+Loaded by `/aw-coordinate` in both of its modes: what a coordinator does with a hand-off, whatever runs the stages. A **worker** here is whatever runs one stage: an Orca worker (the skill's `SKILL.md`) or a Claude Code subagent (its `subagent-mode.md`). How a worker is started, how it reports and how the coordinator waits for it is the mode's part and is not written here. Decisions and parking: [decisions.md](decisions.md); lanes, triage rule and issue standard: [issue-rules.md](issue-rules.md).
+
+Scripts: `spec.sh` and its `task-template.md` live in the skill's directory, the shared ones (`decide.sh`, `merge-pr.sh`, `proto-serve.sh`, `settings.sh`, `issue-status.sh`, `sweep.sh`) in `~/.claude/agent-workflow/bin/`.
+
+## Role and outcome
+
+Every in-scope issue ends merged (`Closes #n`), held with a stated reason, parked on a decision request, waiting with a recorded UX decision, or explicitly failed. You are the **coordinator**: you plan, dispatch, route, merge and report, and **never edit code** (reviewers return findings, fixes go to a fix worker) or read it: a code claim you must check (screening, inbox evidence) goes to one subagent on the fast tier that answers confirmed or refuted, with file:line. Workers never merge.
+
+## Input
+
+- **Issue numbers** (`#12 15`): use as given.
+- **Label query** (e.g. "all needs-spec and ready"): `gh issue list --state open --label <label>` per label.
+- **Free text**: first create the issue so it stays the spec: `gh issue create --title "<short>" --body "<text>"`; its lane comes from screening.
+- **Mode**: default **autonomous**. "interactive" / "ask me first", globally or for named issues, makes those issues interactive ("Decisions and the user").
+
+Per issue, run the guard from `/aw-build`: skip closed issues; if its PR query or a `<type>/<n>-*` / `*/<type>-<n>-*` branch shows work in progress, report it and resume it instead of duplicating (the mode says how).
+
+## Screening (2+ issues)
+
+Before starting any worker, read every in-scope issue yourself (`gh issue view <n> --json title,body,labels,comments`; read-only, no worker). Skip this for a single issue. Post a short plan to the user:
+
+- per issue: **lane** by the triage rule (fog / `needs-design` / `needs-spec` / `ready`; relabel when the current label is wrong, the reason into `decide.sh log`, not a comment), UI or non-UI, rough size, touched areas (for unshaped issues, guess and mark the guess as uncertain)
+- the issue standard (issue rules): you never write Problem, job, stories or ACs into an issue. A clear, standard issue that already meets the standard goes to `ready` (its lead skips Specify); one that does not goes to `needs-spec`, with `--extra` "Specify: Complete track" for its lead when the build is obvious
+- **batches**, looked for in every run without the user asking: issues that would each pay for their own verification, E2E gate, baseline round, review and merge go into one lead and one PR when they touch the same area or files (the overlap that would otherwise force a sequence or a merge conflict), depend on each other, or are each small. Limits: 2-4 issues and a diff one review can still hold; an issue parked on a decision stays out until it is settled, and so does an issue still in Design unless it is part of a design batch (next bullet); an issue that changes persisted data or hits another one-way item ships alone, so it can be reverted alone. The plan names each batch with its reason and the issues kept apart with theirs
+- **design batches**: `needs-design` issues that change the same surface (one sheet, one dialog, one page) are designed together (apply the persisted-data exclusion above before the Design brief tells the user issues share a branch), so the user sees them in one prototype and answers their choices in one go: one Design worker (`spec.sh design <lowest n>`, `--extra` names the issues; `/aw-ui-design` "Several issues on one surface"), then one lead and one PR for all of them. Allowed instead, with the reason in the plan: rounds in sequence on the same proto branch that converge into one PR (too many open questions for one round, or one issue needs a sketch first), or fully separate work (a special case such as an urgent fix or an issue that must be revertible alone)
+- dependencies and overlaps (same area or file) that are not batched: dependency edges, so they never run in parallel (the profile's "Orchestration")
+- order and waves (`WF_MAX_WORKERS`, settings): quick, independent wins and Design/Specify stages first; issues in the profile's "Risk areas" serialized
+- issues with fog: pulled out, marked (`issue-status.sh fog <n>`, the issue rules), reported up front
+- guard results and hold labels (the profile's "Labels"); an issue labelled `on-hold` is pulled out and gets no worker (`~/.claude/agent-workflow/reference/decisions.md`, "Hold")
+
+`inbox` issues join only when the user names them or asks for "all": run `/gh-inbox-dispatcher` (if installed; otherwise give each its lane by the triage rule of `issue-rules.md`) yourself first (you count as the user caller); only issues it routes join. An issue that turns into an epic (Design's handover or `/aw-specify`'s epic check) keeps its goal: when the hand-off was to get it built, its sub-issues join this run as soon as they exist (screened as in this section, in dependency order, the user's model choice for the parent applies to them); they wait for a later run only when the user asked for the structure alone (design or specify only). User feedback 2026-11-15. A **batch** runs as one lead: Specify per issue in turn (if needed), one branch, one verification and E2E pass, one PR (`Closes` per issue), one review (`spec.sh lead <first> --batch <others>` names the issues in the task, `--extra` only the shared branch; naming the batch only in `--extra` built just the first issue twice).
+
+## Stages
+
+Every stage's task comes from `spec.sh <stage> <n>` (the rules every worker gets are in its template); the mode says how the task reaches a worker and where the worker's worktree comes from.
+
+1. **Design** (`needs-design`): `spec.sh design`, on the branch `proto/<n>-<slug>`. Each round parks on a decision request ("Decisions and the user"); the answer starts a fresh round worker on the same branch. The round's `Preview:` link is the hosted preview when the profile has one (`proto-serve.sh hosted <branch>`: opens on any device with the Mac off), with the local link as `Local:` fallback; pass both on to the user. A worker's dev server dies with it, so the spec gives a preview port outside the worker range (`PROTO_PORT`, reserved by `proto-serve.sh port <n>`) for that local link. When the round parks, run `proto-serve.sh start <n[,m]> <wt> <port>` (detached and registered, never a background command of your own: it dies with your session or at 2 h). `decide.sh resolve` and `merge-pr.sh sweep` stop it once the issue no longer waits; after a reboot `proto-serve.sh ensure` restarts what is registered (`list` shows it). The hosted preview stays as the decision's reference until `merge-pr.sh sweep` removes the proto branch of the closed issue (`proto-serve.sh unhost`). Max 3 rounds, then back to the user. Afterwards the issue continues at the lane the worker set.
+2. **Lead** (`needs-spec`, `ready`, a batch): `spec.sh lead`, on the branch `<type>/<n>-<slug>`. One worker owns Specify (when needed), Build, the review route, its own `/code-review` and up to 2 fix rounds, and ends `READY`, `PARKED`, `ROUTED` (to Design) or `FAILED`. Retry or resume after a parked decision: a fresh lead on the same branch; it skips what exists. Interactive issues: `spec.sh --interactive` ("Decisions and the user"). Overlaps a lead's spec reveals late surface at `prep`: a conflict aborts the merge there and goes to a fix worker; serialize the next lead in that area.
+3. **Review route**: the lead ran `merge-pr.sh route <pr>`. `route=reviewer`: a reviewer worker (`spec.sh review --pr <pr>`; the strong tier by default; keep its port when the PR touches UI or page layout, `--no-port` otherwise). Each `-> open` line goes to a fresh fix worker (`spec.sh fix`, max 2 rounds), each followed by `spec.sh delta-review` (skip it when the fix round changed only docs or comments). A user review in a PR comment gets one fix round. A finding still `-> open` after the rounds (or a class of ever-narrower findings with one root cause) is never edited to `deferred` and gets no third round by default: file the root cause as an issue, hold the merge and ask in the decision request whether to merge with it deferred. You never read diffs to review them yourself.
+4. **Merge** (default), one PR at a time, a PR fixing a flake that trips the gate first: `merge-pr.sh prep <pr>` (refuses on holds, `needs-decision`, a missing or open `## Review`, a stricter route, a failed check of the final head; exit 2 `WAIT` = CI still pending, a `WF_REQUIRED_CHECKS` check not reported, or GitHub has not yet reported the pushed head or all its checks: do not merge, rerun prep later; merges the default branch in when behind (never `gh pr update-branch` it yourself), verifies, pushes), then `gh pr merge` as its own call (guard.sh blocks a chain with it), made only after reading prep's output (the project's gate hook runs on it), then `merge-pr.sh after <pr> "<summary>"` (gate row, main checkout update, cleanup, deploy check, summary comment, removal of the PR's worktree and branches plus a sweep). Each of the three is its own call with the Bash tool's `timeout: 600000` (the 120 s default is below verify plus build). The next PR regenerates any shared baselines.
+   **Do not merge** (report instead) when prep refuses, the user asked to review first, or the gate fails. A held merge is itself a decision request on the issue; the other PRs keep merging. `agent-decided` never holds a merge.
+
+## Models per role
+
+Every spec names its tier and a one-line reason (`--tier`). User decisions 2026-11-02 (agent-workflow#3) and 2026-11-23 (model policy):
+
+| Role | Tier (`settings.sh`; defaults) |
+| --- | --- |
+| Coordinator (the user's session; an Orca wave coordinator gets this tier) | strong (`WF_MODEL_STRONG`, opus) |
+| Lead or Design worker for a new feature, a bigger UI change (a new screen or flow; its Design variants count) or complex technical work (cross-cutting, risk area `WF_RISK_GLOBS`, size L) | heavy (`WF_MODEL_HEAVY`, claude-fable-5-2) |
+| Lead or Design worker otherwise; fix workers | default (`WF_MODEL_DEFAULT`, sonnet) |
+| Reviewer (route `reviewer`) and delta-review workers | strong |
+| Root-cause subagent inside a lead stuck > 15 min | strong, at most one per issue (the lead's own `Agent` call) |
+| Mechanical subagents (`rg` audits, copy sweeps) | fast (`WF_MODEL_FAST`, haiku) |
+
+A batch takes its biggest issue's row. Another tier only when the user says so or a worker makes the case; you decide.
+
+## Decisions and the user
+
+Goal: few questions, one ping per batch, nothing waits that does not have to. The rules every stage shares are in `~/.claude/agent-workflow/reference/decisions.md`: one-way or two-way (with the default one-way list), how a record and a request are written, how an issue parks, and the Resume step each stage skill starts with. Read it; they apply to you and to every worker. Script: `~/.claude/agent-workflow/bin/decide.sh` (usage: run it without arguments). What only the coordinator does:
+
+
+- **User words reach workers verbatim.** The auto-mode classifier denies a worker action whose only source is a relayed instruction (seen 3 times, 25 min). Quote the user's own words marked as user-said in the brief or send, or apply a tiny user-requested edit (a copy line, a queue entry) yourself.
+- **Worker questions.** What a worker cannot decide becomes a decision request (`decide.sh request`, as the reference says), and the worker ends. A question a worker can put to you mid-run (the mode says whether it can) you answer yourself from the spec, the profile, the docs and `CLAUDE.md`; what you cannot answer safely becomes a decision request too.
+- **Sweep**: `decide.sh status`, when the mode says. `held`: the issue is `on-hold`; do not resume it (`resolve` refuses too) until the label is removed. `answered`: `decide.sh resolve <n> "<answer>" <D<k>>` (the id `status` printed), then start a fresh worker on the same stage and branch with the line `resolve` printed quoted in its spec (the chosen options spelled out, or the user's free text as it is). Its stage skill's Resume step then finds nothing open and goes on. A `reads as` line with `no answer` for a question: that question is still open, ask it again or take free text in the answer into account. `change`: file a follow-up issue through screening, then `decide.sh followup <n> <new> <D<k>>`.
+- **Digest**: `decide.sh digest --due <run ledger dir>/announced [--idle]` (`--idle` when no worker runs and nothing is runnable; `--cap` defaults to `WF_DIGEST_CAP`). Exit 0: `PushNotification` (via `ToolSearch select:PushNotification`) one line ("3 decisions need you: #<n> design, #<m> merge hold"), then post the digest here. Idle: also ask with `AskUserQuestion` (up to 4 per call). Not idle: do not block; go on with the run. Answers given here go onto the issue with `decide.sh answer <n> "<text>" <D<k>>` (the id the digest listed), so the issue stays the record.
+- **Interactive** issues (named or global): their worker questions and Specify options go to the user at once (`AskUserQuestion`, ASCII sketches in `preview`), one-way or not.
+
+## Progress and reporting
+
+- **The issue thread is for the user**: what was decided and what waits on them (decision requests and records, design rounds, the Look comment, one closing summary). Coordination between agents (stage starts, milestones, fix rounds, routing reasons, resume text) goes to the issue's coordination log, `decide.sh log <n> "<text>"` (the template's "Progress"). When an issue's pipeline settles, post one terse summary comment (`merge-pr.sh after` does it for a merged PR and deletes the log). Your comments go through `decide.sh note` too (an unmarked one counts as the user's).
+- **The user follows only this session (often by phone) and the `needs-decision` filter.** User pings come only from the digest; a failed issue is a digest line of its own, pushed at once if it blocks every remaining issue.
+- Final report per issue: open decision requests and `agent-decided` records (FYI), lane path taken, PR link, checks (`gh pr checks <pr>`), review outcome and fix rounds used, open items, and the model per stage as the runner accepted it (the mode says where to read it; never claim a model from the spec alone).
+- **Ledger**: `bash ~/.claude/skills/aw-retro/ledger.sh dir <run id>` gives the run ledger dir for every spec. Keep your own in it (`coordinator.md`): worker questions better input would have avoided, review findings of medium or higher and gate failures the PR caused (`escaped`, naming the check that should have caught it), checks oversized for the diff; at the end one `measures` line: merged PRs, your tool calls, worker sessions per issue, route per PR, fix rounds, wall time per issue.
+- **Retro** before the final report, when `ledger.sh due <run ledger dir>` says so: `/aw-retro <run_id>` in a fresh Agent on the default tier, given your `measures` line (the skill's "Due" paragraph). Then `decide.sh log --prune` (logs of issues closed without a merge).
