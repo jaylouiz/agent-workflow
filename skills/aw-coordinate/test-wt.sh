@@ -15,6 +15,7 @@ git clone -q "$T/origin.git" "$T/main" 2>/dev/null
 cd "$T/main" || exit 1
 q checkout -q -b main; echo a >a; q add a; q commit -q -m init; q push -q -u origin main
 git remote set-head origin main >/dev/null
+git -C "$T/origin.git" symbolic-ref HEAD refs/heads/main # a later clone checks out main whatever init.defaultBranch is
 # what the harness does: a worktree on a branch of its own naming, cut from the default branch
 agent() { q -C "$T/main" worktree add -q -b "worktree-$1" "$T/wts/$1" main; }
 
@@ -27,7 +28,7 @@ out=$(wt "$T/main" nope); eq "usage: exit 64" "$?" 64
 out=$(wt "$T/main" init "bad name"); eq "bad branch name: exit 64" "$?" 64
 
 # a new branch: cut from the fetched default branch, not from the stale local one
-git clone -q "$T/origin.git" "$T/other" 2>/dev/null
+git clone -q -b main "$T/origin.git" "$T/other" 2>/dev/null
 (cd "$T/other" && echo b >b && q add b && q commit -q -m "main moved" && q push -q origin main)
 tip=$(git -C "$T/other" rev-parse HEAD)
 agent a1
