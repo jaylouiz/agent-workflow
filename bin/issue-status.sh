@@ -105,7 +105,9 @@ cutover() { # cutover <apply 0|1>: see the header; best effort, always 0
     rm=""
     for l in phase:design phase:build; do printf '%s\n' "$have" | grep -qx "$l" && rm="$rm --remove-label $l"; done
     # shellcheck disable=SC2086
-    if [ -z "$rm" ] || gh issue edit "$n" $rm >/dev/null 2>&1; then echo "#$n $lab: $plan, label removed"
+    # none left: the list is a search index and lags a removal by seconds
+    [ -n "$rm" ] || { echo "#$n $lab: nothing to remove (already clean)"; continue; }
+    if gh issue edit "$n" $rm >/dev/null 2>&1; then echo "#$n $lab: $plan, label removed"
     else echo "#$n $lab: kept (label not removed)"; fi
   done
   return 0

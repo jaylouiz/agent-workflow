@@ -196,6 +196,9 @@ reset; printf '7\n' >"$T/list-build"; printf 'phase:build\n' >"$T/labels"; touch
 run cutover --apply >/dev/null
 check "a failed label removal is reported, not fatal" 'grep -q "^#7 phase:build: kept (label not removed)" "$T/out"'
 
+reset; printf '7\n' >"$T/list-build"; answer I_7 "In progress" IS_x
+run cutover --apply >/dev/null
+check "a stale list entry without the label: reported, nothing removed" 'grep -q "nothing to remove" "$T/out" && [ "$(calls remove-label)" = 0 ]'
 reset
 eq "no phase labels left: exit 0" "$(run cutover --apply)" 0
 check "nothing to do is said" 'grep -q "nothing to do" "$T/out"'
